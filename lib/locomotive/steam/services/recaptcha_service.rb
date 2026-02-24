@@ -12,7 +12,7 @@ module Locomotive
         attributes = site.metafields.values.reduce({}, :merge).with_indifferent_access
 
         @api      = attributes[:recaptcha_api_url] || GOOGLE_API_URL
-        @secret   = attributes[:recaptcha_secret]
+        @secret   = attributes[:recaptcha_secret].presence || ENV['RECAPTCHA_SECRET']
         @ip       = request.ip
       end
 

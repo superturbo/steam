@@ -8,6 +8,10 @@ describe Locomotive::Steam::RecaptchaService do
   let(:request)     { instance_double('Request', ip: '127.0.0.1') }
   let(:service)     { described_class.new(site, request) }
 
+  before do
+    allow(ENV).to receive(:[]).and_call_original
+  end
+
   describe '#verify' do
 
     let(:code) { nil }
@@ -21,27 +25,68 @@ describe Locomotive::Steam::RecaptchaService do
       let(:code)    { '42' }
       let(:success) { false }
 
-      before do
-        expect(HTTParty).to receive(:get).with('https://www.google.com/recaptcha/api/siteverify', {
-          query: {
-            secret:   'asecretkey',
-            response: '42',
-            remoteip: '127.0.0.1'
-          }
-        }).and_return(instance_double('Response', parsed_response: { 'success' => success }))
+      context 'when metafields recaptcha_secret is present (preferred over ENV)' do
+
+        let(:expected_secret) { 'asecretkey' }
+
+        before do
+          allow(ENV).to receive(:[]).with('RECAPTCHA_SECRET').and_return('envsecret')
+
+          expect(HTTParty).to receive(:get).with('https://www.google.com/recaptcha/api/siteverify', {
+            query: {
+              secret:   expected_secret,
+              response: '42',
+              remoteip: '127.0.0.1'
+            }
+          }).and_return(instance_double('Response', parsed_response: { 'success' => success }))
+        end
+
+        context 'the code is verified' do
+
+          let(:success) { true }
+          it { is_expected.to eq true }
+
+        end
+
+        context 'the code is not verified' do
+
+          let(:success) { false }
+          it { is_expected.to eq false }
+
+        end
+
       end
 
-      context 'the code is verified' do
+      context 'when metafields recaptcha_secret is blank (falls back to ENV)' do
 
-        let(:success) { true }
-        it { is_expected.to eq true }
+        let(:secret)          { '' }
+        let(:expected_secret) { 'envsecret' }
 
-      end
+        before do
+          allow(ENV).to receive(:[]).with('RECAPTCHA_SECRET').and_return(expected_secret)
 
-      context 'the code is not verified' do
+          expect(HTTParty).to receive(:get).with('https://www.google.com/recaptcha/api/siteverify', {
+            query: {
+              secret:   expected_secret,
+              response: '42',
+              remoteip: '127.0.0.1'
+            }
+          }).and_return(instance_double('Response', parsed_response: { 'success' => success }))
+        end
 
-        let(:success) { false }
-        it { is_expected.to eq false }
+        context 'the code is verified' do
+
+          let(:success) { true }
+          it { is_expected.to eq true }
+
+        end
+
+        context 'the code is not verified' do
+
+          let(:success) { false }
+          it { is_expected.to eq false }
+
+        end
 
       end
 
@@ -53,6 +98,8 @@ describe Locomotive::Steam::RecaptchaService do
       let(:api_url) { 'https://recaptcha.net/api' }
 
       before do
+        allow(ENV).to receive(:[]).with('RECAPTCHA_SECRET').and_return(nil)
+
         expect(HTTParty).to receive(:get).with('https://recaptcha.net/api', {
           query: {
             secret:   'asecretkey',
