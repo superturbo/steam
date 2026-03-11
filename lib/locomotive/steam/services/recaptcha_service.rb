@@ -26,10 +26,13 @@ module Locomotive
           remoteip: @ip
         }})
 
-        _response.parsed_response['success']
+        _response.parsed_response || {}
+      rescue StandardError => e
+        Locomotive::Common::Logger.error(
+          "[Recaptcha] verify failed: #{e.class} #{e.message}"
+        )
+        {}
       end
-
     end
-
   end
 end

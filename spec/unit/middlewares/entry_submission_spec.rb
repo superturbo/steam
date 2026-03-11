@@ -8,14 +8,14 @@ require_relative '../../../lib/locomotive/steam/middlewares/entry_submission'
 describe Locomotive::Steam::Middlewares::EntrySubmission do
 
   let(:app)                 { ->(env) { [200, env, ['app']] } }
-  let(:site)                { instance_double('Site', default_locale: 'en', locales: ['en']) }
+  let(:site)                { instance_double('Site', default_locale: 'en', locales: ['en'], domains: ['example.com'], metafields: { google: {} }) }
   let(:middleware)          { described_class.new(app) }
   let(:recaptcha_enabled)   { false }
-  let(:recaptcha_valid)     { false }
-  let(:content_type)        { instance_double('ContentType', :recaptcha_required? => recaptcha_enabled) }
+  let(:recaptcha_response)  { false }
+  let(:content_type)        { instance_double('ContentType', recaptcha_required?: recaptcha_enabled) }
   let(:service)             { instance_double('EntrySubmissionService') }
   let(:entry_service)       { instance_double('EntryService', get_type: content_type) }
-  let(:recaptcha_service)   { instance_double('RecaptchaService', verify: recaptcha_valid) }
+  let(:recaptcha_service)   { instance_double('RecaptchaService', verify: recaptcha_response) }
   let(:services)            { instance_double('Services', entry_submission: service, content_entry: entry_service, recaptcha: recaptcha_service, :locale= => 'en') }
   let(:session)             { {} }
   let(:method)              { 'POST' }
@@ -60,10 +60,18 @@ describe Locomotive::Steam::Middlewares::EntrySubmission do
 
     context 'the recaptcha response is valid' do
 
-      let(:recaptcha_valid) { true }
+      let(:recaptcha_response) do
+        {
+          'success' => true,
+          'hostname' => 'example.com',
+          'action' => 'contacts',
+          'score' => 0.9,
+          'error-codes' => []
+        }
+      end
 
       it 'creates a new entry' do
-        expect(recaptcha_service).to receive(:verify).with('myrecaptchacode').and_return(true)
+        expect(recaptcha_service).to receive(:verify).with('myrecaptchacode').and_return(recaptcha_response)
         expect(subject.first).to eq 200
         expect(subject.last).to eq entry
       end
@@ -72,7 +80,15 @@ describe Locomotive::Steam::Middlewares::EntrySubmission do
 
     context 'the recaptcha response is invalid' do
 
-      let(:recaptcha_valid) { false }
+      let(:recaptcha_response) do
+        {
+          'success' => false,
+          'hostname' => 'example.com',
+          'action' => 'contacts',
+          'score' => 0.1,
+          'error-codes' => ['error code']
+        }
+      end
 
       it 'returns a 200 code with the invalid entry' do
         expect(errors).to receive(:add).with(:recaptcha_invalid, true)
