@@ -11,7 +11,7 @@ describe Locomotive::Steam::Middlewares::EntrySubmission do
   let(:site)                { instance_double('Site', default_locale: 'en', locales: ['en'], domains: ['example.com'], metafields: { google: {} }) }
   let(:middleware)          { described_class.new(app) }
   let(:recaptcha_enabled)   { false }
-  let(:recaptcha_response)  { false }
+  let(:recaptcha_response)  { {} }
   let(:content_type)        { instance_double('ContentType', recaptcha_required?: recaptcha_enabled) }
   let(:service)             { instance_double('EntrySubmissionService') }
   let(:entry_service)       { instance_double('EntryService', get_type: content_type) }
@@ -21,7 +21,7 @@ describe Locomotive::Steam::Middlewares::EntrySubmission do
   let(:method)              { 'POST' }
   let(:errors)              { instance_double('Error', empty?: false) }
   let(:entry)               { instance_double('Entry', errors: errors, content_type_slug: 'contacts') }
-  let(:form)                { { content_type_slug: 'contacts', :'g-recaptcha-response' => 'myrecaptchacode', content: { email: 'john@doe.net' } } }
+  let(:form)                { { content_type_slug: 'contacts', :'g-recaptcha-response' => 'myrecaptchacode', recaptcha_sitekey: 'mysitekey', content: { email: 'john@doe.net' } } }
   let(:rack_env)            { build_env }
 
   before do
@@ -33,6 +33,21 @@ describe Locomotive::Steam::Middlewares::EntrySubmission do
   subject do
     code, env = middleware.call(rack_env)
     [code, env['steam.liquid_assigns']['contact']]
+  end
+
+  context 'redirect URL after successful submission' do
+
+    let(:errors)  { instance_double('Error', empty?: true) }
+    let(:entry)   { instance_double('Entry', errors: errors, content_type_slug: 'contacts', _slug: 'john') }
+
+    it 'excludes g-recaptcha-response and recaptcha_sitekey from the redirect URL' do
+      code, env = middleware.call(rack_env)
+      location = env['location']
+      expect(location).not_to include('g-recaptcha-response')
+      expect(location).not_to include('recaptcha_sitekey')
+      expect(location).to include('submitted_type_slug=contacts')
+    end
+
   end
 
   context 'recaptcha has not been enabled' do

@@ -26,7 +26,7 @@ describe Locomotive::Steam::RecaptchaService do
 
     subject { service.verify(code) }
 
-    it { is_expected.to eq false }
+    it { is_expected.to eq({}) }
 
     context 'the code is not nil' do
 

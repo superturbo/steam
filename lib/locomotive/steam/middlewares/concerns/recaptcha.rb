@@ -64,11 +64,13 @@ module Locomotive::Steam
         def recaptcha_score_valid?(score, threshold)
           return nil unless threshold && (0.0..1.0).cover?(threshold)
 
-          score >= threshold
+          score.present? && score >= threshold
         end
 
         def recaptcha_score_threshold(metafields)
-          Float(metafields[:recaptcha_score_threshold]) rescue nil
+          Float(metafields[:recaptcha_score_threshold])
+        rescue ArgumentError, TypeError
+          nil
         end
 
         def site_metafields
@@ -99,7 +101,7 @@ module Locomotive::Steam
             score = "score=#{status[:actual_score]} expected_score_threshold=#{status[:expected_threshold]}".colorize(:red)
           end
 
-          errors = status[:has_errors] ? "errors_codes=#{status[:error_codes].inspect}".colorize(:red) : nil
+          errors = status[:has_errors] ? "error_codes=#{status[:error_codes].inspect}".colorize(:red) : nil
 
           msg = "#{recaptcha} #{success} #{hostname} #{action} #{score} #{errors}"
 

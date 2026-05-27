@@ -18,15 +18,15 @@ module Locomotive
 
       def verify(response_code)
         # save a HTTP query if there is no code
-        return false if response_code.blank?
+        return {} if response_code.blank?
 
-        _response = HTTParty.get(@api, { query: {
+        response = HTTParty.get(@api, { query: {
           secret:   @secret,
           response: response_code,
           remoteip: @ip
         }})
 
-        _response.parsed_response || {}
+        response.parsed_response || {}
       rescue StandardError => e
         Locomotive::Common::Logger.error(
           "[Recaptcha] verify failed: #{e.class} #{e.message}"

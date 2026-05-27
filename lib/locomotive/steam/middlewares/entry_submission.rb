@@ -84,7 +84,9 @@ module Locomotive::Steam
           'success_callback',
           'error_callback',
           'content',
-          'entry'
+          'entry',
+          'g-recaptcha-response',
+          'recaptcha_sitekey'
         ]
 
         [].tap do |list|
