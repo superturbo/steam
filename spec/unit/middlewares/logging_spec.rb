@@ -74,9 +74,41 @@ describe Locomotive::Steam::Middlewares::Logging do
       expect { middleware.call(env) }.to raise_error(RuntimeError, 'boom')
     end
 
-    it 'logs the failure at error level so it survives a :warn log level' do
-      expect(Locomotive::Common::Logger).to receive(:error).with(/Errored with RuntimeError/)
+    it 'logs a conventional [render error] key = value line (name-first)' do
+      expect(Locomotive::Common::Logger).to receive(:error).with(
+        %r{\[render error\] site = "Acme Inc" / handle = "acme" / host = models\.example\.com / method = GET / path = /products / took = .+ms / error = RuntimeError: boom}
+      )
       middleware.call(env) rescue nil
+    end
+
+    describe 'with no site resolved in the env' do
+
+      let(:env) do
+        env_for(url, 'steam.locale' => :en).tap do |env|
+          env['steam.request'] = Rack::Request.new(env)
+        end
+      end
+
+      it 'logs site = nil with the requested host and re-raises' do
+        expect(Locomotive::Common::Logger).to receive(:error).with(
+          %r{\[render error\] site = nil / handle = nil / host = models\.example\.com / method = GET / path = /products}
+        )
+        expect { middleware.call(env) }.to raise_error(RuntimeError, 'boom')
+      end
+
+    end
+
+    describe 'with a site that has a blank name' do
+
+      let(:site) { instance_double('Site', _id: 42, handle: 'acme', name: '') }
+
+      it 'logs an empty site name with the handle still present' do
+        expect(Locomotive::Common::Logger).to receive(:error).with(
+          %r{\[render error\] site = "" / handle = "acme" /}
+        )
+        middleware.call(env) rescue nil
+      end
+
     end
 
     it 'emits the steam.render.error event following the Rails convention' do

@@ -24,8 +24,7 @@ module Locomotive::Steam
 
           # error level (not the info-level `log` helper) so it survives a
           # production :warn log level
-          Locomotive::Common::Logger.error "  " +
-            "Errored with #{exception.class.name} in #{errored_in_ms}ms: #{exception.message}\n\n".red
+          Locomotive::Common::Logger.error error_log(env, exception, errored_in_ms)
 
           ActiveSupport::Notifications.instrument('steam.render.error', {
             site_id:          env['steam.site']&._id,
@@ -63,6 +62,20 @@ module Locomotive::Steam
       end
 
       protected
+
+      # A grep-parseable "[render error] key = value / ..." line that locates
+      # the failing request. Site name comes first (for humans), the handle
+      # next; host is the value the site was looked up by, so it is present
+      # even when no site matched.
+      def error_log(env, exception, errored_in_ms)
+        site = env['steam.site']
+
+        "[render error] " \
+          "site = #{site&.name.inspect} / handle = #{site&.handle.inspect} / " \
+          "host = #{env['steam.request']&.host} / method = #{env['REQUEST_METHOD']} / " \
+          "path = #{env['PATH_INFO']} / took = #{errored_in_ms}ms / " \
+          "error = #{exception.class.name}: #{exception.message}"
+      end
 
       # Elapsed time in milliseconds (0.1ms precision), measured with a
       # monotonic clock so NTP adjustments can never produce a negative or
