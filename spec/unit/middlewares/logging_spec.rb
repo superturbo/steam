@@ -6,13 +6,14 @@ require_relative '../../../lib/locomotive/steam/middlewares/logging'
 
 describe Locomotive::Steam::Middlewares::Logging do
 
-  let(:site)        { instance_double('Site', _id: 42, handle: 'acme') }
+  let(:site)        { instance_double('Site', _id: 42, handle: 'acme', name: 'Acme Inc') }
+  let(:page)        { instance_double('Page', fullpath: 'products') }
   let(:app)         { ->(env) { [200, env, 'app'] } }
   let(:middleware)  { described_class.new(app) }
   let(:url)         { 'http://models.example.com/products' }
 
   let(:env) do
-    env_for(url, 'steam.site' => site, 'steam.locale' => :en).tap do |env|
+    env_for(url, 'steam.site' => site, 'steam.locale' => :en, 'steam.page' => page).tap do |env|
       env['steam.request'] = Rack::Request.new(env)
     end
   end
@@ -31,10 +32,12 @@ describe Locomotive::Steam::Middlewares::Logging do
 
       expect(payload[:site_id]).to eq 42
       expect(payload[:site_handle]).to eq 'acme'
+      expect(payload[:site_name]).to eq 'Acme Inc'
       expect(payload[:domain]).to eq 'models.example.com'
       expect(payload[:method]).to eq 'GET'
       expect(payload[:locale]).to eq 'en'
       expect(payload[:path]).to eq '/products'
+      expect(payload[:page]).to eq 'products'
       expect(payload[:status]).to eq 200
       expect(payload[:time_in_ms]).to be_a(Float)
       expect(payload[:time_in_ms]).to be >= 0.0
@@ -48,11 +51,13 @@ describe Locomotive::Steam::Middlewares::Logging do
         end
       end
 
-      it 'emits the event with a nil site_id and site_handle' do
+      it 'emits the event with a nil site_id, site_handle, site_name and page' do
         payload = notification_payload_for('steam.http.render') { middleware.call(env) }
 
         expect(payload[:site_id]).to be_nil
         expect(payload[:site_handle]).to be_nil
+        expect(payload[:site_name]).to be_nil
+        expect(payload[:page]).to be_nil
         expect(payload[:status]).to eq 200
       end
 
@@ -81,6 +86,7 @@ describe Locomotive::Steam::Middlewares::Logging do
 
       expect(payload[:site_id]).to eq 42
       expect(payload[:site_handle]).to eq 'acme'
+      expect(payload[:site_name]).to eq 'Acme Inc'
       expect(payload[:domain]).to eq 'models.example.com'
       expect(payload[:method]).to eq 'GET'
       expect(payload[:locale]).to eq 'en'

@@ -30,6 +30,7 @@ module Locomotive::Steam
           ActiveSupport::Notifications.instrument('steam.render.error', {
             site_id:          env['steam.site']&._id,
             site_handle:      env['steam.site']&.handle,
+            site_name:        env['steam.site']&.name,
             domain:           env['SERVER_NAME'],
             method:           env['REQUEST_METHOD'],
             locale:           env['steam.locale'].to_s,
@@ -48,10 +49,12 @@ module Locomotive::Steam
         ActiveSupport::Notifications.instrument('steam.http.render', {
           site_id:     env['steam.site']&._id,
           site_handle: env['steam.site']&.handle,
+          site_name:   env['steam.site']&.name,
           domain:      env['SERVER_NAME'],
           method:      env['REQUEST_METHOD'],
           locale:      env['steam.locale'].to_s,
           path:        env['PATH_INFO'],
+          page:        env['steam.page']&.fullpath,
           status:      response.first,
           time_in_ms:  done_in_ms
         })
