@@ -19,7 +19,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'origin',     '~> 2.3.1'
 
   spec.add_dependency 'nokogiri',               '~> 1.19'
-  spec.add_dependency 'sanitize',               '~> 6.0.1'
+  spec.add_dependency 'sanitize',               '~> 7.0'
   spec.add_dependency 'morphine',               '~> 0.1.1'
   spec.add_dependency 'httparty',               '~> 0.24'
   spec.add_dependency 'chronic',                '~> 0.10.2'
