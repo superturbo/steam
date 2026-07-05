@@ -37,6 +37,14 @@ describe Locomotive::Steam::Liquid::Filters::Text do
     expect(concat('hello', 'foo', 'bar')).to eq 'hellofoobar'
   end
 
+  describe 'concat rendered through Liquid' do
+
+    subject { render_template("{{ 'hello' | concat: 'foo', 'bar' }}", ::Liquid::Context.new) }
+
+    it { is_expected.to eq 'hellofoobar' }
+
+  end
+
   it 'encodes an input' do
     expect(encode('http:://www.example.com?key=hello world')).to eq 'http%3A%3A%2F%2Fwww.example.com%3Fkey%3Dhello+world'
   end

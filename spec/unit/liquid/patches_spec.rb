@@ -49,6 +49,62 @@ describe ::Liquid::Condition do
 
 end
 
+describe 'Rendering with the Liquid patches' do
+
+  let(:assigns) { {} }
+  let(:context) { ::Liquid::Context.new(assigns, {}, {}) }
+
+  subject { render_template(source, context) }
+
+  describe 'the "is present" condition' do
+
+    let(:source) { "{% if title is present %}present{% else %}blank{% endif %}" }
+
+    context 'with a value' do
+      let(:assigns) { { 'title' => 'Hello' } }
+      it { is_expected.to eq 'present' }
+    end
+
+    context 'with a blank string' do
+      let(:assigns) { { 'title' => '' } }
+      it { is_expected.to eq 'blank' }
+    end
+
+    context 'with no value' do
+      it { is_expected.to eq 'blank' }
+    end
+
+  end
+
+  describe 'the "starts_with" condition' do
+
+    let(:source) { "{% if title starts_with 'Hello' %}yes{% else %}no{% endif %}" }
+
+    context 'the value starts with the string' do
+      let(:assigns) { { 'title' => 'Hello world' } }
+      it { is_expected.to eq 'yes' }
+    end
+
+    context 'the value does not start with the string' do
+      let(:assigns) { { 'title' => 'Goodbye world' } }
+      it { is_expected.to eq 'no' }
+    end
+
+  end
+
+  describe 'Date/Time values passed to numeric filters' do
+
+    # numeric filters go through Liquid::Utils.to_number which knows nothing
+    # about dates (returns 0), no matter what the to_number patch suggests.
+    let(:assigns) { { 'today' => Date.parse('2007-06-29'), 'now' => Time.utc(2007, 6, 29) } }
+    let(:source)  { "{{ today | plus: 1 }}/{{ now | plus: 1 }}" }
+
+    it { is_expected.to eq '1/1' }
+
+  end
+
+end
+
 describe ::Liquid::StandardFilters do
 
   describe '#to_number' do

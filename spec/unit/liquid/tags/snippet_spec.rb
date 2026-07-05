@@ -60,6 +60,26 @@ describe Locomotive::Steam::Liquid::Tags::Snippet do
 
     end
 
+    context 'use a quoted name for the snippet' do
+
+      let(:source) { "Locomotive {% include 'footer' %}" }
+
+      it { is_expected.to eq 'Locomotive built by NoCoffee' }
+
+    end
+
+    context 'the snippet has a syntax error inside its liquid template' do
+
+      # unlike the section tag (wrapped into a Steam LiquidError by the
+      # PartialCache patch), Liquid 4's include raises the bare error
+      let(:snippet_source) { '{% if %}' }
+
+      it 'raises a SyntaxError' do
+        expect { subject }.to raise_exception(::Liquid::SyntaxError)
+      end
+
+    end
+
   end
 
 end
