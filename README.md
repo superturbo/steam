@@ -73,7 +73,7 @@ A docker configuration is included in this repository, you can run all the tests
 First run a bash shell inside the container
 
 ```
-docker-compose run steam gosu ubuntu bash
+docker-compose run --rm steam bash
 ```
 
 Now you are inside the container you can

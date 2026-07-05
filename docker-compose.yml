@@ -1,19 +1,18 @@
 services:
   db:
-    image: mongo:3
+    image: mongo:7
     volumes:
       - ./data/db:/data/db
   steam:
-    image: quay.io/akretion/docky-ruby:latest
+    build:
+      context: .
     environment:
-      - MONGO_HOST=db
+      MONGO_HOST: db
+    network_mode: "service:db"
     volumes:
       - .:/workspace
       - ./bundle:/usr/local/bundle
     depends_on:
       - db
-    labels:
-      docky.main.service: True
-      docky.user: ubuntu
-
-version: '3'
+    working_dir: /workspace
+    command: bash
