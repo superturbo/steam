@@ -1,3 +1,8 @@
+# Pin the timezone so time-sensitive specs are deterministic regardless of the
+# developer's machine TZ (and match the UTC-based CI runner). Override with
+# TZ=... when specifically exercising timezone behaviour.
+ENV['TZ'] ||= 'UTC'
+
 require 'simplecov'
 
 SimpleCov.start do
