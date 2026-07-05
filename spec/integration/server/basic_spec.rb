@@ -9,7 +9,7 @@ describe Locomotive::Steam::Server do
   end
 
   it 'displays an error message if the site does not exist' do
-    get '/index', {},{ 'HTTP_HOST' => 'www.nowhere.org/index' }
+    get '/index', {},{ 'HTTP_HOST' => 'www.nowhere.org' }
     expect(last_response.status).to eq(404)
     expect(last_response.body).to eq 'Hi, we are sorry but no site was found.'
   end
