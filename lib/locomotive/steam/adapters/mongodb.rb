@@ -12,6 +12,8 @@ module Locomotive::Steam
 
     attr_accessor_initialize :options
 
+    INVALID_OBJECT_ID = defined?(BSON::Error::InvalidObjectId) ? BSON::Error::InvalidObjectId : BSON::ObjectId::Invalid
+
     def all(mapper, query)
       dataset(mapper, query)
     end
@@ -54,7 +56,7 @@ module Locomotive::Steam
     def make_id(id)
       begin
         BSON::ObjectId.from_string(id)
-      rescue BSON::ObjectId::Invalid
+      rescue INVALID_OBJECT_ID
         false
       end
     end
