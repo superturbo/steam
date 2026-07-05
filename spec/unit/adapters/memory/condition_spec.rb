@@ -45,6 +45,41 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
     end
   end
 
+  describe '#matches? operators' do
+    let(:entry) { instance_double('Product', tags: %w(red green blue)) }
+
+    context 'size' do
+      let(:name)  { 'tags.size' }
+      let(:value) { 3 }
+      specify('true when the array size matches')  { expect(subject.matches?(entry)).to eq true }
+
+      context 'wrong size' do
+        let(:value) { 2 }
+        specify('false otherwise') { expect(subject.matches?(entry)).to eq false }
+      end
+    end
+
+    context 'all' do
+      let(:name)  { 'tags.all' }
+
+      context 'the entry contains every queried value' do
+        let(:value) { %w(red green) }
+        specify('matches') { expect(subject.matches?(entry)).to eq true }
+      end
+
+      context 'the entry is missing one of the queried values' do
+        let(:value) { %w(red black) }
+        specify('does not match ($all, not $in)') { expect(subject.matches?(entry)).to eq false }
+      end
+    end
+  end
+
+  describe '#inspect' do
+    let(:name)  { 'price.gt' }
+    let(:value) { 42 }
+    specify('renders field, operator and value') { expect(subject.inspect).to eq('price.gt 42') }
+  end
+
   describe '#decode_operator_and_field!' do
     before { subject.send(:decode_operator_and_field!) }
 

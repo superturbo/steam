@@ -34,10 +34,10 @@ module Locomotive::Steam
           when :lt        then entry_value && entry_value < @value
           when :lte       then entry_value && entry_value <= @value
           when :size      then entry_value.size == @value
-          when :all       then array_contains?([*@value], entry_value)
+          when :all       then array_includes_all?(entry_value, [*@value])
           when :in, :nin  then value_is_in_entry_value?(entry_value)
           else
-            raise UnknownConditionInScope.new("#{@operator} is unknown or not implemented.")
+            raise UnsupportedOperator.new("#{@operator} is unknown or not implemented.")
           end
         end
 
@@ -95,6 +95,14 @@ module Locomotive::Steam
           else
             (source & target).size != 0
           end
+        end
+
+        # $all semantics: the entry's array must contain every queried value
+        # (not merely intersect it, which is $in).
+        def array_includes_all?(entry_value, values)
+          return false unless entry_value.is_a?(Array)
+
+          (values - entry_value).empty?
         end
 
       end

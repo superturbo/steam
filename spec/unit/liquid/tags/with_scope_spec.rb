@@ -63,6 +63,13 @@ describe Locomotive::Steam::Liquid::Tags::WithScope do
       end
     end
 
+    describe 'decode a deeply nested variable' do
+      # A multi-segment dotted path resolves to its value in the scope condition.
+      let(:assigns) { { 'params' => { 'a' => { 'b' => 'deep' } } } }
+      let(:source)  { "{% with_scope foo: params.a.b %}{% assign conditions = with_scope %}{% endwith_scope %}" }
+      it { expect(conditions['foo']).to eq 'deep' }
+    end
+
     describe 'decode basic options (boolean, integer, ...)' do
 
       let(:source) { "{% with_scope active: true, price: 42, title: 'foo', hidden: false %}{% assign conditions = with_scope %}{% endwith_scope %}" }
