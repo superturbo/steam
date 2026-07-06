@@ -57,6 +57,15 @@ describe Locomotive::Steam::Liquid::Filters::Text do
 
     end
 
+    context 'inside a loop' do
+
+      # the template literal must not accumulate the previous iterations
+      subject { render_template("{% for x in list %}{{ 'i' | concat: '-', x }} {% endfor %}", ::Liquid::Context.new({ 'list' => %w(a b c) }, {}, {})) }
+
+      it { is_expected.to eq 'i-a i-b i-c ' }
+
+    end
+
   end
 
   it 'encodes an input' do

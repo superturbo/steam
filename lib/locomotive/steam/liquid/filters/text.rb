@@ -32,7 +32,8 @@ module Locomotive
               raise ::Liquid::ArgumentError, 'concat filter requires an array argument' unless array.respond_to?(:to_ary)
               ::Liquid::StandardFilters::InputIterator.new(input, @context).concat(array)
             else
-              result = input.to_s
+              # to_s returns self for strings — dup, or << corrupts the parsed template literal
+              result = input.to_s.dup
               args.flatten.each { |a| result << a.to_s }
               result
             end
