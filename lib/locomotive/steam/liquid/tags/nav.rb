@@ -137,7 +137,12 @@ module Locomotive
           #
           def entry_label(page, context)
             icon  = @_options[:icon] ? '<span></span>' : ''
-            title = @_options[:liquid_render] ? @_options[:liquid_render].render({ 'page' => page }, registers: context.registers) : page.title
+            title = if @_options[:liquid_render]
+              # Share Liquid 5 registers through an explicit context.
+              @_options[:liquid_render].render(::Liquid::Context.build(environments: { 'page' => page }, registers: context.registers))
+            else
+              page.title
+            end
 
             if icon.blank?
               title

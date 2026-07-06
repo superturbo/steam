@@ -31,7 +31,7 @@ module Locomotive
             )
           end
 
-          def render(context)
+          def render_to_output_buffer(context, output)
             evaluate_attributes(context)
 
             # the context (parsing) doesn't include the page key if cache is on
@@ -52,8 +52,10 @@ module Locomotive
 
             context.stack do
               set_section_dom_id(context)
-              render_section(context, template, section, content)
+              output << render_section(context, template, section, content)
             end
+
+            output
           end
 
           private

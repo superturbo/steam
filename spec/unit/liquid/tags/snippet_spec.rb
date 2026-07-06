@@ -70,12 +70,12 @@ describe Locomotive::Steam::Liquid::Tags::Snippet do
 
     context 'the snippet has a syntax error inside its liquid template' do
 
-      # unlike the section tag (wrapped into a Steam LiquidError by the
-      # PartialCache patch), Liquid 4's include raises the bare error
+      # Liquid 5's include loads through PartialCache, so the snippet path now
+      # gets the same Steam error wrapping as the section path
       let(:snippet_source) { '{% if %}' }
 
-      it 'raises a SyntaxError' do
-        expect { subject }.to raise_exception(::Liquid::SyntaxError)
+      it 'raises a LiquidError' do
+        expect { subject }.to raise_exception(Locomotive::Steam::LiquidError)
       end
 
     end

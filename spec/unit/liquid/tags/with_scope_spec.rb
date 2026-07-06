@@ -168,9 +168,8 @@ describe Locomotive::Steam::Liquid::Tags::WithScope do
       let(:assigns) { {'list' => ['A', 'B', 'C']} }
       let(:source) { "{% for key in list %}{% with_scope foo: key %}{% assign conditions = with_scope %}{% endwith_scope %}{{ conditions }}{% endfor %}" }
 
-      # NB: rendered via Hash#to_s, whose format changed in Ruby 3.4 (spaces
-      # around `=>`); build the expectation from Ruby itself to stay version-agnostic.
-      it { expect(output).to eq([{ 'foo' => 'A' }, { 'foo' => 'B' }, { 'foo' => 'C' }].map(&:to_s).join) }
+      # hashes are serialized by Liquid::Utils.to_s, no matter the Ruby version
+      it { expect(output).to eq '{"foo"=>"A"}{"foo"=>"B"}{"foo"=>"C"}' }
 
     end
 
