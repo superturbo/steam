@@ -26,9 +26,16 @@ module Locomotive
           end
 
           def concat(input, *args)
-            result = input.to_s
-            args.flatten.each { |a| result << a.to_s }
-            result
+            if input.is_a?(::Array)
+              # Liquid's built-in array concat semantics
+              array = args.first
+              raise ::Liquid::ArgumentError, 'concat filter requires an array argument' unless array.respond_to?(:to_ary)
+              ::Liquid::StandardFilters::InputIterator.new(input, @context).concat(array)
+            else
+              result = input.to_s
+              args.flatten.each { |a| result << a.to_s }
+              result
+            end
           end
 
           # right justify and padd a string

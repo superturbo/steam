@@ -26,7 +26,9 @@ module Locomotive
             array.to_a.shuffle
           end
 
-          def default(input, value)
+          def default(input, value = '', options = {})
+            options = {} unless options.is_a?(Hash)
+            return input if options['allow_false'] && input == false
             input.blank? ? value : input
           end
 

@@ -22,6 +22,15 @@ describe Locomotive::Steam::Liquid::Filters::Misc do
     expect(default(false, 42)).to eq 42
   end
 
+  it 'keeps false when allow_false is on' do
+    expect(default(false, 42, 'allow_false' => true)).to eq false
+    expect(default(nil, 42, 'allow_false' => true)).to eq 42
+  end
+
+  it 'defaults to an empty string without an explicit value' do
+    expect(default(nil)).to eq ''
+  end
+
   describe 'rendered through Liquid' do
 
     let(:assigns) { {} }
@@ -32,6 +41,11 @@ describe Locomotive::Steam::Liquid::Filters::Misc do
     describe 'default' do
       let(:source) { "{{ false | default: 42 }}" }
       it { is_expected.to eq '42' }
+
+      context 'with allow_false' do
+        let(:source) { "{{ false | default: 42, allow_false: true }}" }
+        it { is_expected.to eq 'false' }
+      end
     end
 
     describe 'map' do
