@@ -51,15 +51,18 @@ describe Locomotive::Steam::Middlewares::Cache do
     let(:site) { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_control: '', cache_vary: nil) }
     let(:page) { instance_double('Page', cache_enabled: true) }
 
+    # same formula as Cache#cache_key (the version prefix busts caches on release)
+    let(:cache_key) { Digest::MD5.hexdigest("#{Locomotive::Steam::VERSION}/site/42/#{now.to_time.to_i}/page///") }
+
     context 'the request is a GET' do
 
       let(:response) { nil }
 
-      before { expect(cache).to receive(:read).with('f5f2eb8af560507da49fbe5df8220030').and_return(response) }
+      before { expect(cache).to receive(:read).with(cache_key).and_return(response) }
 
       context 'the cache is empty' do
 
-        before { expect(cache).to receive(:write).with('f5f2eb8af560507da49fbe5df8220030', Marshal.dump([200, {}, ["Hello world!"]])) }
+        before { expect(cache).to receive(:write).with(cache_key, Marshal.dump([200, {}, ["Hello world!"]])) }
 
         it 'tells the CDN to cache the page and also cache it internally' do
           is_expected.to eq ['max-age=0, s-maxage=3600, public, must-revalidate', 'Accept-Language']
@@ -69,7 +72,7 @@ describe Locomotive::Steam::Middlewares::Cache do
 
           subject { send_request[:env]['steam.cache_etag'] }
 
-          it { is_expected.to eq 'f5f2eb8af560507da49fbe5df8220030' }
+          it { is_expected.to eq cache_key }
 
         end
 
@@ -104,7 +107,7 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       context 'based on the ETag' do
 
-        let(:etag) { 'f5f2eb8af560507da49fbe5df8220030' }
+        let(:etag) { cache_key }
 
         it 'returns a 304 (Not modified) without no cache headers' do
           expect(subject.first).to eq 304
