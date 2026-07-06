@@ -28,7 +28,7 @@ module Locomotive
             end
           end
 
-          def render(context)
+          def render_to_output_buffer(context, output)
             # parse_context (previously @options) doesn't include the page key if cache is on
             parse_context[:page] = context.registers[:page]
 
@@ -43,17 +43,6 @@ module Locomotive
 
               super
             end
-          end
-
-          private
-
-          def read_template_from_file_system(context)
-            file_system = context.registers[:file_system] || Liquid::Template.file_system
-
-            # we use a convention to differentiate sections from snippets
-            template_path = "snippets--#{context.evaluate(@template_name_expr)}"
-
-            file_system.read_template_file(template_path)
           end
 
         end

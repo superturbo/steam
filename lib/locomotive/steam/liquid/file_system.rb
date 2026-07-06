@@ -23,6 +23,9 @@ module Locomotive
         def read_template_file(template_path)
           type, name = template_path.split('--')
 
+          # Liquid 5 include passes bare snippet names.
+          type, name = 'snippets', type if name.nil?
+
           entity = (
             case type
             when 'sections'

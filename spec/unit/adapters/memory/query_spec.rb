@@ -82,4 +82,43 @@ describe Locomotive::Steam::Adapters::Memory::Query do
     end
   end
 
+  describe '#+' do
+    specify 'mutates and returns the left query, merging in the other conditions' do
+      q1 = query.new(dataset, locale) { where('name.eq' => 'foo') }
+      q2 = query.new(dataset, locale) { where('id.lt' => 2) }
+      merged = q1 + q2
+
+      expect(merged).to be(q1)
+      expect(merged.conditions.size).to eq(2)
+      expect(merged.all.map(&:name)).to eq(['foo'])
+    end
+  end
+
+  describe "#where with the 'all' operator" do
+    # Locks the public adapter contract ($all) exercised by other LocomotiveCMS
+    # gems through the query DSL, not just Condition in isolation.
+    let(:entry_1) { OpenStruct.new(name: 'foo', tags: %w(red green blue)) }
+    let(:entry_2) { OpenStruct.new(name: 'bar', tags: %w(red)) }
+    let(:records) { { 1 => entry_1, 2 => entry_2 } }
+
+    specify 'keeps only entries whose array contains every queried value' do
+      result = query.new(dataset, locale) { where('tags.all' => %w(red green)) }.all
+      expect(result.map(&:name)).to eq(['foo'])
+    end
+  end
+
+  describe '#==' do
+    context 'compared to an Array' do
+      specify 'materializes and compares the results' do
+        expect(query.new(dataset, locale)).to eq([entry_1, entry_2, entry_3])
+      end
+    end
+
+    context 'compared to a non-Array' do
+      specify 'falls back to object identity' do
+        expect(query.new(dataset, locale) == 'foo').to eq(false)
+      end
+    end
+  end
+
 end

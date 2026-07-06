@@ -158,7 +158,7 @@ module Locomotive::Steam
           def transform_sections_content(page, locale)
             [:sections_dropzone_content, :sections_content].each do |name|
               if content = page[name][locale]
-                return unless content.is_a?(String)
+                next unless content.is_a?(String)
 
                 begin
                   page[name][locale] = MultiJson.load(content)

@@ -26,3 +26,31 @@ describe Locomotive::Steam::TemplateError do
   end
 
 end
+
+describe Locomotive::Steam::JsonParsingError do
+
+  context 'when the parse error message carries a line number' do
+    let(:error) { double('error', message: 'unexpected token at line 3, column 5', backtrace: ['a.rb:1']) }
+    subject     { described_class.new(error, 'index', '{ bad }') }
+
+    it('extracts the line number') { expect(subject.line_number).to eq(3) }
+    it('prefixes the message')     { expect(subject.message).to start_with('JSON parsing error - ') }
+  end
+
+  context 'when the parse error message has no line number' do
+    let(:error) { double('error', message: 'boom', backtrace: []) }
+    subject     { described_class.new(error, 'index', '{ bad }') }
+
+    it('defaults the line number to zero') { expect(subject.line_number).to eq(0) }
+  end
+
+end
+
+describe Locomotive::Steam::RenderError do
+
+  let(:error) { double('error', message: 'boom', line_number: 2, backtrace: []) }
+  subject     { described_class.new(error, 'index', 'source') }
+
+  it('prefixes the message') { expect(subject.message).to start_with('Render - ') }
+
+end

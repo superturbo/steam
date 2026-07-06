@@ -8,23 +8,9 @@ Liquid::Condition.operators['starts_with'.freeze] = proc { |_cond, left, right| 
 
 module Liquid
 
-  class Expression
+  class Condition
 
-    class << self
-      alias_method :parse_without_extra_literals, :parse
-    end
-
-    EXTRA_LITERALS = {
-      'present' => MethodLiteral.new(:present?, '').freeze
-    }.freeze
-
-    def self.parse(markup)
-      if EXTRA_LITERALS.key?(markup)
-        EXTRA_LITERALS[markup]
-      else
-        parse_without_extra_literals(markup)
-      end
-    end
+    @@method_literals['present'.freeze] = MethodLiteral.new(:present?, '').freeze
 
   end
 
@@ -40,49 +26,31 @@ module Liquid
 
   end
 
-  module StandardFilters
-
-    private
-
-    # FIXME: Handle DateTime, Date and Time objects, convert them
-    # into seconds (integer)
-    def to_number(obj)
-      case obj
-      when Numeric
-        obj
-      when String
-        (obj.strip =~ /^\d+\.\d+$/) ? obj.to_f : obj.to_i
-      when DateTime, Date, Time
-        obj.to_time.to_i
-      else
-        0
-      end
-    end
-
-  end
-
   class PartialCache
 
     def self.load(template_name, context:, parse_context:)
+      cached_partials = context.registers[:cached_partials]
+      cache_key = "#{template_name}:#{parse_context.error_mode}"
+      cached = cached_partials[cache_key]
+      return cached if cached
+
+      file_system = context.registers[:file_system]
+      source      = file_system.read_template_file(template_name)
+
+      parse_context.partial = true
+
+      template = context.registers[:template_factory].for(template_name)
+
       begin
-        cached_partials = (context.registers[:cached_partials] ||= {})
-        cached = cached_partials[template_name]
-        return cached if cached
-
-        file_system = (context.registers[:file_system] ||= ::Liquid::Template.file_system)
-        source = file_system.read_template_file(template_name)
-        parse_context.partial = true
-
-        partial = ::Liquid::Template.parse(source, parse_context)
-        cached_partials[template_name] = partial
-
-
+        partial = template.parse(source, parse_context)
+      rescue Locomotive::Steam::TemplateError
+        raise
       rescue ::Liquid::SyntaxError => e
-        # FIXME: we had to reload the template one more time. Not ideal.
-        file_system = (context.registers[:file_system] ||= ::Liquid::Template.file_system)
-        source = file_system.read_template_file(template_name)
         raise Locomotive::Steam::LiquidError.new(e, template_name, source)
       end
+
+      partial.name ||= template_name
+      cached_partials[cache_key] = partial
     ensure
       parse_context.partial = false
     end

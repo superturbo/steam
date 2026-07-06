@@ -35,7 +35,10 @@ module Locomotive
             # replace the nodes of the current template by those from the parent
             # which itself may have have done the same operation if it includes
             # the extends tag.
-            nodelist.replace(parent_template.root.nodelist)
+            # Liquid 5 freezes parsed bodies, so replace the body instead of its nodelist.
+            body = @body.frozen? ? @body.dup : @body
+            body.instance_variable_set(:@nodelist, parent_template.root.nodelist.dup)
+            @body = body
           end
 
           def blank?

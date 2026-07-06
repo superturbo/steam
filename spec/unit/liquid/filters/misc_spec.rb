@@ -19,6 +19,59 @@ describe Locomotive::Steam::Liquid::Filters::Misc do
     expect(default('foo', 42)).to eq 'foo'
     expect(default('', 42)).to eq 42
     expect(default(nil, 42)).to eq 42
+    expect(default(false, 42)).to eq 42
+  end
+
+  it 'keeps false when allow_false is on' do
+    expect(default(false, 42, 'allow_false' => true)).to eq false
+    expect(default(nil, 42, 'allow_false' => true)).to eq 42
+  end
+
+  it 'defaults to an empty string without an explicit value' do
+    expect(default(nil)).to eq ''
+  end
+
+  describe 'rendered through Liquid' do
+
+    let(:assigns) { {} }
+    let(:context) { ::Liquid::Context.new(assigns, {}, {}) }
+
+    subject { render_template(source, context) }
+
+    describe 'default' do
+      let(:source) { "{{ false | default: 42 }}" }
+      it { is_expected.to eq '42' }
+
+      context 'with allow_false' do
+        let(:source) { "{{ false | default: 42, allow_false: true }}" }
+        it { is_expected.to eq 'false' }
+      end
+    end
+
+    describe 'map' do
+
+      # leading zeros prove the conversion ran (unconverted strings would
+      # render as 04,05)
+      context 'to_i' do
+        let(:assigns) { { 'list' => ['04', '05'] } }
+        let(:source)  { "{{ list | map: 'to_i' | join: ',' }}" }
+        it { is_expected.to eq '4,5' }
+      end
+
+      context 'to_f' do
+        let(:assigns) { { 'list' => ['04.30', '05.20'] } }
+        let(:source)  { "{{ list | map: 'to_f' | join: ',' }}" }
+        it { is_expected.to eq '4.3,5.2' }
+      end
+
+      context 'to_liquid' do
+        let(:assigns) { { 'list' => ['4', '5'] } }
+        let(:source)  { "{{ list | map: 'to_liquid' | join: ',' }}" }
+        it { is_expected.to eq '4,5' }
+      end
+
+    end
+
   end
 
   describe 'blank?' do

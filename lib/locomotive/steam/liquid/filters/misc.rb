@@ -26,7 +26,9 @@ module Locomotive
             array.to_a.shuffle
           end
 
-          def default(input, value)
+          def default(input, value = '', options = {})
+            options = {} unless options.is_a?(Hash)
+            return input if options['allow_false'] && input == false
             input.blank? ? value : input
           end
 
@@ -36,7 +38,7 @@ module Locomotive
 
           # map/collect on a given property (support to_f, to_i)
           def map(input, property)
-            ::Liquid::StandardFilters::InputIterator.new(input).map do |e|
+            ::Liquid::StandardFilters::InputIterator.new(input, @context).map do |e|
               e = e.call if e.is_a?(Proc)
 
               if property == 'to_liquid'.freeze
