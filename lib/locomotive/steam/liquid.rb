@@ -4,6 +4,7 @@ require 'ast'
 
 require_relative 'liquid/errors'
 require_relative 'liquid/patches'
+require_relative 'liquid/marshal_cache'
 require_relative 'liquid/file_system'
 require_relative 'liquid/drops/base'
 require_relative 'liquid/drops/i18n_base'
