@@ -42,17 +42,17 @@ module Locomotive::Steam
         end
 
         def against(collection)
-          _query = to_origin
-          selector = apply_tenant_scope(_query.selector)
-          fields, sort = _query.options[:fields], _query.options[:sort]
+          origin_query = to_origin
 
-          results = collection.find(selector)
-          results = results.sort(sort)          if sort
-          results = results.projection(fields)  if fields
-          results = results.skip(@skip)         if @skip
-          results = results.limit(@limit)       if @limit
+          filter  = apply_tenant_scope(origin_query.selector)
+          options = {
+            sort: origin_query.options[:sort],
+            projection: origin_query.options[:fields],
+            skip: @skip,
+            limit: @limit
+          }.compact
 
-          results
+          collection.find(filter, options)
         end
 
         def to_origin

@@ -89,25 +89,45 @@ describe Locomotive::Steam::Adapters::MongoDB::Query do
 
   end
 
-  describe '#against (tenant boundary)' do
+  describe '#against' do
 
     let(:collection) { instance_double('Mongo::Collection') }
     let(:view)       { instance_double('Mongo::Collection::View') }
 
-    before do
-      allow(collection).to receive(:find).and_return(view)
-      %i(sort projection skip limit).each { |m| allow(view).to receive(m).and_return(view) }
+    before { allow(collection).to receive(:find).and_return(view) }
+
+    context 'tenant boundary' do
+
+      it 'scopes an empty query to the current site, with no options' do
+        query.against(collection)
+        expect(collection).to have_received(:find).with({ 'site_id' => 42 }, {})
+      end
+
+      it 'cannot be widened by a user-supplied site_id criterion' do
+        query.where('site_id.ne' => 42).against(collection)
+        expect(collection).to have_received(:find).with(
+          { '$and' => [{ 'site_id' => { '$ne' => 42 } }, { 'site_id' => 42 }] }, {}
+        )
+      end
+
+      context 'without a current site' do
+
+        let(:site) { nil }
+
+        it 'does not add a site filter' do
+          query.where(handle: 'acme').against(collection)
+          expect(collection).to have_received(:find).with({ 'handle' => 'acme' }, {})
+        end
+
+      end
+
     end
 
-    it 'scopes an empty query to the current site' do
-      query.against(collection)
-      expect(collection).to have_received(:find).with('site_id' => 42)
-    end
-
-    it 'cannot be widened by a user-supplied site_id criterion' do
-      query.where('site_id.ne' => 42).against(collection)
+    it 'passes sort, projection, skip and limit as find options' do
+      query.only(:title, :published).order_by(title: :asc).offset(5).limit(10).against(collection)
       expect(collection).to have_received(:find).with(
-        '$and' => [{ 'site_id' => { '$ne' => 42 } }, { 'site_id' => 42 }]
+        { 'site_id' => 42 },
+        { sort: { 'title.en' => 1 }, projection: { 'title.en' => 1, 'published' => 1 }, skip: 5, limit: 10 }
       )
     end
 
