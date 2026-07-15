@@ -12,8 +12,6 @@ module Locomotive::Steam
           @criteria, @sort, @fields, @skip, @limit = {}, nil, nil, nil, nil
           @scope, @localized_attributes = scope, localized_attributes
 
-          apply_default_scope
-
           instance_eval(&block) if block_given?
         end
 
@@ -45,7 +43,8 @@ module Locomotive::Steam
 
         def against(collection)
           _query = to_origin
-          selector, fields, sort = _query.selector, _query.options[:fields], _query.options[:sort]
+          selector = apply_tenant_scope(_query.selector)
+          fields, sort = _query.options[:fields], _query.options[:sort]
 
           results = collection.find(selector)
           results = results.sort(sort)          if sort
@@ -80,8 +79,12 @@ module Locomotive::Steam
           end
         end
 
-        def apply_default_scope
-          where(site_id: @scope.site._id) if @scope.site
+        # Keep reads within the current site.
+        def apply_tenant_scope(selector)
+          return selector unless @scope.site
+
+          tenant = { 'site_id' => @scope.site._id }
+          selector.empty? ? tenant : { '$and' => [selector, tenant] }
         end
 
         def decode_symbol_operators(criterion)

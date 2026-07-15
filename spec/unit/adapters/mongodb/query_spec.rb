@@ -22,7 +22,7 @@ describe Locomotive::Steam::Adapters::MongoDB::Query do
 
       before { query.where(criterion) }
 
-      it { expect(query.criteria).to eq({ site_id: 42, fullpath: 'index' }) }
+      it { expect(query.criteria).to eq({ fullpath: 'index' }) }
 
     end
 
@@ -32,7 +32,7 @@ describe Locomotive::Steam::Adapters::MongoDB::Query do
 
       before { query.where(criterion).where(another_criterion) }
 
-      it { expect(query.criteria).to eq({ site_id: 42, fullpath: 'index', published: true }) }
+      it { expect(query.criteria).to eq({ fullpath: 'index', published: true }) }
 
     end
 
@@ -72,7 +72,7 @@ describe Locomotive::Steam::Adapters::MongoDB::Query do
 
     before { query.where(published: true).order_by(title: :asc) }
 
-    it { expect(query.criteria).to eq({ site_id: 42, published: true }) }
+    it { expect(query.criteria).to eq({ published: true }) }
     it { expect(query.sort).to eq([{ title: :asc }]) }
 
   end
@@ -83,9 +83,33 @@ describe Locomotive::Steam::Adapters::MongoDB::Query do
 
     subject { query.to_origin }
 
-    it { expect(subject.selector).to eq({ 'site_id' => 42, 'title.en' => { '$in' => %w(index) } }) }
+    it { expect(subject.selector).to eq({ 'title.en' => { '$in' => %w(index) } }) }
     it { expect(subject.options[:sort]).to eq({ 'title.en' => 1 }) }
     it { expect(subject.options[:fields]).to eq({ 'title.en' => 1, 'published' => 1}) }
+
+  end
+
+  describe '#against (tenant boundary)' do
+
+    let(:collection) { instance_double('Mongo::Collection') }
+    let(:view)       { instance_double('Mongo::Collection::View') }
+
+    before do
+      allow(collection).to receive(:find).and_return(view)
+      %i(sort projection skip limit).each { |m| allow(view).to receive(m).and_return(view) }
+    end
+
+    it 'scopes an empty query to the current site' do
+      query.against(collection)
+      expect(collection).to have_received(:find).with('site_id' => 42)
+    end
+
+    it 'cannot be widened by a user-supplied site_id criterion' do
+      query.where('site_id.ne' => 42).against(collection)
+      expect(collection).to have_received(:find).with(
+        '$and' => [{ 'site_id' => { '$ne' => 42 } }, { 'site_id' => 42 }]
+      )
+    end
 
   end
 
