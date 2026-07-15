@@ -4,9 +4,10 @@ module Locomotive::Steam
 
       class Command
 
-        def initialize(collection, mapper)
+        def initialize(collection, mapper, scope)
           @collection = collection
           @mapper     = mapper
+          @scope      = scope
         end
 
         def insert(entity)
@@ -23,20 +24,29 @@ module Locomotive::Steam
         def update(entity)
           entity.tap do
             serialized_entity = @mapper.serialize(entity)
-            @collection.find(_id: entity._id).update_one('$set' => serialized_entity)
+            @collection.find(write_filter(entity)).update_one('$set' => serialized_entity)
           end
         end
 
         def inc(entity, attribute, amount = 1)
           entity.tap do
-            @collection.find(_id: entity._id).update_one('$inc' => { attribute => amount })
+            @collection.find(write_filter(entity)).update_one('$inc' => { attribute => amount })
             entity[attribute] ||= 0
             entity[attribute] += amount
           end
         end
 
         def delete(entity)
-          @collection.find(_id: entity._id).delete_one
+          @collection.find(write_filter(entity)).delete_one
+        end
+
+        private
+
+        # Keep writes within the current site.
+        def write_filter(entity)
+          { _id: entity._id }.tap do |filter|
+            filter[:site_id] = @scope.site._id if @scope.site
+          end
         end
 
       end

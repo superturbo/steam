@@ -34,19 +34,19 @@ module Locomotive::Steam
     end
 
     def create(mapper, scope, entity)
-      command(mapper).insert(entity)
+      command(mapper, scope).insert(entity)
     end
 
     def update(mapper, scope, entity)
-      command(mapper).update(entity)
+      command(mapper, scope).update(entity)
     end
 
-    def inc(mapper, entity, attribute, amount = 1)
-      command(mapper).inc(entity, attribute, amount)
+    def inc(mapper, scope, entity, attribute, amount = 1)
+      command(mapper, scope).inc(entity, attribute, amount)
     end
 
     def delete(mapper, scope, entity)
-      command(mapper).delete(entity)
+      command(mapper, scope).delete(entity)
     end
 
     def key(name, operator)
@@ -108,8 +108,8 @@ module Locomotive::Steam
       end
     end
 
-    def command(mapper)
-      command_klass.new(collection(mapper), mapper)
+    def command(mapper, scope)
+      command_klass.new(collection(mapper), mapper, scope)
     end
 
     def collection(mapper)

@@ -37,7 +37,7 @@ module Locomotive::Steam
       end
 
       def inc(entity, attribute, amount = 1)
-        adapter.inc(mapper, entity, attribute, amount)
+        adapter.inc(mapper, scope, entity, attribute, amount)
       end
 
       def delete(entity)

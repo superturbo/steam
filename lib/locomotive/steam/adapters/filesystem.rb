@@ -48,7 +48,7 @@ module Locomotive::Steam
       entity
     end
 
-    def inc(mapper, entity, attribute, amount = 1)
+    def inc(mapper, scope, entity, attribute, amount = 1)
       entity.tap do
         entity[attribute] ||= 0
         entity[attribute] += amount

@@ -52,15 +52,16 @@ describe Locomotive::Steam::FilesystemAdapter do
 
   describe '#inc' do
 
+    let(:site)   { instance_double('Site', _id: 1) }
     let(:entity) { OpenStruct.new(name: 'My post', views: 41) }
 
-    subject { adapter.inc(mapper, entity, :views) }
+    subject { adapter.inc(mapper, scope, entity, :views) }
 
     it { expect(subject.views).to eq 42 }
 
     describe 'by an amount different from 1' do
 
-      subject { adapter.inc(mapper, entity, :views, 3) }
+      subject { adapter.inc(mapper, scope, entity, :views, 3) }
 
       it { expect(subject.views).to eq 44 }
 
