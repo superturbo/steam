@@ -68,7 +68,7 @@ module Locomotive
       end
 
       def default
-        query { where(k(:default, :neq) => nil, k(:type, :in) => [:string, :text, :color, :select, :boolean, :email, :integer, :float]) }.all
+        query { where(k(:default, :ne) => nil, k(:type, :in) => [:string, :text, :color, :select, :boolean, :email, :integer, :float]) }.all
       end
 
       def select_options(name)
