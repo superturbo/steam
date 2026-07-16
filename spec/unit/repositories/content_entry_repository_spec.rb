@@ -19,6 +19,32 @@ describe Locomotive::Steam::ContentEntryRepository do
     adapter.cache = NoCacheStore.new
   end
 
+  describe 'lazy read wiring' do
+
+    before { repository.with(type) }
+
+    it '#first fetches a single entry (query#first), not #all' do
+      dataset = double('dataset', first: :entry)
+      allow(dataset).to receive(:all)
+      allow(repository).to receive(:query).and_return(dataset)
+
+      expect(repository.first).to eq :entry
+      expect(dataset).to have_received(:first)
+      expect(dataset).not_to have_received(:all)
+    end
+
+    it '#exists? checks #empty?, not #all.size' do
+      dataset = double('dataset', empty?: false)
+      allow(repository).to receive(:query).and_return(dataset)
+      allow(dataset).to receive(:all)
+
+      expect(repository.exists?).to be true
+      expect(dataset).to have_received(:empty?)
+      expect(dataset).not_to have_received(:all)
+    end
+
+  end
+
   describe '#all' do
 
     let(:conditions) { nil }

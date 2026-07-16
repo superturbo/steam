@@ -37,18 +37,7 @@ module Locomotive
       end
 
       def all(conditions = {}, &block)
-        conditions, order_by = conditions_without_order_by(conditions)
-
-        # priority:
-        # 1/ order_by passed in the conditions parameter
-        # 2/ the default order (_position) defined in the content type
-        order_by ||= content_type.order_by
-
-        query {
-          (block_given? ? instance_eval(&block) : where).
-            where(conditions).
-              order_by(order_by)
-        }.all
+        ordered_entries(conditions, &block).all
       end
 
       def count(conditions = {})
@@ -62,16 +51,16 @@ module Locomotive
       end
 
       def first(&block)
-        all({}, &block).first
+        ordered_entries({}, &block).first
       end
 
       def last(&block)
-        all({}, &block).last
+        ordered_entries({}, &block).all.last
       end
 
       def exists?(conditions = {})
         conditions, _ = conditions_without_order_by(conditions)
-        query { where(conditions) }.all.size > 0
+        !query { where(conditions) }.empty?
       end
 
       def by_slug(slug)
@@ -124,6 +113,21 @@ module Locomotive
       end
 
       private
+
+      def ordered_entries(conditions = {}, &block)
+        conditions, order_by = conditions_without_order_by(conditions)
+
+        # priority:
+        # 1/ order_by passed in the conditions parameter
+        # 2/ the default order (_position) defined in the content type
+        order_by ||= content_type.order_by
+
+        query {
+          (block_given? ? instance_eval(&block) : where).
+            where(conditions).
+              order_by(order_by)
+        }
+      end
 
       def mapper
         key = self.content_type._id.to_s

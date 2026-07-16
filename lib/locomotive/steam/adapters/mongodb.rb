@@ -97,11 +97,7 @@ module Locomotive::Steam
     end
 
     def dataset(mapper, query)
-      Locomotive::Steam::Adapters::MongoDB::Dataset.new do
-        query.against(collection(mapper)).map do |attributes|
-          entity = mapper.to_entity(attributes)
-        end
-      end
+      Locomotive::Steam::Adapters::MongoDB::Dataset.new(query.against(collection(mapper)), mapper)
     end
 
     def command(mapper, scope)

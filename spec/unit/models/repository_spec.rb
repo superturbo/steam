@@ -39,6 +39,20 @@ describe Locomotive::Steam::Models::Repository do
 
   end
 
+  describe '#all' do
+
+    let(:dataset) { double('dataset') }
+
+    it 'materializes the query result' do
+      allow(repository).to receive(:query).and_return(dataset)
+      allow(dataset).to receive(:all).and_return([:entity])
+
+      expect(repository.all).to eq [:entity]
+      expect(dataset).to have_received(:all)
+    end
+
+  end
+
   describe '#prepare_conditions' do
 
     let(:conditions) { [{ 'band_id' => 42, 'order_by' => 'created_at.desc' }] }

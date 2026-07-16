@@ -68,7 +68,10 @@ module Locomotive::Steam
         adapter.key(name, operator)
       end
 
-      alias :all :query
+      # Keep #all materialized across adapters.
+      def all(&block)
+        query(&block).all
+      end
 
       def mapper(memoized = true)
         name, options, block = mapper_options
