@@ -22,7 +22,7 @@ module Locomotive::Steam
 
     def count(mapper, scope, &block)
       query = query_klass.new(scope, mapper.localized_attributes, &block)
-      query.against(collection(mapper)).count
+      query.against(collection(mapper)).count_documents
     end
 
     def find(mapper, scope, id)
