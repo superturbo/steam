@@ -1,7 +1,6 @@
 require 'mongo'
-require 'origin'
+require 'mongo/active_support'
 
-require_relative 'mongodb/origin'
 require_relative 'mongodb/query'
 require_relative 'mongodb/dataset'
 require_relative 'mongodb/command'
@@ -11,8 +10,6 @@ module Locomotive::Steam
   class MongoDBAdapter
 
     attr_accessor_initialize :options
-
-    INVALID_OBJECT_ID = defined?(BSON::Error::InvalidObjectId) ? BSON::Error::InvalidObjectId : BSON::ObjectId::Invalid
 
     def all(mapper, query)
       dataset(mapper, query)
@@ -50,15 +47,14 @@ module Locomotive::Steam
     end
 
     def key(name, operator)
-      name.to_sym.__send__(operator.to_sym)
+      "#{name}.#{operator}"
     end
 
     def make_id(id)
-      begin
-        BSON::ObjectId.from_string(id)
-      rescue INVALID_OBJECT_ID
-        false
-      end
+      return id if id.is_a?(BSON::ObjectId)
+      return false unless BSON::ObjectId.legal?(id)
+
+      BSON::ObjectId.from_string(id)
     end
 
     def base_url(mapper, scope, entity = nil)

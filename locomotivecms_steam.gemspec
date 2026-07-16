@@ -16,7 +16,6 @@ Gem::Specification.new do |spec|
   spec.require_paths = ['lib']
 
   spec.add_development_dependency 'mongo',      '~> 2.24'
-  spec.add_development_dependency 'origin',     '~> 2.3.1'
 
   spec.add_dependency 'nokogiri',               '~> 1.19'
   spec.add_dependency 'sanitize',               '~> 7.0'

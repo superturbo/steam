@@ -1,5 +1,4 @@
 require 'spec_helper'
-require 'origin'
 
 describe Locomotive::Steam::Liquid::Tags::WithScope do
 

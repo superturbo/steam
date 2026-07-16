@@ -10,7 +10,7 @@ describe Locomotive::Steam::MongoDBAdapter do
 
     subject { adapter.key(:title, :in) }
 
-    it { is_expected.to eq :title.in }
+    it { is_expected.to eq 'title.in' }
 
   end
 
@@ -26,7 +26,15 @@ describe Locomotive::Steam::MongoDBAdapter do
 
       let(:id) { BSON::ObjectId.from_string('56fd9f48a2f42217744a85d7') }
 
-      it { is_expected.to eq(BSON::ObjectId.from_string('56fd9f48a2f42217744a85d7')) }
+      it { is_expected.to eq id }
+
+    end
+
+    context 'passing an invalid id' do
+
+      let(:id) { 'not-an-object-id' }
+
+      it { is_expected.to eq false }
 
     end
 

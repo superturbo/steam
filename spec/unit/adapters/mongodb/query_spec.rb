@@ -1,8 +1,5 @@
 require 'spec_helper'
 
-require 'origin'
-
-require_relative '../../../../lib/locomotive/steam/adapters/mongodb/origin.rb'
 require_relative '../../../../lib/locomotive/steam/adapters/mongodb/query.rb'
 
 describe Locomotive::Steam::Adapters::MongoDB::Query do
@@ -74,18 +71,6 @@ describe Locomotive::Steam::Adapters::MongoDB::Query do
 
     it { expect(query.criteria).to eq({ published: true }) }
     it { expect(query.sort).to eq([{ title: :asc }]) }
-
-  end
-
-  describe '#to_origin' do
-
-    before { query.where(:title.in => %w(index)).only(:title, :published).order_by(title: :asc) }
-
-    subject { query.to_origin }
-
-    it { expect(subject.selector).to eq({ 'title.en' => { '$in' => %w(index) } }) }
-    it { expect(subject.options[:sort]).to eq({ 'title.en' => 1 }) }
-    it { expect(subject.options[:fields]).to eq({ 'title.en' => 1, 'published' => 1}) }
 
   end
 

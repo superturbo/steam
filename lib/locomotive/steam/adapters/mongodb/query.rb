@@ -1,10 +1,10 @@
+require_relative 'query_compiler'
+
 module Locomotive::Steam
   module Adapters
     module MongoDB
 
       class Query
-
-        SYMBOL_OPERATORS = %w(all elem_match exists gt gte in lt lte mod ne near near_sphere nin with_size with_type within_box within_circle within_polygon within_spherical_circle)
 
         attr_reader :criteria, :sort
 
@@ -17,7 +17,7 @@ module Locomotive::Steam
 
         def where(criterion = nil)
           self.tap do
-            @criteria.merge!(decode_symbol_operators(criterion)) unless criterion.nil?
+            @criteria.merge!(criterion) unless criterion.nil?
           end
         end
 
@@ -42,34 +42,20 @@ module Locomotive::Steam
         end
 
         def against(collection)
-          origin_query = to_origin
+          compiled = QueryCompiler.new(build_aliases(@localized_attributes, @scope.locale)).compile(
+            @criteria, sort: @sort, fields: @fields, skip: @skip, limit: @limit
+          )
 
-          filter  = apply_tenant_scope(origin_query.selector)
-          options = {
-            sort: origin_query.options[:sort],
-            projection: origin_query.options[:fields],
-            skip: @skip,
-            limit: @limit
-          }.compact
-
-          collection.find(filter, options)
-        end
-
-        def to_origin
-          build_origin_query.only(@fields).where(@criteria).order_by(*@sort)
+          collection.find(apply_tenant_scope(compiled.filter), compiled.options)
         end
 
         def key(name, operator)
-          :"#{name}".send(operator.to_sym)
+          "#{name}.#{operator}"
         end
 
         alias :k :key
 
         private
-
-        def build_origin_query
-          ::Origin::Query.new(build_aliases(@localized_attributes, @scope.locale))
-        end
 
         def build_aliases(localized_attributes, locale)
           localized_attributes.inject({}) do |aliases, name|
@@ -80,27 +66,11 @@ module Locomotive::Steam
         end
 
         # Keep reads within the current site.
-        def apply_tenant_scope(selector)
-          return selector unless @scope.site
+        def apply_tenant_scope(filter)
+          return filter unless @scope.site
 
           tenant = { 'site_id' => @scope.site._id }
-          selector.empty? ? tenant : { '$and' => [selector, tenant] }
-        end
-
-        def decode_symbol_operators(criterion)
-          criterion.dup.tap do |_criterion|
-            criterion.each do |key, value|
-              next unless key.is_a?(String)
-
-              _key, operator = key.split('.')
-
-              if operator && SYMBOL_OPERATORS.include?(operator)
-                _criterion.delete(key)
-                _key = _key.to_s.to_sym.public_send(operator.to_sym)
-                _criterion[_key] = value
-              end
-            end
-          end
+          filter.empty? ? tenant : { '$and' => [filter, tenant] }
         end
 
         def decode_order_by(*spec)

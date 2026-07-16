@@ -137,7 +137,6 @@ GEM
     nio4r (2.7.5)
     nokogiri (1.19.4-arm64-darwin)
       racc (~> 1.4)
-    origin (2.3.1)
     ostruct (0.6.3)
     parser (3.3.11.1)
       ast (~> 2.4.1)
@@ -213,7 +212,6 @@ DEPENDENCIES
   locomotivecms_steam!
   memory_profiler
   mongo (~> 2.24)
-  origin (~> 2.3.1)
   puma (~> 8.0)
   rack (~> 3.0)
   rack-mini-profiler (~> 4.0)

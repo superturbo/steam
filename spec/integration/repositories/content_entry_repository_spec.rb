@@ -151,7 +151,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
         let(:type) { type_repository.by_slug('events') }
 
-        subject { repository.all(:date.lte => Time.now.to_date, order_by: 'date desc') }
+        subject { repository.all('date.lte' => Time.now.to_date, order_by: 'date desc') }
         it { expect(subject.map { |entry| entry[:place] }.slice(0, 2)).to eq(["Avogadro's Number", "Quixote's True Blue"]) }
 
       end
