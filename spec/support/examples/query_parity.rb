@@ -2,7 +2,7 @@
 # — MongoDB (Engine) and Filesystem->Memory (Wagon) — so the two products render
 # a site the same way. Each case pins the exact rows by their stable, unique
 # _slug (place/name repeat across years, so a wrong-row match must not pass).
-# The contract is documented in query_semantics.md; the table grows as later
+# The contract is documented in docs/query_semantics.md; the table grows as later
 # phases align the engines, so every commit stays green.
 #
 # Fixture caveat: the MongoDB seed applied type defaults the Filesystem YAML
