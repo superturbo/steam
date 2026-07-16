@@ -23,21 +23,20 @@ module Locomotive::Steam
 
         def update(entity)
           entity.tap do
-            serialized_entity = @mapper.serialize(entity)
-            @collection.find(write_filter(entity)).update_one('$set' => serialized_entity)
+            @collection.update_one(write_filter(entity), '$set' => @mapper.serialize(entity))
           end
         end
 
         def inc(entity, attribute, amount = 1)
           entity.tap do
-            @collection.find(write_filter(entity)).update_one('$inc' => { attribute => amount })
+            @collection.update_one(write_filter(entity), '$inc' => { attribute => amount })
             entity[attribute] ||= 0
             entity[attribute] += amount
           end
         end
 
         def delete(entity)
-          @collection.find(write_filter(entity)).delete_one
+          @collection.delete_one(write_filter(entity))
         end
 
         private
