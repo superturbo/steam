@@ -1,6 +1,7 @@
 require 'mongo'
 require 'mongo/active_support'
 
+require_relative 'query'
 require_relative 'mongodb/query'
 require_relative 'mongodb/dataset'
 require_relative 'mongodb/command'
@@ -47,7 +48,7 @@ module Locomotive::Steam
     end
 
     def key(name, operator)
-      "#{name}.#{operator}"
+      Adapters::Query::Operators.key(name, operator)
     end
 
     def make_id(id)

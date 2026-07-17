@@ -33,13 +33,19 @@ module Locomotive::Steam
         # no suffix) and no aliases
         PUBLIC = %i(all exists gt gte in lt lte ne nin size).freeze
 
+        private_constant :BY_NAME, :ALIASES
+
         module_function
 
-        def fetch(operator)
+        # the Operator for a name or alias, or nil — resolves aliases so the
+        # engines never touch the raw index
+        def [](operator)
           name = operator.to_s
-          name = ALIASES.fetch(name, name)
+          BY_NAME[ALIASES.fetch(name, name)]
+        end
 
-          BY_NAME[name] ||
+        def fetch(operator)
+          self[operator] ||
             raise(UnsupportedOperator, "unsupported operator: #{operator.inspect}")
         end
 

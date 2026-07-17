@@ -49,6 +49,15 @@ describe Locomotive::Steam::Adapters::Query::Operators do
 
   end
 
+  describe '.[]' do
+
+    it { expect(described_class['gt'].name).to eq :gt }
+    it { expect(described_class['=='].name).to eq :eq }
+    it { expect(described_class['neq']).to be_nil }
+    it { expect(described_class['approx']).to be_nil }
+
+  end
+
   describe '.key' do
 
     it { expect(described_class.key(:views, 'gt')).to eq 'views.gt' }

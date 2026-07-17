@@ -4,8 +4,10 @@ require_relative '../../../../lib/locomotive/steam/adapters/mongodb/query_compil
 
 describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
 
-  let(:aliases)  { { 'title' => 'title.en' } }
-  let(:compiler) { described_class.new(aliases) }
+  let(:aliases)     { { 'title' => 'title.en' } }
+  let(:compiler)    { described_class.new(aliases) }
+  let(:unsupported) { Locomotive::Steam::Adapters::Query::UnsupportedOperator }
+  let(:invalid)     { Locomotive::Steam::Adapters::Query::InvalidValue }
 
   def filter(criteria)
     compiler.compile(criteria, sort: nil, fields: nil, skip: nil, limit: nil).filter
@@ -17,6 +19,7 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
     it { expect(filter('price.lt'  => 5)).to   eq('price'  => { '$lt'  => 5 }) }
     it { expect(filter('price.lte' => 5)).to   eq('price'  => { '$lte' => 5 }) }
     it { expect(filter('handle.ne' => nil)).to eq('handle' => { '$ne'  => nil }) }
+    it { expect(filter('handle.==' => 'a')).to eq('handle' => { '$eq'  => 'a' }) }
   end
 
   describe '#compile filter — list operators normalise the value to an array' do
@@ -25,6 +28,7 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
     it { expect(filter('tags.in'  => Set[1, 2])).to eq('tags' => { '$in'  => [1, 2] }) }
     it { expect(filter('type.nin' => :x)).to        eq('type' => { '$nin' => [:x] }) }
     it { expect(filter('tags.all' => %w(a b))).to   eq('tags' => { '$all' => %w(a b) }) }
+    it { expect { filter('tags.in' => (1..3)) }.to raise_error(invalid) }
   end
 
   describe '#compile filter — plain fields' do
@@ -32,6 +36,11 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
     it { expect(filter(published: true)).to eq('published' => true) }
     it { expect(filter(name: /bob/)).to eq('name' => /bob/) }
     it { expect(filter(price: (1..3))).to eq('price' => { '$gte' => 1, '$lte' => 3 }) }
+    it { expect(filter(price: (1...3))).to eq('price' => { '$gte' => 1, '$lt' => 3 }) }
+    it { expect(filter(price: (1..))).to eq('price' => { '$gte' => 1 }) }
+    it { expect(filter(price: (..3))).to eq('price' => { '$lte' => 3 }) }
+    it { expect(filter(price: (...3))).to eq('price' => { '$lt' => 3 }) }
+    it { expect { filter(price: Range.new(nil, nil)) }.to raise_error(invalid) }
     it { expect(filter(tags: Set[1, 2])).to eq('tags' => [1, 2]) }
   end
 
@@ -52,7 +61,7 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
     it { expect(filter('f.exists' => false)).to     eq('f' => { '$exists' => false }) }
     it { expect(filter('f.exists' => 'true')).to    eq('f' => { '$exists' => true }) }
     it { expect(filter('f.exists' => 'false')).to   eq('f' => { '$exists' => false }) }
-    it { expect(filter('f.exists' => 'company')).to eq('f' => { '$exists' => false }) }
+    it { expect { filter('f.exists' => 'company') }.to raise_error(invalid) }
   end
 
   describe '#compile filter — $size cast' do
@@ -60,15 +69,15 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
     it { expect(filter('tags.size' => '2')).to eq('tags' => { '$size' => 2 }) }
 
     it 'raises rather than truncate a fractional value' do
-      expect { filter('tags.size' => 2.5) }.to raise_error(described_class::InvalidQueryValue)
+      expect { filter('tags.size' => 2.5) }.to raise_error(invalid)
     end
 
     it 'raises on a non-integer' do
-      expect { filter('tags.size' => 'x') }.to raise_error(described_class::InvalidQueryValue)
+      expect { filter('tags.size' => 'x') }.to raise_error(invalid)
     end
 
     it 'raises on a negative value' do
-      expect { filter('tags.size' => -1) }.to raise_error(described_class::InvalidQueryValue)
+      expect { filter('tags.size' => -1) }.to raise_error(invalid)
     end
   end
 
@@ -89,24 +98,24 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
        within within_box within_circle within_spherical_circle
        within_polygon intersects_line intersects_point intersects_polygon).each do |op|
       it "raises UnsupportedOperator for #{op}" do
-        expect { filter("f.#{op}" => 1) }.to raise_error(described_class::UnsupportedOperator)
+        expect { filter("f.#{op}" => 1) }.to raise_error(unsupported)
       end
     end
   end
 
   describe '#compile filter — rejects Mongo operator injection' do
     context 'in the key' do
-      it { expect { filter('$where' => 'sleep(1000)') }.to raise_error(described_class::UnsupportedOperator) }
-      it { expect { filter('$or' => [{ a: 1 }]) }.to raise_error(described_class::UnsupportedOperator) }
-      it { expect { filter('$expr' => {}) }.to raise_error(described_class::UnsupportedOperator) }
-      it { expect { filter('field.$gt' => 5) }.to raise_error(described_class::UnsupportedOperator) }
+      it { expect { filter('$where' => 'sleep(1000)') }.to raise_error(unsupported) }
+      it { expect { filter('$or' => [{ a: 1 }]) }.to raise_error(unsupported) }
+      it { expect { filter('$expr' => {}) }.to raise_error(unsupported) }
+      it { expect { filter('field.$gt' => 5) }.to raise_error(unsupported) }
     end
 
     context 'in a Hash value (recursively, through Array and Set)' do
-      it { expect { filter(price: { '$gt' => 5 }) }.to raise_error(described_class::UnsupportedOperator) }
-      it { expect { filter(name: { '$not' => { '$regex' => 'bob' } }) }.to raise_error(described_class::UnsupportedOperator) }
-      it { expect { filter(tags: [{ '$where' => 'x' }]) }.to raise_error(described_class::UnsupportedOperator) }
-      it { expect { filter('tags.in' => Set[{ '$gt' => 5 }]) }.to raise_error(described_class::UnsupportedOperator) }
+      it { expect { filter(price: { '$gt' => 5 }) }.to raise_error(unsupported) }
+      it { expect { filter(name: { '$not' => { '$regex' => 'bob' } }) }.to raise_error(unsupported) }
+      it { expect { filter(tags: [{ '$where' => 'x' }]) }.to raise_error(unsupported) }
+      it { expect { filter('tags.in' => Set[{ '$gt' => 5 }]) }.to raise_error(unsupported) }
     end
 
     it 'still allows a legitimate sub-document equality match' do
@@ -161,11 +170,11 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
     it { expect(sort([])).to be_nil }
 
     it 'rejects a numeric direction other than 1 or -1' do
-      expect { sort([{ title: 2 }]) }.to raise_error(described_class::InvalidQueryValue)
+      expect { sort([{ title: 2 }]) }.to raise_error(invalid)
     end
 
     it 'rejects a $-prefixed field such as $natural' do
-      expect { sort([['$natural']]) }.to raise_error(described_class::UnsupportedOperator)
+      expect { sort([['$natural']]) }.to raise_error(unsupported)
     end
   end
 
@@ -178,7 +187,7 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
     it { expect(projection(nil)).to be_nil }
 
     it 'rejects a $-prefixed field' do
-      expect { projection(['$natural']) }.to raise_error(described_class::UnsupportedOperator)
+      expect { projection(['$natural']) }.to raise_error(unsupported)
     end
   end
 

@@ -49,7 +49,9 @@ A key without a suffix is a literal match, and is **not** the same as `.eq`:
 - **`Regexp`** → a native regular expression match (Mongo `{f: /x/}`; it is
   **not** wrapped in `$eq`).
 - **`Range`** → range bounds: `1..3` → `$gte: 1, $lte: 3`; `1...3` → `$gte: 1,
-  $lt: 3` (the exclusive end is honoured).
+  $lt: 3` (the exclusive end is honoured). One-sided ranges keep the bound they
+  have: `1..` → `$gte: 1`, `..3` → `$lte: 3`, `...3` → `$lt: 3`. A range with
+  neither bound (`nil..nil`) raises `Query::InvalidValue`.
 
 A `Regexp` and a `Range` are allowed **only** in a plain field (a `Range` as
 bounds). Neither is accepted through an `.eq`/`.ne` suffix (those take scalars,

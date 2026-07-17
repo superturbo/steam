@@ -12,6 +12,10 @@ describe Locomotive::Steam::MongoDBAdapter do
 
     it { is_expected.to eq 'title.in' }
 
+    it 'raises on an unknown operator' do
+      expect { adapter.key(:title, :bogus) }.to raise_error(Locomotive::Steam::Adapters::Query::UnsupportedOperator)
+    end
+
   end
 
   describe '#make_id' do
