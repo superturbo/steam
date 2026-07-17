@@ -1,3 +1,5 @@
+require_relative '../../../adapters/query'
+
 module Locomotive
   module Steam
     module Liquid
@@ -11,8 +13,7 @@ module Locomotive
             extend ActiveSupport::Concern
 
             included do
-              # Mongoid operators available on symbols
-              OPERATORS = %w(all exists gt gte in lt lte ne nin size near within)
+              OPERATORS = Locomotive::Steam::Adapters::Query::Operators::PUBLIC.map(&:to_s).freeze
 
               SYMBOL_OPERATORS_REGEXP = /(\w+\.(#{OPERATORS.join('|')})){1}\s*\:/o
             end

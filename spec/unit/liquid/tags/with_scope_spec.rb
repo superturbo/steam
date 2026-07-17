@@ -14,6 +14,17 @@ describe Locomotive::Steam::Liquid::Tags::WithScope do
 
   end
 
+  describe 'a removed or unknown operator is not recognised' do
+
+    %w(near within approx).each do |operator|
+      context "with #{operator}" do
+        let(:source) { "{% with_scope f.#{operator}: [1, 2] %}42{% endwith_scope %}" }
+        it { expect { output }.to raise_error(::Liquid::SyntaxError) }
+      end
+    end
+
+  end
+
   describe 'valid syntax' do
 
     before { output }
@@ -160,6 +171,13 @@ describe Locomotive::Steam::Liquid::Tags::WithScope do
       it { expect(conditions['price.lt']).to eq 50 }
       it { expect(conditions['published_at.lte']).to eq '2019-09-10 00:00:00' }
       it { expect(conditions['published_at.gte']).to eq '2019/09/09 00:00:00' }
+
+    end
+
+    describe 'decode the exists operator' do
+
+      let(:source) { "{% with_scope f.exists: true %}{% assign conditions = with_scope %}{% endwith_scope %}" }
+      it { expect(conditions['f.exists']).to eq true }
 
     end
 
