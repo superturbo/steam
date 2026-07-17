@@ -14,16 +14,6 @@ module Locomotive::Steam
 
         CompiledQuery = Data.define(:filter, :options)
 
-        # Operator suffixes Steam does not support: raised with a clear error
-        # rather than silently building a stray dotted field. An unknown, non-
-        # operator suffix stays a literal sub-document path for now.
-        UNSUPPORTED = %w(
-          neq not mod elem_match with_size with_type
-          near near_sphere within within_box within_circle
-          within_spherical_circle within_polygon
-          intersects_line intersects_point intersects_polygon
-        ).freeze
-
         def initialize(aliases)
           @aliases = aliases
         end
@@ -59,12 +49,10 @@ module Locomotive::Steam
 
           if separator.empty?
             literal(key.to_s, value)
-          elsif (operator = Adapters::Query::Operators[suffix])
-            expand(field, operator, value)
-          elsif UNSUPPORTED.include?(suffix)
-            raise Adapters::Query::UnsupportedOperator, "#{suffix} is not supported"
+          elsif field.include?('.')
+            raise Adapters::Query::InvalidValue, "nested fields are not supported: #{key.inspect}"
           else
-            literal(key.to_s, value)
+            expand(field, Adapters::Query::Operators.fetch(suffix), value)
           end
         end
 

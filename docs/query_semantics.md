@@ -24,6 +24,9 @@ are **outside the supported parity contract**.
 A query key is a field name with an optional `.operator` suffix (`price.gte`).
 Values may be coerced per the operator's *value kind* before execution.
 
+The dot is reserved for the operator suffix. Nested field paths are
+unsupported and raise instead of being interpreted as MongoDB dotted paths.
+
 | operator | mongo    | value kind | public (`with_scope`) | meaning |
 |----------|----------|------------|-----------------------|---------|
 | `eq`     | `$eq`    | literal    | no | equal to a scalar, or the scalar is an element of an array field; an array value matches an equal single-level array |

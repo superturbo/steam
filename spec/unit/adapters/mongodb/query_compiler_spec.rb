@@ -49,10 +49,12 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
     it { expect(filter('title.in' => %w(a b))).to eq('title.en' => { '$in' => %w(a b) }) }
   end
 
-  describe '#compile filter — operator split on the last dot' do
-    it { expect(filter('address.location.ne' => 1)).to eq('address.location' => { '$ne' => 1 }) }
-    it 'treats a non-operator suffix as a literal sub-document path' do
-      expect(filter('meta.title' => 'x')).to eq('meta.title' => 'x')
+  describe '#compile filter — a dotted key needs a plain field and a known operator' do
+    it 'rejects a nested field path' do
+      expect { filter('address.location.ne' => 1) }.to raise_error(invalid)
+    end
+    it 'rejects a non-operator suffix' do
+      expect { filter('meta.title' => 'x') }.to raise_error(unsupported)
     end
   end
 
@@ -93,10 +95,8 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
     it { expect(filter({})).to eq({}) }
   end
 
-  describe '#compile filter — unsupported operators raise a clear error' do
-    %w(neq not mod elem_match with_size with_type near near_sphere
-       within within_box within_circle within_spherical_circle
-       within_polygon intersects_line intersects_point intersects_polygon).each do |op|
+  describe '#compile filter — any operator outside the registry raises' do
+    %w(neq not mod near within approx).each do |op|
       it "raises UnsupportedOperator for #{op}" do
         expect { filter("f.#{op}" => 1) }.to raise_error(unsupported)
       end
