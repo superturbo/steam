@@ -4,165 +4,157 @@ require_relative '../../../../lib/locomotive/steam/adapters/memory/condition.rb'
 
 describe Locomotive::Steam::Adapters::Memory::Condition do
 
-  let(:title)     { instance_double('Title', translations: { en: 'Awesome Site' }, :[] => 'Awesome Site') }
-  let(:entry)     { instance_double('Site', { title: title, content: 'foo' }) }
   let(:locale)    { :en }
   let(:field)     { :title }
   let(:operator)  { :eq }
-  let(:name)      { "#{field}.#{operator}"}
+  let(:name)      { "#{field}.#{operator}" }
   let(:value)     { 'Awesome Site' }
 
-  subject { Locomotive::Steam::Adapters::Memory::Condition.new(name, value, locale) }
+  subject { described_class.new(name, value, locale) }
 
-  describe '#entry_value' do
-    context 'i18n' do
-      let(:name)  { 'title.eq' }
-      let(:value) { 'Awesome Site' }
+  def i18n(translations)
+    Locomotive::Steam::Models::I18nField.new(:field, translations)
+  end
 
-      context 'single entry' do
-        specify('match') do
-          expect(subject.matches?(entry)).to eq true
-        end
+  describe '#matches? localization and presence' do
+    let(:entry) { instance_double('Site', title: i18n(en: 'Awesome Site', fr: 'Génial'), content: 'foo') }
 
-        specify('return value') do
-          expect(subject.send(:entry_value, entry)).to eq(value)
-        end
-      end
+    it 'matches a localized field in the current locale' do
+      expect(described_class.new('title.eq', 'Awesome Site', :en).matches?(entry)).to eq true
     end
-    context 'regular way' do
-      let(:name)  { 'content.eq' }
-      let(:value) { 'foo' }
 
-      context 'single entry' do
-        specify('should be match') do
-          expect(subject.matches?(entry)).to eq true
-        end
+    it 'matches a regular field' do
+      expect(described_class.new('content.eq', 'foo', :en).matches?(entry)).to eq true
+    end
 
-        specify('return value') do
-          expect(subject.send(:entry_value, entry)).to eq(value)
-        end
-      end
+    it 'treats a localized field missing the current locale as absent' do
+      only_fr = instance_double('Site', title: i18n(fr: 'Bonjour'))
+      expect(described_class.new(:title, nil, :en).matches?(only_fr)).to eq true
+      expect(described_class.new('title.ne', 'x', :en).matches?(only_fr)).to eq true
     end
   end
 
-  describe '#matches? operators' do
-    let(:entry) { instance_double('Product', tags: %w(red green blue)) }
+  describe '#matches? equality and lists' do
+    let(:with_tags)    { instance_double('Product', tags: %w(red green)) }
+    let(:blank_tags)   { instance_double('Product', tags: nil) }
+    let(:without_tags) { instance_double('Product') }
+    let(:grunge_band)  { instance_double('Band', kind: 'grunge') }
 
-    context 'size' do
-      let(:name)  { 'tags.size' }
-      let(:value) { 3 }
-      specify('true when the array size matches')  { expect(subject.matches?(entry)).to eq true }
+    def match?(name, value, entry)
+      described_class.new(name, value, :en).matches?(entry)
+    end
 
-      context 'wrong size' do
-        let(:value) { 2 }
-        specify('false otherwise') { expect(subject.matches?(entry)).to eq false }
-      end
+    context 'eq' do
+      it('matches a single-level array exactly') { expect(match?(:tags, %w(red green), with_tags)).to eq true }
+      it('rejects a non-exact array') { expect(match?(:tags, %w(red), with_tags)).to eq false }
+      it('matches a scalar against an element') { expect(match?(:tags, 'red', with_tags)).to eq true }
+      it('nil matches a missing field') { expect(match?(:tags, nil, without_tags)).to eq true }
+      it('nil matches a present null field') { expect(match?(:tags, nil, blank_tags)).to eq true }
+      it('nil does not match a present value') { expect(match?(:tags, nil, with_tags)).to eq false }
+    end
+
+    context 'ne' do
+      it('matches a present non-null value') { expect(match?('tags.ne', nil, with_tags)).to eq true }
+      it('does not match a missing field') { expect(match?('tags.ne', nil, without_tags)).to eq false }
+      it('does not match a present null') { expect(match?('tags.ne', nil, blank_tags)).to eq false }
+      it('a non-null value matches a present null') { expect(match?('tags.ne', 'red', blank_tags)).to eq true }
+      it('a non-null value matches a missing field') { expect(match?('tags.ne', 'red', without_tags)).to eq true }
+    end
+
+    context 'in' do
+      it('an element is in the list') { expect(match?('tags.in', %w(red), with_tags)).to eq true }
+      it('no element is in the list') { expect(match?('tags.in', %w(black), with_tags)).to eq false }
+      it('an empty list matches nothing') { expect(match?('tags.in', [], with_tags)).to eq false }
+      it('[nil] matches a missing field') { expect(match?('tags.in', [nil], without_tags)).to eq true }
+    end
+
+    context 'nin' do
+      it('a value in the list is excluded') { expect(match?('tags.nin', %w(red), with_tags)).to eq false }
+      it('a missing field always matches') { expect(match?('tags.nin', %w(red), without_tags)).to eq true }
+      it('an empty list matches everything') { expect(match?('tags.nin', [], with_tags)).to eq true }
     end
 
     context 'all' do
-      let(:name)  { 'tags.all' }
+      it('the entry contains every value') { expect(match?('tags.all', %w(red green), with_tags)).to eq true }
+      it('a missing value fails') { expect(match?('tags.all', %w(red black), with_tags)).to eq false }
+      it('an empty list matches nothing') { expect(match?('tags.all', [], with_tags)).to eq false }
+      it('a missing field fails') { expect(match?('tags.all', %w(red), without_tags)).to eq false }
+      it('a scalar matches a single-value list') { expect(match?('kind.all', %w(grunge), grunge_band)).to eq true }
+    end
 
-      context 'the entry contains every queried value' do
-        let(:value) { %w(red green) }
-        specify('matches') { expect(subject.matches?(entry)).to eq true }
-      end
+    context '[nil] against a present null and a locale-missing field' do
+      let(:present_null)     { instance_double('Product', tags: nil) }
+      let(:locale_missing)   { instance_double('Product', tags: i18n(fr: %w(x))) }
 
-      context 'the entry is missing one of the queried values' do
-        let(:value) { %w(red black) }
-        specify('does not match ($all, not $in)') { expect(subject.matches?(entry)).to eq false }
-      end
+      it('in [nil] matches a present null') { expect(match?('tags.in', [nil], present_null)).to eq true }
+      it('nin [nil] excludes a present null') { expect(match?('tags.nin', [nil], present_null)).to eq false }
+      it('in [nil] matches locale-missing') { expect(match?('tags.in', [nil], locale_missing)).to eq true }
+      it('nin [nil] matches locale-missing') { expect(match?('tags.nin', [nil], locale_missing)).to eq true }
+    end
+  end
+
+  describe '#matches? size' do
+    let(:entry) { instance_double('Product', tags: %w(red green blue)) }
+
+    def size?(n) = described_class.new('tags.size', n, :en).matches?(entry)
+
+    it('true when the array size matches') { expect(size?(3)).to eq true }
+    it('false otherwise') { expect(size?(2)).to eq false }
+  end
+
+  describe 'list value normalization and errors' do
+    let(:invalid) { Locomotive::Steam::Adapters::Query::InvalidValue }
+
+    it 'normalizes a scalar nil in a list to [nil]' do
+      absent  = instance_double('Product')
+      present = instance_double('Product', tags: %w(red))
+      expect(described_class.new('tags.in', nil, :en).matches?(absent)).to eq true
+      expect(described_class.new('tags.in', nil, :en).matches?(present)).to eq false
+    end
+
+    it 'rejects a Range in a list operator' do
+      expect { described_class.new('tags.in', 1..3, :en) }.to raise_error(invalid)
+    end
+
+    it 'rejects a Regexp given to an explicit list operator' do
+      expect { described_class.new('tags.in', /red/, :en) }.to raise_error(invalid)
+    end
+
+    it 'treats a plain-field Regexp as a search, not a list operator' do
+      cond = described_class.new(:name, /red/, :en)
+      expect(cond.matches?(instance_double('Product', name: 'bordeaux red'))).to eq true
+      expect(cond.matches?(instance_double('Product', name: 'green'))).to eq false
+    end
+
+    it 'does not swallow a field reader error' do
+      entry = instance_double('Product')
+      allow(entry).to receive(:tags).and_raise('boom')
+      expect { described_class.new(:tags, 'x', :en).matches?(entry) }.to raise_error('boom')
     end
   end
 
   describe '#inspect' do
     let(:name)  { 'price.gt' }
     let(:value) { 42 }
-    specify('renders field, operator and value') { expect(subject.inspect).to eq('price.gt 42') }
+    it('renders field, operator and value') { expect(subject.inspect).to eq('price.gt 42') }
   end
 
-  describe '#decode_operator_and_field!' do
-    before { subject.send(:decode_operator_and_field!) }
-
-    context 'with normal value' do
-      specify('name should be left part of dot') { expect(subject.field).to eq(field) }
-      specify('operator should be right part of dot') { expect(subject.operator).to eq(operator) }
-      specify('right_operand should be value') { expect(subject.value).to eq(value) }
+  describe 'decoding the field and operator' do
+    context 'with a normal value' do
+      it('extracts the field') { expect(subject.field).to eq field }
+      it('extracts the operator') { expect(subject.operator).to eq operator }
+      it('preserves the value') { expect(subject.value).to eq(value) }
     end
 
-    context 'with regex value' do
+    context 'with a regex value on a plain field' do
+      let(:name)  { 'title' }
       let(:value) { /^[a-z]$/ }
-      specify('operator should be matchtes') { expect(subject.operator).to eq(:matches) }
+      it('the operator becomes matches') { expect(subject.operator).to eq(:matches) }
     end
-  end
 
-  describe '#decode_operator_and_field!' do
-    context 'with unsupported operator' do
+    context 'with an unsupported operator' do
       let(:name) { 'domains.unsupported' }
-      specify('should be throw Exception') do
-        expect do
-          subject.send(:decode_operator_and_field!)
-        end.to raise_error Locomotive::Steam::Adapters::Memory::Condition::UnsupportedOperator
-      end
-    end
-  end
-
-  describe '#adapt_operator!' do
-    let(:name) { 'domains.==' }
-    before do
-      subject.send(:decode_operator_and_field!)
-      subject.send(:adapt_operator!, value)
-    end
-    context 'with single value' do
-      let(:value) { 'sample.example.com' }
-      specify('operator should be :==') { expect(subject.operator).to eq(:==) }
-    end
-    context 'with array of values' do
-      let(:value) { ['sample.example.com'] }
-      specify('operator should be :in') { expect(subject.operator).to eq(:in) }
-    end
-  end
-
-  describe '#array_contains?' do
-    let(:source) { [1, 2, 3, 4] }
-    let(:target) { [1, 2, 3] }
-    context 'target contains the source' do
-      specify('should be true') do
-        expect(subject.send(:array_contains?, source, target)).to eq true
-      end
-    end
-
-    context 'target contains at least one element' do
-      let(:source) { [1] }
-      let(:target) { [1, 2, 3] }
-      specify('should be true') do
-        expect(subject.send(:array_contains?, source, target)).to eq true
-      end
-    end
-  end
-
-  describe '#value_in_right_operand?' do
-    context 'value contains in right operand' do
-      let(:value) { [1, 2, 3, 4] }
-      let(:right_operand) { [1, 2, 3] }
-
-      before do
-        allow(subject).to receive(:operator).and_return(operator)
-        allow(subject).to receive(:right_operand).and_return(right_operand)
-      end
-
-      context 'with operator :in' do
-        let(:operator) { :in }
-        specify('should return true') do
-          expect(subject.send(:value_is_in_entry_value?, value)).to eq true
-        end
-      end
-
-      context 'with other operator' do
-        let(:operator) { :nin }
-        specify('should not return true') do
-          expect(subject.send(:value_is_in_entry_value?, value)).to eq false
-        end
-      end
+      it('raises') { expect { subject }.to raise_error(described_class::UnsupportedOperator) }
     end
   end
 end

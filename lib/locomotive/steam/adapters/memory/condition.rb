@@ -1,3 +1,5 @@
+require_relative '../query'
+
 module Locomotive::Steam
   module Adapters
     module Memory
@@ -6,7 +8,8 @@ module Locomotive::Steam
 
         class UnsupportedOperator < StandardError; end
 
-        OPERATORS = %i(== eq ne neq matches gt gte lt lte size all in nin).freeze
+        OPERATORS      = %i(== eq ne neq matches gt gte lt lte size all in nin).freeze
+        LIST_OPERATORS = %i(in nin all).freeze
 
         attr_reader :field, :operator, :value
 
@@ -16,26 +19,25 @@ module Locomotive::Steam
           @operator, @field = :==, operator_and_field
 
           decode_operator_and_field!
+
+          @list = Adapters::Query::Values.list(@value) if LIST_OPERATORS.include?(@operator)
         end
 
         def matches?(entry)
-          entry_value = entry_value(entry)
-
-          adapt_operator!(entry_value)
+          present, value = read(entry)
 
           case @operator
-          when :==        then entry_value == @value
-          when :eq        then entry_value == @value
-          when :ne        then entry_value != @value
-          when :neq       then entry_value != @value
-          when :matches   then @value =~ entry_value
-          when :gt        then entry_value && entry_value > @value
-          when :gte       then entry_value && entry_value >= @value
-          when :lt        then entry_value && entry_value < @value
-          when :lte       then entry_value && entry_value <= @value
-          when :size      then entry_value.size == @value
-          when :all       then array_includes_all?(entry_value, [*@value])
-          when :in, :nin  then value_is_in_entry_value?(entry_value)
+          when :==, :eq   then eq_match?(value)
+          when :ne, :neq  then !eq_match?(value)
+          when :in        then in_match?(value)
+          when :nin       then !present || !in_match?(value)
+          when :all       then all_match?(value)
+          when :matches   then !(@value =~ value).nil?
+          when :gt        then value && value > @value
+          when :gte       then value && value >= @value
+          when :lt        then value && value < @value
+          when :lte       then value && value <= @value
+          when :size      then value.size == @value
           else
             raise UnsupportedOperator.new("#{@operator} is unknown or not implemented.")
           end
@@ -47,62 +49,54 @@ module Locomotive::Steam
 
         protected
 
-        def entry_value(entry)
-          value = entry.send(@field) rescue nil # TODO: not safe to rely on rescue (hidden errors)
-
-          if value.respond_to?(:translations)
-            value[@locale]
-          else
-            value
-          end
-        end
-
         def decode_operator_and_field!
           if match = @operator_and_field.match(/^(?<field>[a-z0-9_-]+)\.(?<operator>.*)$/)
             @field    = match[:field].to_sym
             @operator = match[:operator].to_sym
             check_operator!
-          end
-
-          @operator = :matches if @value.is_a?(Regexp)
-        end
-
-        def adapt_operator!(value)
-          case value
-          when Array
-            @operator = :in if @operator == :==
+          elsif @value.is_a?(Regexp)
+            @operator = :matches
           end
         end
 
-        def value_is_in_entry_value?(value)
-          _matches = if value.is_a?(Array)
-            array_contains?([*value], [*@value])
+        # Preserve missing vs null for MongoDB parity.
+        def read(entry)
+          return [false, nil] unless entry.respond_to?(@field)
+
+          value = entry.public_send(@field)
+
+          if value.respond_to?(:translations)
+            [value.translations.key?(@locale), value[@locale]]
           else
-            [*@value].include?(value)
+            [true, value]
           end
-          @operator == :in ? _matches : !_matches
         end
 
         private
 
-        def check_operator!
-          raise UnsupportedOperator.new unless OPERATORS.include?(@operator)
-        end
-
-        def array_contains?(source, target)
-          if target.size == 0
-            source.size == 0
+        # MongoDB equality matches scalar array elements, but arrays exactly.
+        def eq_match?(value)
+          if @value.is_a?(Array)
+            value == @value
+          elsif value.is_a?(Array)
+            value.include?(@value)
           else
-            (source & target).size != 0
+            value == @value
           end
         end
 
-        # $all semantics: the entry's array must contain every queried value
-        # (not merely intersect it, which is $in).
-        def array_includes_all?(entry_value, values)
-          return false unless entry_value.is_a?(Array)
+        def in_match?(value)
+          value.is_a?(Array) ? value.intersect?(@list) : @list.include?(value)
+        end
 
-          (values - entry_value).empty?
+        def all_match?(value)
+          return false if @list.empty?
+
+          value.is_a?(Array) ? (@list - value).empty? : @list == [value]
+        end
+
+        def check_operator!
+          raise UnsupportedOperator.new unless OPERATORS.include?(@operator)
         end
 
       end

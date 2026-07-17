@@ -12,6 +12,13 @@
 # without reseeding the dump.
 module QueryParity
 
+  # every event without a tags field (all but the two 2012 tagged rows)
+  UNTAGGED_EVENTS = %w(
+    avogadros-number avogadros-number-1 ballydoyles ballydoyles-1
+    brownes-market-1 kellys-westport-inn-1 quixotes-true-blue
+    quixotes-true-blue-1 the-belmont the-belmont-1
+  ).freeze
+
   CASES = [
     { desc: 'scalar equality on a select field',
       type: 'bands', conditions: { kind: 'grunge' },
@@ -63,6 +70,39 @@ module QueryParity
     { desc: 'gte on a numeric field',
       type: 'events', conditions: { 'price.gte' => 5.5 },
       expected: %w(brownes-market kellys-westport-inn) },
+
+    { desc: 'a scalar equals an array field element',
+      type: 'events', conditions: { tags: 'awesome' },
+      expected: %w(brownes-market kellys-westport-inn) },
+
+    { desc: 'an array value matches a single-level array exactly',
+      type: 'events', conditions: { tags: ['awesome', 'open bar'] },
+      expected: %w(brownes-market kellys-westport-inn) },
+
+    { desc: 'an array value must match exactly, not intersect',
+      type: 'events', conditions: { tags: ['awesome'] }, expected: [] },
+
+    { desc: 'an empty all matches nothing',
+      type: 'events', conditions: { 'tags.all' => [] }, expected: [] },
+
+    { desc: 'ne a non-null value also matches a missing field',
+      type: 'events', conditions: { 'tags.ne' => 'awesome' },
+      expected: UNTAGGED_EVENTS },
+
+    { desc: 'eq nil matches a missing or null field',
+      type: 'events', conditions: { tags: nil }, expected: UNTAGGED_EVENTS },
+
+    { desc: 'ne nil matches only present, non-null fields',
+      type: 'events', conditions: { 'tags.ne' => nil },
+      expected: %w(brownes-market kellys-westport-inn) },
+
+    { desc: 'nin — a missing field matches',
+      type: 'events', conditions: { 'tags.nin' => ['awesome'] },
+      expected: UNTAGGED_EVENTS },
+
+    { desc: 'in [nil] matches a missing field',
+      type: 'events', conditions: { 'tags.in' => [nil] },
+      expected: UNTAGGED_EVENTS },
   ].freeze
 
 end
