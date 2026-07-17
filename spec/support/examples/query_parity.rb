@@ -36,6 +36,14 @@ module QueryParity
       type: 'bands', conditions: { order_by: 'name' },
       expected: %w(alice-in-chains pearl-jam the-who), ordered: true },
 
+    { desc: 'order_by descending via a dotted direction',
+      type: 'bands', conditions: { order_by: 'name.desc' },
+      expected: %w(the-who pearl-jam alice-in-chains), ordered: true },
+
+    { desc: 'order_by a Hash direction (-1)',
+      type: 'bands', conditions: { order_by: { name: -1 } },
+      expected: %w(the-who pearl-jam alice-in-chains), ordered: true },
+
     { desc: 'scalar equality on a string field',
       type: 'events', conditions: { state: 'Colorado' },
       expected: %w(avogadros-number avogadros-number-1

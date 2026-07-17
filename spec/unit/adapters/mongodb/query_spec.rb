@@ -35,7 +35,7 @@ describe Locomotive::Steam::Adapters::MongoDB::Query do
 
   end
 
-  describe '#order_by' do
+  describe '#order_by (decoded to the neutral form)' do
 
     subject { query.order_by(order_by).sort }
 
@@ -43,15 +43,7 @@ describe Locomotive::Steam::Adapters::MongoDB::Query do
 
       let(:order_by) { { title: :asc, published: :desc } }
 
-      it { is_expected.to eq [{title: :asc, published: :desc}] }
-
-    end
-
-    context 'passing an array of strings' do
-
-      let(:order_by) { ['title.asc', 'published'] }
-
-      it { is_expected.to eq [[['title', 'asc'], ['published']]] }
+      it { is_expected.to eq [[:title, :asc], [:published, :desc]] }
 
     end
 
@@ -59,7 +51,15 @@ describe Locomotive::Steam::Adapters::MongoDB::Query do
 
       let(:order_by) { 'title.asc, published' }
 
-      it { is_expected.to eq [[['title', 'asc'], ['published']]] }
+      it { is_expected.to eq [[:title, :asc], [:published, :asc]] }
+
+    end
+
+    context 'passing an array of pairs' do
+
+      let(:order_by) { [['title', 'asc'], ['published', 'desc']] }
+
+      it { is_expected.to eq [[:title, :asc], [:published, :desc]] }
 
     end
 
@@ -70,7 +70,7 @@ describe Locomotive::Steam::Adapters::MongoDB::Query do
     before { query.where(published: true).order_by(title: :asc) }
 
     it { expect(query.criteria).to eq({ published: true }) }
-    it { expect(query.sort).to eq([{ title: :asc }]) }
+    it { expect(query.sort).to eq([[:title, :asc]]) }
 
   end
 

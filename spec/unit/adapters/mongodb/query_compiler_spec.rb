@@ -149,32 +149,26 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
       expect(values).to eq([1, 2])
     end
 
-    it 'leaves the sort spec untouched (origin mutated it)' do
-      spec = [{ title: :asc }]
+    it 'leaves the sort spec untouched' do
+      spec = [[:title, :asc]]
       compiler.compile({}, sort: spec, fields: nil, skip: nil, limit: nil)
-      expect(spec).to eq([{ title: :asc }])
+      expect(spec).to eq([[:title, :asc]])
     end
   end
 
-  describe '#compile options — sort' do
+  describe '#compile options — sort (neutral [[field, dir]] form)' do
     def sort(spec)
       compiler.compile({}, sort: spec, fields: nil, skip: nil, limit: nil).options[:sort]
     end
 
-    it { expect(sort([{ title: :asc, published: :desc }])).to eq('title.en' => 1, 'published' => -1) }
-    it { expect(sort([{ title: 1, published: -1 }])).to      eq('title.en' => 1, 'published' => -1) }
-    it { expect(sort([[['title', 'asc'], ['published']]])).to eq('title.en' => 1, 'published' => 1) }
-    it { expect(sort([['date', 'desc']])).to eq('date' => -1) }
-    it { expect(sort([['_position']])).to eq('_position' => 1) }
+    it { expect(sort([[:title, :asc], [:published, :desc]])).to eq('title.en' => 1, 'published' => -1) }
+    it { expect(sort([[:date, :desc]])).to eq('date' => -1) }
+    it { expect(sort([[:_position, :asc]])).to eq('_position' => 1) }
     it { expect(sort(nil)).to be_nil }
     it { expect(sort([])).to be_nil }
 
-    it 'rejects a numeric direction other than 1 or -1' do
-      expect { sort([{ title: 2 }]) }.to raise_error(invalid)
-    end
-
     it 'rejects a $-prefixed field such as $natural' do
-      expect { sort([['$natural']]) }.to raise_error(unsupported)
+      expect { sort([[:'$natural', :asc]]) }.to raise_error(unsupported)
     end
   end
 

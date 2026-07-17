@@ -1,3 +1,5 @@
+require_relative '../query'
+
 module Locomotive::Steam
   module Adapters
     module Memory
@@ -7,15 +9,7 @@ module Locomotive::Steam
         attr_reader :list
 
         def initialize(*spec)
-          @list = []
-          spec.compact.each do |criterion|
-            @list += (case criterion
-            when Array  then criterion
-            when Hash   then criterion.to_a
-            when String then criterion.split(',').collect { |s| build(s.strip) }
-            else []
-            end)
-          end
+          @list = Adapters::Query::OrderBy.decode(*spec)
         end
 
         def empty?
@@ -25,24 +19,10 @@ module Locomotive::Steam
         def apply_to(entry, locale)
           @list.collect do |(name, direction)|
             value = entry.send(name)
+            value = value[locale] if value.respond_to?(:translations)
 
-            if value.respond_to?(:translations) # localized
-              value = value[locale]
-            end
-
-            asc?(direction) ? Asc.new(value) : Desc.new(value)
+            direction == :desc ? Desc.new(value) : Asc.new(value)
           end
-        end
-
-        def asc?(direction)
-          direction.nil? || direction.to_sym == :asc
-        end
-
-        private
-
-        def build(string)
-          pattern = string.include?('.') ? '.' : ' '
-          string.downcase.split(pattern).map(&:to_sym)
         end
 
         class Direction

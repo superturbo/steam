@@ -23,7 +23,7 @@ module Locomotive::Steam
 
         def order_by(*args)
           self.tap do
-            @sort = decode_order_by(*args)
+            @sort = Adapters::Query::OrderBy.decode(*args)
           end
         end
 
@@ -71,25 +71,6 @@ module Locomotive::Steam
 
           tenant = { 'site_id' => @scope.site._id }
           filter.empty? ? tenant : { '$and' => [filter, tenant] }
-        end
-
-        def decode_order_by(*spec)
-          [*spec].compact.map do |arg|
-            _decode_order_by(arg)
-          end
-        end
-
-        def _decode_order_by(arg)
-          case arg
-          when String
-            if arg.include?(',')
-              _decode_order_by(arg.split(','))
-            else
-              arg.strip.split(/[\s|.]/)
-            end
-          when Array  then arg.map { |_arg| _decode_order_by(_arg) }
-          else arg
-          end
         end
 
       end

@@ -36,6 +36,12 @@ describe Locomotive::Steam::Adapters::Memory::Order do
 
   end
 
+  describe 'a Mongo operator field' do
+    it 'is rejected through the shared decoder' do
+      expect { described_class.new('$natural') }.to raise_error(Locomotive::Steam::Adapters::Query::UnsupportedOperator)
+    end
+  end
+
   describe '#apply_to' do
 
     subject { order.apply_to(entry, :en) }

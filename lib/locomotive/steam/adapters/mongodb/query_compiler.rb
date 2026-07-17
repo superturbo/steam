@@ -137,42 +137,13 @@ module Locomotive::Steam
         def build_sort(spec)
           return nil if spec.nil?
 
-          sort = sort_pairs(spec).each_with_object({}) do |(field, direction), result|
+          sort = spec.each_with_object({}) do |(field, direction), result|
             next if field.nil? || field.to_s.empty?
             reject_raw_operator!('sort field', field)
-            result[aliased(field.to_s)] = direction_value(direction)
+            result[aliased(field.to_s)] = direction == :desc ? -1 : 1
           end
 
           sort.empty? ? nil : sort
-        end
-
-        # Flattens the shapes Query#decode_order_by produces — a Hash, or
-        # (possibly nested) [field, direction] / [field] tuples — into pairs.
-        def sort_pairs(spec)
-          case spec
-          when Hash
-            spec.to_a
-          when Array
-            return [] if spec.empty?
-            if spec.first.is_a?(Array) || spec.first.is_a?(Hash)
-              spec.flat_map { |element| sort_pairs(element) }
-            else
-              [[spec[0], spec[1]]]
-            end
-          else
-            []
-          end
-        end
-
-        def direction_value(direction)
-          case direction
-          when 1  then 1
-          when -1 then -1
-          when Numeric
-            raise Adapters::Query::InvalidValue, "sort direction must be 1 or -1, got #{direction.inspect}"
-          else
-            direction.to_s.match?(/\Adesc/i) ? -1 : 1
-          end
         end
 
         def build_fields(list)
