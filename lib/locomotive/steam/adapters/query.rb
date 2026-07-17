@@ -7,9 +7,11 @@ module Locomotive::Steam
     module Query
 
       class InvalidValue < StandardError; end
+      class UnsupportedOperator < StandardError; end
 
     end
   end
 end
 
 require_relative 'query/values'
+require_relative 'query/operators'
