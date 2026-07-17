@@ -42,6 +42,16 @@ describe Locomotive::Steam::Adapters::Query::Values do
 
   end
 
+  describe '.range' do
+
+    it { expect(described_class.range(1..3)).to eq(1..3) }
+    it { expect(described_class.range(1..)).to eq(1..) }
+    it { expect(described_class.range(..3)).to eq(..3) }
+
+    it { expect { described_class.range(Range.new(nil, nil)) }.to raise_error(invalid) }
+
+  end
+
   describe '.list' do
 
     it { expect(described_class.list([1, 2])).to eq [1, 2] }

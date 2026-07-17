@@ -126,14 +126,11 @@ module Locomotive::Steam
         end
 
         def range_bounds(range)
+          range = Adapters::Query::Values.range(range)
+
           bounds = {}
           bounds['$gte'] = range.begin unless range.begin.nil?
           bounds[range.exclude_end? ? '$lt' : '$lte'] = range.end unless range.end.nil?
-
-          if bounds.empty?
-            raise Adapters::Query::InvalidValue, "a range needs at least one bound: #{range.inspect}"
-          end
-
           bounds
         end
 

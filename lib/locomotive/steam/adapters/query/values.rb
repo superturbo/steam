@@ -40,6 +40,15 @@ module Locomotive::Steam
           integer
         end
 
+        # A plain-field Range must have at least one bound.
+        def range(value)
+          if value.begin.nil? && value.end.nil?
+            raise InvalidValue, "a range needs at least one bound: #{value.inspect}"
+          end
+
+          value
+        end
+
         # in/nin/all take a list of scalars. A Set or a lone scalar is
         # normalized; a Range is rejected rather than enumerated, so a wide
         # range can't explode into a huge query. Every element must be a scalar

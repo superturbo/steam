@@ -103,6 +103,22 @@ module QueryParity
     { desc: 'in [nil] matches a missing field',
       type: 'events', conditions: { 'tags.in' => [nil] },
       expected: UNTAGGED_EVENTS },
+
+    { desc: 'exists true matches present fields',
+      type: 'events', conditions: { 'tags.exists' => true },
+      expected: %w(brownes-market kellys-westport-inn) },
+
+    { desc: 'exists false matches absent fields',
+      type: 'events', conditions: { 'tags.exists' => false },
+      expected: UNTAGGED_EVENTS },
+
+    { desc: 'size counts array elements',
+      type: 'events', conditions: { 'tags.size' => 2 },
+      expected: %w(brownes-market kellys-westport-inn) },
+
+    { desc: 'a Range on a plain field matches its bounds',
+      type: 'events', conditions: { price: (5..6) },
+      expected: %w(kellys-westport-inn) },
   ].freeze
 
 end

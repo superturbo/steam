@@ -9,6 +9,7 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
   let(:operator)  { :eq }
   let(:name)      { "#{field}.#{operator}" }
   let(:value)     { 'Awesome Site' }
+  let(:invalid)   { Locomotive::Steam::Adapters::Query::InvalidValue }
 
   subject { described_class.new(name, value, locale) }
 
@@ -93,18 +94,67 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
     end
   end
 
-  describe '#matches? size' do
-    let(:entry) { instance_double('Product', tags: %w(red green blue)) }
+  describe '#matches? exists' do
+    let(:present) { instance_double('Product', tags: %w(red)) }
+    let(:null)    { instance_double('Product', tags: nil) }
+    let(:absent)  { instance_double('Product') }
 
-    def size?(n) = described_class.new('tags.size', n, :en).matches?(entry)
+    def exists?(value, entry)
+      described_class.new('tags.exists', value, :en).matches?(entry)
+    end
 
-    it('true when the array size matches') { expect(size?(3)).to eq true }
-    it('false otherwise') { expect(size?(2)).to eq false }
+    it('true matches a present field') { expect(exists?(true, present)).to eq true }
+    it('true matches a present null') { expect(exists?(true, null)).to eq true }
+    it('true excludes a missing field') { expect(exists?(true, absent)).to eq false }
+    it('false matches a missing field') { expect(exists?(false, absent)).to eq true }
+    it('false excludes a present field') { expect(exists?(false, present)).to eq false }
+    it('accepts the string form') { expect(exists?('true', present)).to eq true }
+    it('rejects a non-boolean') { expect { exists?('yes', present) }.to raise_error(invalid) }
+
+    it 'treats a localized null translation as present' do
+      expect(exists?(true, instance_double('Product', tags: i18n(en: nil)))).to eq true
+    end
+
+    it 'treats a field missing the current locale as absent' do
+      expect(exists?(true, instance_double('Product', tags: i18n(fr: 'x')))).to eq false
+    end
+  end
+
+  describe '#matches? size (arrays only)' do
+    def size?(value, tags)
+      described_class.new('tags.size', value, :en).matches?(instance_double('Product', tags: tags))
+    end
+
+    it('matches an array of the right size') { expect(size?(2, %w(a b))).to eq true }
+    it('rejects a wrong size') { expect(size?(3, %w(a b))).to eq false }
+    it('does not match a string') { expect(size?(3, 'abc')).to eq false }
+    it('coerces a string size') { expect(size?('2', %w(a b))).to eq true }
+    it('rejects a fractional size') { expect { size?(2.5, %w(a b)) }.to raise_error(invalid) }
+
+    it 'does not match a missing field' do
+      expect(described_class.new('tags.size', 1, :en).matches?(instance_double('Product'))).to eq false
+    end
+  end
+
+  describe '#matches? a plain-field Range' do
+    def in_range?(range, price)
+      described_class.new(:price, range, :en).matches?(instance_double('Product', price: price))
+    end
+
+    it('matches a value inside the range') { expect(in_range?(1..3, 2)).to eq true }
+    it('excludes a value outside the range') { expect(in_range?(1..3, 5)).to eq false }
+    it('honours an exclusive end') { expect(in_range?(1...3, 3)).to eq false }
+
+    it 'does not match a missing field' do
+      expect(described_class.new(:price, 1..3, :en).matches?(instance_double('Product'))).to eq false
+    end
+
+    it 'rejects an unbounded range' do
+      expect { described_class.new(:price, Range.new(nil, nil), :en) }.to raise_error(invalid)
+    end
   end
 
   describe 'list value normalization and errors' do
-    let(:invalid) { Locomotive::Steam::Adapters::Query::InvalidValue }
-
     it 'normalizes a scalar nil in a list to [nil]' do
       absent  = instance_double('Product')
       present = instance_double('Product', tags: %w(red))

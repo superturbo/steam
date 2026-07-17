@@ -8,7 +8,7 @@ module Locomotive::Steam
 
         class UnsupportedOperator < StandardError; end
 
-        OPERATORS      = %i(== eq ne neq matches gt gte lt lte size all in nin).freeze
+        OPERATORS      = %i(== eq ne neq matches gt gte lt lte size all in nin exists).freeze
         LIST_OPERATORS = %i(in nin all).freeze
 
         attr_reader :field, :operator, :value
@@ -19,8 +19,7 @@ module Locomotive::Steam
           @operator, @field = :==, operator_and_field
 
           decode_operator_and_field!
-
-          @list = Adapters::Query::Values.list(@value) if LIST_OPERATORS.include?(@operator)
+          normalize_value!
         end
 
         def matches?(entry)
@@ -32,12 +31,14 @@ module Locomotive::Steam
           when :in        then in_match?(value)
           when :nin       then !present || !in_match?(value)
           when :all       then all_match?(value)
+          when :exists    then present == @exists
           when :matches   then !(@value =~ value).nil?
+          when :range     then !value.nil? && @range.cover?(value)
           when :gt        then value && value > @value
           when :gte       then value && value >= @value
           when :lt        then value && value < @value
           when :lte       then value && value <= @value
-          when :size      then value.size == @value
+          when :size      then value.is_a?(Array) && value.size == @size
           else
             raise UnsupportedOperator.new("#{@operator} is unknown or not implemented.")
           end
@@ -56,6 +57,19 @@ module Locomotive::Steam
             check_operator!
           elsif @value.is_a?(Regexp)
             @operator = :matches
+          elsif @value.is_a?(Range)
+            @operator = :range
+          end
+        end
+
+        def normalize_value!
+          values = Adapters::Query::Values
+
+          case @operator
+          when *LIST_OPERATORS then @list   = values.list(@value)
+          when :exists         then @exists = values.boolean(@value)
+          when :size           then @size   = values.size(@value)
+          when :range          then @range  = values.range(@value)
           end
         end
 
