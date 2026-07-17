@@ -188,6 +188,21 @@ describe Locomotive::Steam::ContentEntryRepository do
         end
       end
 
+      describe '#update' do
+        let(:detached_entry) do
+          repository.find('pearl-jam').dup.tap do |entity|
+            entity.attributes = entity.attributes.dup
+            entity[:leader] = 'Vedder'
+          end
+        end
+
+        before { repository.update(detached_entry) }
+
+        it 'is visible to a later query' do
+          expect(repository.find('pearl-jam').leader).to eq 'Vedder'
+        end
+      end
+
     end
 
   end

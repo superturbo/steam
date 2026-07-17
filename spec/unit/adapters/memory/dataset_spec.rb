@@ -49,6 +49,15 @@ describe Locomotive::Steam::Adapters::Memory::Dataset do
     end
   end
 
+  describe '#insert' do
+    it 'rejects a record whose identity is already taken' do
+      impostor = { _id: john[:_id], firstname: 'Impostor' }
+
+      expect { subject.insert(impostor) }.to raise_error(described_class::InvalidIdentity)
+      expect(subject.find(john[:_id])[:firstname]).to eq('John')
+    end
+  end
+
   describe '#update' do
     before do
       subject.update(jane.to_hash.merge(lastname: 'birkin'))
@@ -56,6 +65,11 @@ describe Locomotive::Steam::Adapters::Memory::Dataset do
 
     specify do
       expect(subject.find(jane[:_id]).fetch(:lastname)).to eq('birkin')
+    end
+
+    it 'raises rather than upserting an unknown record' do
+      expect { subject.update(_id: 'nope', name: 'x') }
+        .to raise_error(Locomotive::Steam::Models::Repository::RecordNotFound)
     end
   end
 
@@ -69,5 +83,34 @@ describe Locomotive::Steam::Adapters::Memory::Dataset do
     it { expect(dataset.exists?(3)).to eq false  }
     it { expect(dataset.exists?(nil)).to eq false  }
 
+  end
+
+  describe '#reindex!' do
+    let(:invalid) { Locomotive::Steam::Adapters::Memory::Dataset::InvalidIdentity }
+    let(:record)  { { name: 'Bowie' } }
+
+    before { subject.insert(record) }
+
+    it 'moves the record to its new identity and drops the old key' do
+      old_key = record[:_id]
+      record[:_id] = 'bowie'
+      subject.reindex!
+
+      expect(subject.find('bowie')).to eq(record)
+      expect(subject.exists?(old_key)).to eq false
+    end
+
+    it 'fails fast on a missing identity' do
+      record.delete(:_id)
+      expect { subject.reindex! }.to raise_error(invalid, /without an _id/)
+    end
+
+    it 'fails fast on a duplicate identity' do
+      other = { name: 'Iggy' }
+      subject.insert(other)
+      record[:_id] = other[:_id] = 'clash'
+
+      expect { subject.reindex! }.to raise_error(invalid, /duplicate/)
+    end
   end
 end

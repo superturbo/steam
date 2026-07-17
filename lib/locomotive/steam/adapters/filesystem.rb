@@ -38,13 +38,14 @@ module Locomotive::Steam
     def create(mapper, scope, entity)
       sanitizers[mapper.name].with(scope) do |sanitizer|
         dataset = memoized_dataset(mapper, scope)
-        dataset.insert(entity)
         sanitizer.apply_to_entity_with_dataset(entity, dataset)
+        dataset.insert(entity)
       end
       entity
     end
 
     def update(mapper, scope, entity)
+      memoized_dataset(mapper, scope).update(entity)
       entity
     end
 
@@ -107,6 +108,7 @@ module Locomotive::Steam
         end
 
         sanitizer.apply_to(dataset)
+        dataset.reindex!
       end
     end
 
