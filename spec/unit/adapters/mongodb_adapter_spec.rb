@@ -1,10 +1,13 @@
 require 'spec_helper'
 
 require_relative '../../../lib/locomotive/steam/adapters/mongodb.rb'
+require_relative '../../support/examples/adapter_contract'
 
 describe Locomotive::Steam::MongoDBAdapter do
 
   let(:adapter) { described_class.new(nil) }
+
+  it_behaves_like 'a repository adapter'
 
   describe '#key' do
 

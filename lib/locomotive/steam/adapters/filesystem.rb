@@ -56,7 +56,7 @@ module Locomotive::Steam
     end
 
     def delete(mapper, scope, entity)
-      # TODO: to be implemented
+      memoized_dataset(mapper, scope).delete(entity._id)
     end
 
     def find(mapper, scope, id)

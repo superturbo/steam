@@ -1,12 +1,15 @@
 require 'spec_helper'
 
 require_relative '../../../lib/locomotive/steam/adapters/filesystem.rb'
+require_relative '../../support/examples/adapter_contract'
 
 describe Locomotive::Steam::FilesystemAdapter do
 
   let(:mapper)  { instance_double('Mapper', name: :test) }
   let(:scope)   { instance_double('Scope', site: site, locale: nil, to_key: 'key') }
   let(:adapter) { Locomotive::Steam::FilesystemAdapter.new(nil) }
+
+  it_behaves_like 'a repository adapter'
 
   describe '#key' do
 

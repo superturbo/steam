@@ -36,7 +36,11 @@ module Locomotive::Steam
         end
 
         def delete(id)
-          records.delete(id)
+          return records.delete(id) if records.key?(id)
+
+          # Identity may change after insertion.
+          key, _ = records.find { |_, record| record[identity] == id }
+          records.delete(key)
         end
 
         def size

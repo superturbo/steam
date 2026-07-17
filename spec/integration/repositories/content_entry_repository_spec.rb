@@ -177,6 +177,17 @@ describe Locomotive::Steam::ContentEntryRepository do
         it { expect { subject }.to change { repository.all.size } }
       end
 
+      describe '#delete' do
+        let(:messages) { type_repository.by_slug('messages') }
+        let(:message)  { repository.with(messages).build(name: 'Jane', email: 'jane@doe.net', message: 'Bye!') }
+        before { repository.create(message) }
+        subject { repository.delete(message) }
+
+        it 'removes the entry from later queries' do
+          expect { subject }.to change { repository.all.size }.by(-1)
+        end
+      end
+
     end
 
   end

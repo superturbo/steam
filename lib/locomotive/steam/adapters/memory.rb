@@ -11,6 +11,8 @@ module Locomotive::Steam
 
   class MemoryAdapter
 
+    class UnsupportedWrite < StandardError; end
+
     attr_accessor_initialize :collection
 
     include Locomotive::Steam::Adapters::Concerns::Key
@@ -23,6 +25,10 @@ module Locomotive::Steam
       _query(mapper, scope, &block)
     end
 
+    def count(mapper, scope, &block)
+      query(mapper, scope, &block).count
+    end
+
     def find(mapper, scope, id)
       _query(mapper, scope) { where(_id: id) }.first
     end
@@ -31,7 +37,20 @@ module Locomotive::Steam
       ''
     end
 
+    def make_id(id)
+      id
+    end
+
+    def create(*) = unsupported_write!(:create)
+    def update(*) = unsupported_write!(:update)
+    def inc(*)    = unsupported_write!(:inc)
+    def delete(*) = unsupported_write!(:delete)
+
     private
+
+    def unsupported_write!(operation)
+      raise UnsupportedWrite, "MemoryAdapter does not support #{operation}"
+    end
 
     def _query(mapper, scope, &block)
       Locomotive::Steam::Adapters::Memory::Query.new(all(mapper, scope), scope.locale, &block)
@@ -56,5 +75,3 @@ module Locomotive::Steam
   end
 
 end
-
-
