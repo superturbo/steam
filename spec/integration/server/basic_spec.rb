@@ -72,6 +72,7 @@ describe Locomotive::Steam::Server do
       get '/404'
       expect(last_response.status).to eq(404)
       expect(last_response.body).to include 'page not found'
+      expect(last_response.body).to include '<li>Page not found</li>'
     end
 
   end

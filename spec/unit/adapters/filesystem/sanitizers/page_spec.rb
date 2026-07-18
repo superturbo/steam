@@ -8,6 +8,19 @@ describe Locomotive::Steam::Adapters::Filesystem::Sanitizers::Page do
 
   let(:sanitizer) { described_class.new }
 
+  describe '#set_parent_id' do
+
+    let(:page) do
+      Locomotive::Steam::Page.new(title: { en: 'Not found' }).tap { |p| p._fullpath = '404' }
+    end
+
+    it 'initializes empty ancestry for the 404 page' do
+      sanitizer.set_parent_id(page)
+      expect(page.parent_ids).to eq []
+    end
+
+  end
+
   describe '#transform_sections_content' do
 
     # transform_sections_content only relies on its `page`/`locale` arguments,

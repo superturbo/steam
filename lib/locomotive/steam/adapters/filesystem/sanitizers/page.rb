@@ -49,7 +49,10 @@ module Locomotive::Steam
           def set_parent_id(page)
             page._fullpath ||= page.attributes.delete(:_fullpath)
 
-            return if page._fullpath == '404'
+            if page._fullpath == '404'
+              page[:parent_ids] ||= []
+              return
+            end
 
             parent_key = parent_fullpath(page)
 

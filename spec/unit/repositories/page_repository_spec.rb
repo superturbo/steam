@@ -270,6 +270,17 @@ describe Locomotive::Steam::PageRepository do
 
     end
 
+    context 'a page without initialized ancestry' do
+
+      let(:pages) do
+        [{ _id: 1, title: { en: 'Not found' }, slug: { en: '404' }, _fullpath: '404', template_path: { en: '404.liquid' } }]
+      end
+      let(:page) { instance_double('Page', _id: 1, parent_ids: nil) }
+
+      it { expect(subject.map { |p| p.title[:en] }).to eq ['Not found'] }
+
+    end
+
   end
 
   describe '#children_of' do

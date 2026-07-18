@@ -7,4 +7,9 @@ title: Page not found
 
 %p.error page not found
 
+%ul.breadcrumbs
+  {% for crumb in page.breadcrumbs %}
+  %li {{ crumb.title }}
+  {% endfor %}
+
 {% endblock %}

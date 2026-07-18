@@ -70,7 +70,7 @@ module Locomotive
       # Note: Ancestors and self
       def ancestors_of(page)
         return [] if page.nil?
-        all(k(:_id, :in) => page.parent_ids + [page._id])
+        all(k(:_id, :in) => Array(page.parent_ids) + [page._id])
       end
 
       def children_of(page)
