@@ -21,7 +21,9 @@ module Locomotive::Steam
 
       def initialize_copy(source)
         super
+        @scope            = source.scope.dup
         @local_conditions = source.local_conditions.dup
+        @mapper           = nil
       end
 
       def build(attributes, &block)

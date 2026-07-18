@@ -15,6 +15,11 @@ module Locomotive
         @memoized_mappers = {}
       end
 
+      def initialize_copy(source)
+        super
+        @memoized_mappers = {}
+      end
+
       # Entity mapping
       mapping :content_entries, entity: ContentEntry do
         localized_attributes :_slug, :seo_title, :meta_description, :meta_keywords

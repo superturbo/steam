@@ -45,6 +45,21 @@ describe Locomotive::Steam::ContentEntryRepository do
 
   end
 
+  describe '#dup' do
+
+    it 'builds entities against the copy content type' do
+      repository.with(type)
+      repository.build({})
+
+      copy          = repository.dup
+      reloaded_type = build_content_type('Articles', _id: 1)
+      copy.with(reloaded_type)
+
+      expect(copy.build({}).content_type).to be(reloaded_type)
+    end
+
+  end
+
   describe '#all' do
 
     let(:conditions) { nil }
@@ -335,7 +350,7 @@ describe Locomotive::Steam::ContentEntryRepository do
   describe 'has_many' do
 
     let(:field)   { instance_double('Field', name: :articles, type: :has_many, association_options: { target_id: 2, inverse_of: :author, order_by: 'position_in_author' }) }
-    let(:type)    { build_content_type('Authors', label_field_name: :name, association_fields: [field], fields_with_default: []) }
+    let(:type)    { build_content_type('Authors', label_field_name: :name, association_fields: [field], fields_by_name: { articles: field }, fields_with_default: []) }
     let(:entries) { [{ content_type_id: 1, _id: 'john-doe', name: 'John Doe' }] }
     let(:other_type) { build_content_type('Articles', _id: 2, label_field_name: :title, fields: _fields, fields_by_name: { name: instance_double('Field', name: :title, type: :string) }, fields_with_default: []) }
     let(:other_entries) {
@@ -363,6 +378,36 @@ describe Locomotive::Steam::ContentEntryRepository do
       expect(articles.all.map(&:title)).to eq ['Lorem ipsum', 'Hello world']
     end
 
+    it 'applies a runtime order_by to the returned entries (over the field default)' do
+      articles = repository.value_for(subject, :articles, order_by: 'title.asc')
+      allow(adapter).to receive(:collection).and_return(other_entries)
+
+      expect(articles.all.map(&:title)).to eq ['Hello world', 'Lorem ipsum']
+    end
+
+    it 'applies a runtime order_by given as a hash (symbol direction)' do
+      articles = repository.value_for(subject, :articles, order_by: { title: :asc })
+      allow(adapter).to receive(:collection).and_return(other_entries)
+
+      expect(articles.all.map(&:title)).to eq ['Hello world', 'Lorem ipsum']
+    end
+
+    it 'does not leak a scoped copy back into the original association' do
+      scoped = repository.value_for(subject, :articles, order_by: 'title.asc')
+      allow(adapter).to receive(:collection).and_return(other_entries)
+      scoped.all
+
+      expect(subject.articles.all.map(&:title)).to eq ['Lorem ipsum', 'Hello world']
+    end
+
+    it 'does not change the parent scope content type when the association loads' do
+      articles = subject.articles
+      allow(adapter).to receive(:collection).and_return(other_entries)
+      articles.all
+
+      expect(repository.scope.context[:content_type]).to eq type
+    end
+
     context 'the owner has a composite [mongo_id, slug] id (synced entries)' do
 
       let(:entries) { [{ content_type_id: 1, _id: ['5baf7d38a953300567956448', 'john-doe'], name: 'John Doe' }] }
@@ -388,7 +433,7 @@ describe Locomotive::Steam::ContentEntryRepository do
   describe 'many_to_many' do
 
     let(:field)   { instance_double('Field', name: :articles, type: :many_to_many, association_options: { target_id: 2, inverse_of: :authors }) }
-    let(:type)    { build_content_type('Authors', label_field_name: :name, association_fields: [field], fields: _fields, fields_with_default: []) }
+    let(:type)    { build_content_type('Authors', label_field_name: :name, association_fields: [field], fields_by_name: { articles: field }, fields: _fields, fields_with_default: []) }
     let(:entries) { [{ content_type_id: 1, _id: 1, name: 'John Doe', article_ids: ['hello-world', 'lorem-ipsum'] }] }
     let(:other_type)    { build_content_type('Articles', _id: 2, label_field_name: :title, fields: _fields, fields_by_name: { name: instance_double('Field', name: :title, type: :string) }, fields_with_default: []) }
     let(:other_entries) {
@@ -414,6 +459,21 @@ describe Locomotive::Steam::ContentEntryRepository do
       articles = subject.articles
       allow(adapter).to receive(:collection).and_return(other_entries)
       expect(articles.all.map(&:title)).to eq ['Hello world', 'Lorem ipsum']
+    end
+
+    it 'applies a runtime order_by to the returned entries' do
+      articles = repository.value_for(subject, :articles, order_by: 'title.desc')
+      allow(adapter).to receive(:collection).and_return(other_entries)
+
+      expect(articles.all.map(&:title)).to eq ['Lorem ipsum', 'Hello world']
+    end
+
+    it 'does not leak a scoped copy back into the original association' do
+      scoped = repository.value_for(subject, :articles, order_by: 'title.desc')
+      allow(adapter).to receive(:collection).and_return(other_entries)
+      scoped.all
+
+      expect(subject.articles.all.map(&:title)).to eq ['Hello world', 'Lorem ipsum']
     end
 
   end

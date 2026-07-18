@@ -5,6 +5,11 @@ module Locomotive::Steam
 
       attr_reader :repository
 
+      def initialize_copy(source)
+        super
+        @repository = source.repository.dup
+      end
+
       def initialize(repository_klass, scope, adapter, options = {}, &block)
         # build a new instance of the target repository
         @repository = repository_klass.new(adapter)

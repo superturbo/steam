@@ -9,6 +9,12 @@ module Locomotive::Steam
         @site, @locale, @context = site, locale, (context || {})
       end
 
+      # Isolate the mutable query context.
+      def initialize_copy(source)
+        super
+        @context = source.context.dup
+      end
+
       def default_locale
         site.try(:default_locale)
       end

@@ -53,6 +53,29 @@ describe Locomotive::Steam::Models::Repository do
 
   end
 
+  describe '#dup' do
+
+    subject(:copy) { repository.dup }
+
+    it 'gives the copy its own scope' do
+      expect(copy.scope).not_to be(repository.scope)
+    end
+
+    it 'isolates the copy scope context from the original' do
+      repository.scope.context[:content_type] = :parent
+      copy.scope.context[:content_type] = :child
+
+      expect(repository.scope.context[:content_type]).to eq :parent
+    end
+
+    it 'gives the copy its own mapper (not the source one)' do
+      source_mapper = repository.mapper
+
+      expect(copy.mapper).not_to be(source_mapper)
+    end
+
+  end
+
   describe '#prepare_conditions' do
 
     let(:conditions) { [{ 'band_id' => 42, 'order_by' => 'created_at.desc' }] }
@@ -80,6 +103,7 @@ describe Locomotive::Steam::Models::Repository do
 
   class ArticleRepository
     include Locomotive::Steam::Models::Repository
+    mapping :articles
   end
 
 end
