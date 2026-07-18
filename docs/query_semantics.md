@@ -6,9 +6,9 @@ the storage adapter:
 - **Filesystem → Memory** (Wagon): reads a site from YAML, queries it in Ruby.
 - **MongoDB** (Engine): a real database with tenant scoping.
 - **Memory** also backs embedded sub-collections (`select_options`,
-  `editable_elements`, `entries_custom_fields`) in **both** products.
+  `editable_elements`, `entries_custom_fields`) in **both hosts**.
 
-Because both products must render the same site identically, a query must mean
+Because both hosts must render the same site identically, a query must mean
 the **same thing** on every adapter. This document is the canonical contract.
 It describes the **target** behaviour; the engines are aligned to it across the
 query-layer standardization, and each row is locked by
@@ -18,6 +18,21 @@ Filesystem→Memory) as it lands.
 Where a supported form has a MongoDB meaning, the canonical semantics follow
 MongoDB. Heterogeneous comparisons (string vs integer) and BSON type ordering
 are **outside the supported parity contract**.
+
+## Implementation status
+
+The rules below describe the **target** contract. The following are not yet
+enforced consistently and remain release blockers for a stable 2.0:
+
+- Operator suffixes and key builders are not yet resolved consistently through
+  the shared registry; Memory additionally accepts legacy `neq` and `matches`
+  suffixes and raises an adapter-specific error for unknown suffixes.
+- Nested paths are rejected by both engines, but not yet with the same exception
+  class.
+- Memory does not yet have a recursive raw `$` guard.
+- Literal and scalar value-kind restrictions, including plain `Hash` rejection,
+  are not yet enforced by either engine. A bare `Set` is normalized by MongoDB
+  but handled differently by Memory.
 
 ## Operator registry
 
@@ -92,8 +107,8 @@ matrix alongside the implementation change that aligns both engines.
 | `exists true`  | no  | match     | match |
 | `exists false` | match | no      | no    |
 
-In Memory, field presence is read via `attributes.key?` (localized fields via
-`translations.key?(locale)`, generic objects via `respond_to?`). A real
+In Memory, field presence is read via `respond_to?` and the value via
+`public_send` (localized fields via `translations.key?(locale)`). A real
 execution error is **not** swallowed as "missing".
 
 ## Fail-fast
@@ -102,8 +117,8 @@ The following raise rather than silently returning nothing:
 
 - an unknown operator suffix (`price.approx`);
 - a raw Mongo operator in a key **or** recursively in a value (`$where`,
-  `price: { $gt: 5 }`) — enforced for **both** engines, so Wagon cannot accept
-  an injection Engine rejects;
+  `price: { $gt: 5 }`) — must be rejected by **both** engines, so Wagon cannot
+  accept criteria Engine rejects;
 - a non-boolean `exists` value, a negative/fractional `size`;
 - an unknown sort direction;
 - a `Range`/`Regexp` where the value kind does not allow it;
