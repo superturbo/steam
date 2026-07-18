@@ -31,6 +31,33 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
         expect(subject.first[:position_in_band]).to eq 0
       end
 
+      context 'the entry carries an explicit position' do
+
+        before do
+          allow(loader).to receive(:_load).and_return([{ 'One' => { band: 'pearl-jam', position_in_band: 5 } }])
+        end
+
+        it 'keeps the explicit position_in_<name> over the file order' do
+          expect(subject.first[:position_in_band]).to eq 5
+        end
+
+      end
+
+      context 'the explicit position is zero' do
+
+        before do
+          allow(loader).to receive(:_load).and_return([
+            { 'One' => { band: 'pearl-jam' } },
+            { 'Two' => { band: 'pearl-jam', position_in_band: 0 } }
+          ])
+        end
+
+        it 'keeps the explicit zero over the file order' do
+          expect(subject.last[:position_in_band]).to eq 0
+        end
+
+      end
+
     end
 
     context 'a content type with a select field' do
