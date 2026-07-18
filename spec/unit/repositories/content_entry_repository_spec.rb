@@ -363,6 +363,26 @@ describe Locomotive::Steam::ContentEntryRepository do
       expect(articles.all.map(&:title)).to eq ['Lorem ipsum', 'Hello world']
     end
 
+    context 'the owner has a composite [mongo_id, slug] id (synced entries)' do
+
+      let(:entries) { [{ content_type_id: 1, _id: ['5baf7d38a953300567956448', 'john-doe'], name: 'John Doe' }] }
+      let(:other_entries) {
+          [
+            { content_type_id: 2, _id: 'hello-world', title: 'Hello world', author_id: 'john-doe',                   position_in_author: 2 },
+            { content_type_id: 2, _id: 'lorem-ipsum', title: 'Lorem ipsum', author_id: '5baf7d38a953300567956448', position_in_author: 1 },
+            { content_type_id: 2, _id: 'lost',        title: 'Lost',        author_id: 'jane-doe' },
+            { content_type_id: 2, _id: 'orphan',      title: 'Orphan' },
+          ]
+        }
+
+      it 'matches children referencing either component and skips foreign and orphan ones' do
+        articles = subject.articles
+        allow(adapter).to receive(:collection).and_return(other_entries)
+        expect(articles.all.map(&:title)).to eq ['Lorem ipsum', 'Hello world']
+      end
+
+    end
+
   end
 
   describe 'many_to_many' do

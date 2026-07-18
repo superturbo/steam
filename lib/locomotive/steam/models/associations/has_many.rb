@@ -4,10 +4,10 @@ module Locomotive::Steam
     class HasManyAssociation < ReferencedAssociation
 
       def __load__
-        key = :"#{@options[:inverse_of]}_id"
+        key = @repository.k(:"#{@options[:inverse_of]}_id", :in)
 
-        # all the further queries will be scoped by the "foreign_key"
-        @repository.local_conditions[key] = @entity._id
+        # a synced owner may be referenced by either identity
+        @repository.local_conditions[key] = Array(@entity._id).compact
 
         # use order_by from options as the default one for further queries
         @repository.local_conditions[:order_by] = @options[:order_by] unless @options[:order_by].blank?
