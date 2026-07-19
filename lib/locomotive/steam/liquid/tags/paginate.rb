@@ -136,7 +136,7 @@ module Locomotive
           end
         end
 
-        ::Liquid::Template.register_tag('paginate'.freeze, Paginate)
+        ::Liquid::Environment.default.register_tag('paginate'.freeze, Paginate)
       end
 
     end

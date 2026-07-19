@@ -89,7 +89,7 @@ module Locomotive
 
           end
 
-          ::Liquid::Template.register_tag('editable_file'.freeze, File)
+          ::Liquid::Environment.default.register_tag('editable_file'.freeze, File)
         end
       end
     end

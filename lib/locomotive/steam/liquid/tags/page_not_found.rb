@@ -11,7 +11,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_tag('render_page_not_found'.freeze, PageNotFound)
+        ::Liquid::Environment.default.register_tag('render_page_not_found'.freeze, PageNotFound)
 
       end
     end

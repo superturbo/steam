@@ -60,7 +60,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_tag('alt_page_links'.freeze, AltPageLinks)
+        ::Liquid::Environment.default.register_tag('alt_page_links'.freeze, AltPageLinks)
       end
     end
   end

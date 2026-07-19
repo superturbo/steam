@@ -301,7 +301,7 @@ module Locomotive
             @_options[:no_wrapper].to_bool
           end
 
-          ::Liquid::Template.register_tag('nav'.freeze, Nav)
+          ::Liquid::Environment.default.register_tag('nav'.freeze, Nav)
         end
       end
     end

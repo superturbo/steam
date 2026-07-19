@@ -60,7 +60,7 @@ module Locomotive
 
           end
 
-          ::Liquid::Template.register_tag('editable_text'.freeze, Text)
+          ::Liquid::Environment.default.register_tag('editable_text'.freeze, Text)
 
           class ShortText < Text
             def initialize(tag_name, markup, options)
@@ -71,14 +71,14 @@ module Locomotive
               super.merge(format: 'raw', rows: 2, line_break: false, inline: true)
             end
           end
-          ::Liquid::Template.register_tag('editable_short_text'.freeze, ShortText)
+          ::Liquid::Environment.default.register_tag('editable_short_text'.freeze, ShortText)
 
           class LongText < ShortText
             def default_element_attributes
               super.merge(format: 'html', rows: 15, line_break: true, inline: false)
             end
           end
-          ::Liquid::Template.register_tag('editable_long_text'.freeze, LongText)
+          ::Liquid::Environment.default.register_tag('editable_long_text'.freeze, LongText)
 
         end
       end

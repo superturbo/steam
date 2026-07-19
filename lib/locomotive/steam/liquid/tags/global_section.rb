@@ -25,7 +25,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_tag('global_section'.freeze, GlobalSection)
+        ::Liquid::Environment.default.register_tag('global_section'.freeze, GlobalSection)
       end
     end
   end

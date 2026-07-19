@@ -120,7 +120,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_tag('model_form'.freeze, ModelForm)
+        ::Liquid::Environment.default.register_tag('model_form'.freeze, ModelForm)
 
       end
     end

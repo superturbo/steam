@@ -47,7 +47,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_tag('include'.freeze, Snippet)
+        ::Liquid::Environment.default.register_tag('include'.freeze, Snippet)
       end
     end
   end

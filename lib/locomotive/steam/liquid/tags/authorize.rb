@@ -57,7 +57,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_tag('authorize'.freeze, Authorize)
+        ::Liquid::Environment.default.register_tag('authorize'.freeze, Authorize)
 
       end
     end

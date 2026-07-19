@@ -90,7 +90,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_tag('locale_switcher'.freeze, LocaleSwitcher)
+        ::Liquid::Environment.default.register_tag('locale_switcher'.freeze, LocaleSwitcher)
 
       end
     end

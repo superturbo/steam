@@ -63,9 +63,9 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_tag('seo'.freeze, SEO::Base)
-        ::Liquid::Template.register_tag('seo_title'.freeze, SEO::Title)
-        ::Liquid::Template.register_tag('seo_metadata'.freeze, SEO::Metadata)
+        ::Liquid::Environment.default.register_tag('seo'.freeze, SEO::Base)
+        ::Liquid::Environment.default.register_tag('seo_title'.freeze, SEO::Title)
+        ::Liquid::Environment.default.register_tag('seo_metadata'.freeze, SEO::Metadata)
       end
     end
   end

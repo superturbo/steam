@@ -46,7 +46,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_tag('link_to', LinkTo)
+        ::Liquid::Environment.default.register_tag('link_to', LinkTo)
       end
     end
   end

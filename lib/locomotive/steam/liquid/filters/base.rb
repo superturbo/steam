@@ -53,7 +53,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_filter(Base)
+        ::Liquid::Environment.default.register_filter(Base)
 
       end
     end

@@ -100,7 +100,7 @@ EOF
 
         end
 
-        ::Liquid::Template.register_filter(Html)
+        ::Liquid::Environment.default.register_filter(Html)
 
       end
     end

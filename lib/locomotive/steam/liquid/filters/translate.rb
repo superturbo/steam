@@ -19,7 +19,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_filter(Translate)
+        ::Liquid::Environment.default.register_filter(Translate)
 
       end
     end

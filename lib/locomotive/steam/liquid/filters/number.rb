@@ -46,7 +46,7 @@ module Locomotive
 
           end
 
-          ::Liquid::Template.register_filter(Number)
+          ::Liquid::Environment.default.register_filter(Number)
 
         end
 

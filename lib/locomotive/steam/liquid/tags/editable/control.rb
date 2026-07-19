@@ -24,7 +24,7 @@ module Locomotive
 
           end
 
-          ::Liquid::Template.register_tag('editable_control'.freeze, Control)
+          ::Liquid::Environment.default.register_tag('editable_control'.freeze, Control)
         end
       end
     end

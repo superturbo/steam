@@ -47,7 +47,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_tag('sections_dropzone'.freeze, SectionsDropzone)
+        ::Liquid::Environment.default.register_tag('sections_dropzone'.freeze, SectionsDropzone)
 
       end
 

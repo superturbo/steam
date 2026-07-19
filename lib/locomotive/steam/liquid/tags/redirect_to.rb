@@ -26,7 +26,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_tag('redirect_to'.freeze, RedirectTo)
+        ::Liquid::Environment.default.register_tag('redirect_to'.freeze, RedirectTo)
 
       end
     end

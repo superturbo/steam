@@ -51,7 +51,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_filter(Pagination)
+        ::Liquid::Environment.default.register_filter(Pagination)
 
       end
     end

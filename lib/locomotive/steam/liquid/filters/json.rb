@@ -43,7 +43,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_filter(Json)
+        ::Liquid::Environment.default.register_filter(Json)
 
       end
     end

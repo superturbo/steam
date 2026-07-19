@@ -151,7 +151,7 @@ module Locomotive
           end
         end
 
-        ::Liquid::Template.register_tag('block', InheritedBlock)
+        ::Liquid::Environment.default.register_tag('block', InheritedBlock)
       end
     end
   end

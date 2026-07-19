@@ -34,8 +34,8 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_tag('csrf_param'.freeze, Csrf::Param)
-        ::Liquid::Template.register_tag('csrf_meta'.freeze, Csrf::Meta)
+        ::Liquid::Environment.default.register_tag('csrf_param'.freeze, Csrf::Param)
+        ::Liquid::Environment.default.register_tag('csrf_meta'.freeze, Csrf::Meta)
 
       end
     end

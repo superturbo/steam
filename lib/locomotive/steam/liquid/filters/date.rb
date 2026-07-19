@@ -262,7 +262,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_filter(Date)
+        ::Liquid::Environment.default.register_filter(Date)
       end
     end
   end

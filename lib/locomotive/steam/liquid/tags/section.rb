@@ -88,7 +88,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_tag('section'.freeze, Section)
+        ::Liquid::Environment.default.register_tag('section'.freeze, Section)
       end
     end
   end

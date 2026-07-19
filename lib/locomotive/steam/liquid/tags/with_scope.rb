@@ -51,7 +51,7 @@ module Locomotive
           end
         end
 
-        ::Liquid::Template.register_tag('with_scope'.freeze, WithScope)
+        ::Liquid::Environment.default.register_tag('with_scope'.freeze, WithScope)
       end
     end
   end

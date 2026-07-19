@@ -82,7 +82,7 @@ module Locomotive
           end
         end
 
-        ::Liquid::Template.register_tag('extends', Extends)
+        ::Liquid::Environment.default.register_tag('extends', Extends)
       end
     end
   end

@@ -95,7 +95,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_tag('consume'.freeze, Consume)
+        ::Liquid::Environment.default.register_tag('consume'.freeze, Consume)
       end
     end
   end

@@ -40,7 +40,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_tag('google_analytics'.freeze, GoogleAnalytics)
+        ::Liquid::Environment.default.register_tag('google_analytics'.freeze, GoogleAnalytics)
 
       end
     end

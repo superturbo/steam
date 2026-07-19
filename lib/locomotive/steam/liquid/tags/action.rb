@@ -73,7 +73,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_tag('action'.freeze, Action)
+        ::Liquid::Environment.default.register_tag('action'.freeze, Action)
 
       end
     end

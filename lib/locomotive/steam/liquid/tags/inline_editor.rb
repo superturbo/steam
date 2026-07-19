@@ -17,7 +17,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_tag('inline_editor'.freeze, InlineEditor)
+        ::Liquid::Environment.default.register_tag('inline_editor'.freeze, InlineEditor)
 
       end
     end

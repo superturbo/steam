@@ -41,7 +41,7 @@ module Locomotive
 
         end
 
-        ::Liquid::Template.register_filter(Resize)
+        ::Liquid::Environment.default.register_filter(Resize)
 
       end
     end
