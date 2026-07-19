@@ -50,10 +50,13 @@ module Locomotive::Steam
     end
 
     def inc(mapper, scope, entity, attribute, amount = 1)
-      entity.tap do
-        entity[attribute] ||= 0
-        entity[attribute] += amount
-      end
+      record = memoized_dataset(mapper, scope).find(entity._id)
+      value  = (record[attribute] || 0) + amount
+
+      record[attribute] = value
+      entity[attribute] = value
+
+      entity
     end
 
     def delete(mapper, scope, entity)

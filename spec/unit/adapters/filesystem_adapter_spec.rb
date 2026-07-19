@@ -55,18 +55,53 @@ describe Locomotive::Steam::FilesystemAdapter do
 
   describe '#inc' do
 
-    let(:site)   { instance_double('Site', _id: 1) }
-    let(:entity) { OpenStruct.new(name: 'My post', views: 41) }
+    let(:mapper)     { instance_double('Mapper', name: :posts) }
+    let(:site)       { instance_double('Site', _id: 1) }
+    let(:stored)     { OpenStruct.new(_id: 1, name: 'My post', views: 50) }
+    let(:collection) { [stored] }
+    let(:entity)     { OpenStruct.new(_id: 1, name: 'stale copy', views: 41) }
+    let(:cache_key)  { "#{scope.to_key}_#{mapper.name}" }
+
+    before do
+      adapter.cache.delete(cache_key)
+      allow(mapper).to receive(:to_entity) { |arg| arg }
+      allow(adapter).to receive(:collection).and_return(collection)
+    end
+
+    after { adapter.cache.delete(cache_key) }
 
     subject { adapter.inc(mapper, scope, entity, :views) }
 
-    it { expect(subject.views).to eq 42 }
+    it 'increments from the stored value, not the passed entity' do
+      expect(subject.views).to eq 51
+    end
+
+    it 'makes the increment visible to a later read' do
+      subject
+      expect(adapter.find(mapper, scope, 1).views).to eq 51
+    end
+
+    it 'increments only the given field, leaving the stored record otherwise intact' do
+      subject
+      expect(adapter.find(mapper, scope, 1).name).to eq 'My post'
+    end
 
     describe 'by an amount different from 1' do
 
       subject { adapter.inc(mapper, scope, entity, :views, 3) }
 
-      it { expect(subject.views).to eq 44 }
+      it { expect(subject.views).to eq 53 }
+
+    end
+
+    context 'an unknown record' do
+
+      let(:entity) { OpenStruct.new(_id: 999, name: 'ghost', views: 7) }
+
+      it 'raises RecordNotFound without mutating the passed entity' do
+        expect { subject }.to raise_error(Locomotive::Steam::Models::Repository::RecordNotFound)
+        expect(entity.views).to eq 7
+      end
 
     end
 
