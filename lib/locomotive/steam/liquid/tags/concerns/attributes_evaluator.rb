@@ -44,7 +44,10 @@ module Locomotive
               when ::Liquid::VariableLookup
                 evaluated_value = context.evaluate(value)
                 evaluated_value.respond_to?(:_id) ? evaluated_value.send(:_source) : evaluate_attribute(context, evaluated_value)
-              else 
+              when Locomotive::Steam::Liquid::ContentTypeFieldSelectOption
+                # Select scopes use option names.
+                value.name
+              else
                 value
               end
             end

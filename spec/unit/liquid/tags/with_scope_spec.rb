@@ -190,6 +190,20 @@ describe Locomotive::Steam::Liquid::Tags::WithScope do
 
     end
 
+    describe 'a select option in a loop' do
+      let(:options) do
+        %w(grunge rock country).map do |name|
+          Locomotive::Steam::Liquid::ContentTypeFieldSelectOption.new(OpenStruct.new(_id: name, name: name))
+        end
+      end
+      let(:assigns) { { 'list' => options } }
+      let(:source)  { "{% for opt in list %}{% with_scope kind: opt %}{% assign conditions = with_scope %}{% endwith_scope %}{{ conditions }}{% endfor %}" }
+
+      it 'captures each option name independently' do
+        expect(output).to eq '{"kind"=>"grunge"}{"kind"=>"rock"}{"kind"=>"country"}'
+      end
+    end
+
   end
 
   describe 'decode advanced options' do
