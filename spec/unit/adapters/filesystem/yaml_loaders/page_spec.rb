@@ -47,6 +47,33 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::Page do
 
     end
 
+    context 'region locales' do
+
+      let(:env)    { :regions }
+      let(:loader) { described_class.new(site_path, env) }
+      let(:scope)  { instance_double('Scope', locale: :en, default_locale: :en, locales: [:en, :'pl-PL']) }
+
+      it 'loads page data stored under a region-locale folder' do
+        index = subject.find { |page| page[:_fullpath] == 'index' }
+        expect(index[:title]).to include('pl-PL': 'Strona główna')
+      end
+
+    end
+
+    context 'a data file under an unconfigured locale' do
+
+      let(:env)         { :ignored_locale }
+      let(:loader)      { described_class.new(site_path, env) }
+      let(:scope)       { instance_double('Scope', locale: :en, default_locale: :en, locales: [:en, :fr]) }
+      let(:broken_json) { File.join(site_path, 'data', 'ignored_locale', 'pages', 'de', 'broken.json') }
+
+      it 'is skipped without parsing its json' do
+        expect(File).to exist(broken_json)
+        expect { subject }.not_to raise_error
+      end
+
+    end
+
   end
 
 end

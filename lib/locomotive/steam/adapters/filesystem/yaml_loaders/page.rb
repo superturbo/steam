@@ -59,21 +59,19 @@ module Locomotive
             end
 
             def load_data
-              Dir.glob(File.join(data_path, '**', '*.json')).each do |filepath|
-                filepath  =~ /#{data_path}\/([a-z]+)\//
-                data      = safe_json_file_load(filepath)
-                locale    = $1.to_sym
+              locales.each do |locale|
+                Dir.glob(File.join(data_path, locale.to_s, '**', '*.json')).each do |filepath|
+                  data = safe_json_file_load(filepath)
 
-                next unless locales.include?($1.to_sym)
+                  if data['handle'].present? # yeah, core page found!
+                    attributes = @pages_by_handle[data['handle']]
+                  else
+                    @pages_by_fullpath[data['fullpath']] ||= {}
+                    attributes = @pages_by_fullpath[data['fullpath']]
+                  end
 
-                if data['handle'].present? # yeah, core page found!
-                  attributes = @pages_by_handle[data['handle']]
-                else
-                  @pages_by_fullpath[data['fullpath']] ||= {}
-                  attributes = @pages_by_fullpath[data['fullpath']]
+                  complete_attributes_from_data(attributes, data, locale)
                 end
-
-                complete_attributes_from_data(attributes, data, locale)
               end
             end
 
