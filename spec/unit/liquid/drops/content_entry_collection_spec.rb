@@ -20,20 +20,78 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntryCollection do
 
   describe 'acts as a collection' do
 
-    before do
-      allow(services.repositories.content_entry).to receive(:all).with(nil).and_return(['a', 'b'])
-    end
+    let(:repo) { services.repositories.content_entry }
 
     describe '#first' do
-      it { expect(drop.first).to eq('a') }
+      it 'pushes down to repository.first, not #all' do
+        allow(repo).to receive(:first).with(nil).and_return('a')
+        allow(repo).to receive(:all)
+        expect(drop.first).to eq('a')
+        expect(repo).not_to have_received(:all)
+      end
+    end
+
+    describe '#first(n)' do
+      it 'materializes and slices the collection' do
+        allow(repo).to receive(:all).with(nil).and_return(['a', 'b'])
+        expect(drop.first(2)).to eq(['a', 'b'])
+      end
     end
 
     describe '#last' do
+      before { allow(repo).to receive(:all).with(nil).and_return(['a', 'b']) }
       it { expect(drop.last).to eq('b') }
     end
 
-    describe '#last' do
+    describe '#map' do
+      before { allow(repo).to receive(:all).with(nil).and_return(['a', 'b']) }
       it { expect(drop.map(&:to_s)).to eq(['a', 'b']) }
+    end
+
+    describe '#empty?' do
+      it 'pushes down to repository.exists?, not #all' do
+        allow(repo).to receive(:exists?).with(nil).and_return(false)
+        allow(repo).to receive(:all)
+        expect(drop.empty?).to eq true
+        expect(repo).not_to have_received(:all)
+      end
+
+      it 'is false when the collection has entries' do
+        allow(repo).to receive(:exists?).with(nil).and_return(true)
+        expect(drop.empty?).to eq false
+      end
+    end
+
+    describe '#any?' do
+      it 'without a block pushes down to repository.exists?, not #all' do
+        allow(repo).to receive(:exists?).with(nil).and_return(true)
+        allow(repo).to receive(:all)
+        expect(drop.any?).to eq true
+        expect(repo).not_to have_received(:all)
+      end
+
+      it 'with a block materializes and evaluates it (Array#any? contract)' do
+        allow(repo).to receive(:all).with(nil).and_return(['a', 'b'])
+        expect(drop.any? { |e| e == 'a' }).to eq true
+      end
+
+      it 'with a pattern argument materializes and evaluates it' do
+        allow(repo).to receive(:all).with(nil).and_return(['a', 'b'])
+        expect(drop.any?('a')).to eq true
+      end
+    end
+
+    describe 'reusing an already-materialized collection' do
+      it 'first/empty?/any? read the loaded collection without re-querying' do
+        allow(repo).to receive(:all).with(nil).and_return(['a', 'b'])
+        drop.map { |e| e }
+
+        expect(repo).not_to receive(:first)
+        expect(repo).not_to receive(:exists?)
+        expect(drop.first).to eq('a')
+        expect(drop.empty?).to eq false
+        expect(drop.any?).to eq true
+      end
     end
 
     context 'with a scope' do
@@ -41,23 +99,19 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntryCollection do
       let(:assigns) { { 'with_scope' => { 'visible' => true } } }
 
       describe '#first' do
-        before do
-          expect(services.repositories.content_entry).to receive(:all).with({ 'visible' => true }).and_return(['a', 'b'])
-        end
+        before { expect(repo).to receive(:first).with({ 'visible' => true }).and_return('a') }
         it { expect(drop.first).to eq('a') }
       end
 
       describe '#count' do
-        before do
-          expect(services.repositories.content_entry).to receive(:count).with({ 'visible' => true }).and_return(2)
-        end
+        before { expect(repo).to receive(:count).with({ 'visible' => true }).and_return(2) }
         it { expect(drop.count).to eq 2 }
       end
 
       describe 'only applied to the first content type' do
 
         it 'sets the content type in the context' do
-          expect(services.repositories.content_entry).to receive(:all).with({ 'visible' => true }).and_return(['a', 'b'])
+          expect(repo).to receive(:first).with({ 'visible' => true }).and_return('a')
           expect(context['with_scope_content_type']).to eq nil
           drop.first
           expect(context['with_scope_content_type']).to eq 'articles'
@@ -65,7 +119,7 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntryCollection do
 
         it "doesn't apply the with_scope conditions if it's not the same content type" do
           context['with_scope_content_type'] = 'projects'
-          expect(services.repositories.content_entry).to receive(:all).with({}).and_return(['a', 'b'])
+          expect(repo).to receive(:first).with({}).and_return('a')
           drop.first
           expect(context['with_scope_content_type']).to eq 'projects'
         end

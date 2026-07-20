@@ -40,6 +40,11 @@ describe Locomotive::Steam::ContentEntryRepository do
       it { expect(subject.name).to eq 'Alice in Chains' }
     end
 
+    describe '#first with conditions' do
+      subject { repository.first(featured: true) }
+      it { expect(subject.name).to eq 'The who' }
+    end
+
     describe '#last' do
       subject { repository.last }
       it { expect(subject.name).to eq 'The who' }

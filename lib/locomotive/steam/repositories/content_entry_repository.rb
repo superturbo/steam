@@ -55,8 +55,8 @@ module Locomotive
         first { where(conditions) }
       end
 
-      def first(&block)
-        ordered_entries({}, &block).first
+      def first(conditions = {}, &block)
+        ordered_entries(conditions, &block).first
       end
 
       def last(&block)

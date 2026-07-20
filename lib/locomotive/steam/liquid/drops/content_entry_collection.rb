@@ -5,11 +5,31 @@ module Locomotive
 
         class ContentEntryCollection < ::Liquid::Drop
 
-          delegate :first, :last, :each, :each_with_index, :empty?, :any?, :map, to: :collection
+          delegate :last, :each, :each_with_index, :map, to: :collection
 
           def initialize(content_type, repository = nil)
             @content_type = content_type
             @repository   = repository
+          end
+
+          def first(*args)
+            return collection.first(*args) unless args.empty?
+            return @collection.first if defined?(@collection)
+
+            repository.first(conditions)
+          end
+
+          def empty?
+            return @collection.empty? if defined?(@collection)
+
+            !repository.exists?(conditions)
+          end
+
+          def any?(*args, &block)
+            return collection.any?(*args, &block) if args.any? || block_given?
+            return @collection.any? if defined?(@collection)
+
+            repository.exists?(conditions)
           end
 
           def all
