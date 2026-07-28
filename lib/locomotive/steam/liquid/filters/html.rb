@@ -1,8 +1,28 @@
+require 'cgi'
+
 module Locomotive
   module Steam
     module Liquid
       module Filters
         module Html
+
+          SAFE_URL_SCHEMES = %w[http https mailto tel].freeze
+          private_constant :SAFE_URL_SCHEMES
+
+          # Validate and HTML-escape a CMS URL for quoted a[href]/img[src] attributes.
+          # Rejects non-allowlisted schemes and ASCII control chars; not for script/iframe/form/CSS/JS.
+          # Output is attribute-safe — do NOT chain an extra `| escape`.
+          def safe_url(input)
+            url = input.to_s
+            return '' if url.match?(/[\x00-\x1F\x7F]/)
+
+            url = url.strip
+            scheme = url[/\A([a-z][a-z0-9+.-]*):/i, 1]
+
+            return '' if scheme && !SAFE_URL_SCHEMES.include?(scheme.downcase)
+
+            CGI.escapeHTML(url)
+          end
 
           # Return a link tag that browsers and news readers can use to auto-detect an RSS or ATOM feed.
           # input: url of the feed

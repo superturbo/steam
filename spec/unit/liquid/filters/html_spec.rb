@@ -330,6 +330,65 @@ describe Locomotive::Steam::Liquid::Filters::Html do
 
   end
 
+  describe '#safe_url' do
+
+    it 'passes allowlisted schemes through (escaped)' do
+      expect(safe_url('http://x')).to eq 'http://x'
+      expect(safe_url('https://x')).to eq 'https://x'
+      expect(safe_url('mailto:a@b.com')).to eq 'mailto:a@b.com'
+      expect(safe_url('tel:+123')).to eq 'tel:+123'
+    end
+
+    it 'passes relative, anchor, query and protocol-relative urls' do
+      expect(safe_url('/foo/bar')).to eq '/foo/bar'
+      expect(safe_url('foo/bar')).to eq 'foo/bar'
+      expect(safe_url('#section')).to eq '#section'
+      expect(safe_url('?q=1')).to eq '?q=1'
+      expect(safe_url('//cdn.example.com')).to eq '//cdn.example.com'
+    end
+
+    it 'strips surrounding whitespace before deciding' do
+      expect(safe_url('  http://x')).to eq 'http://x'
+      expect(safe_url('  javascript:x')).to eq ''
+    end
+
+    it 'rejects non-allowlisted schemes (case-insensitive)' do
+      expect(safe_url('javascript:alert(1)')).to eq ''
+      expect(safe_url('data:text/html,x')).to eq ''
+      expect(safe_url('vbscript:x')).to eq ''
+      expect(safe_url('JavaScript:alert(1)')).to eq ''
+    end
+
+    it 'rejects any value carrying an ASCII control character' do
+      expect(safe_url("java\tscript:x")).to eq ''
+      expect(safe_url("java\nscript:x")).to eq ''
+      expect(safe_url("/foo\tbar")).to eq ''
+      expect(safe_url("http://x\0")).to eq ''
+      expect(safe_url("http://x\x7F")).to eq ''
+    end
+
+    it 'html-escapes the result so it is safe inside a quoted attribute' do
+      expect(safe_url('http://x?a=1&b=2')).to eq 'http://x?a=1&amp;b=2'
+      expect(safe_url('http://x" onclick="alert(1)')).to eq 'http://x&quot; onclick=&quot;alert(1)'
+      expect(safe_url("http://x' onclick='alert(1)")).to eq 'http://x&#39; onclick=&#39;alert(1)'
+    end
+
+    it 'keeps an entity-encoded scheme inert' do
+      expect(safe_url('javascript&#58;alert(1)')).to eq 'javascript&amp;#58;alert(1)'
+    end
+
+    it 'returns an empty string for nil or blank input' do
+      expect(safe_url(nil)).to eq ''
+      expect(safe_url('')).to eq ''
+      expect(safe_url('   ')).to eq ''
+    end
+
+    it 'is registered and usable through Liquid' do
+      expect(::Liquid::Template.parse("{{ 'javascript:alert(1)' | safe_url }}").render).to eq ''
+    end
+
+  end
+
   class EngineThemeAsset < Locomotive::Steam::ThemeAssetRepository
     def url_for(path)
       ['', 'sites', site._id.to_s, 'theme', path].join('/')
