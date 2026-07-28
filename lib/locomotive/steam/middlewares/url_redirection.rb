@@ -51,9 +51,9 @@ module Locomotive::Steam
           _regexp = route.gsub(/:([^\/]+)/, "(?<\\1>[^\/]+)").gsub('/', '\/')
 
           if matches = Regexp.new(_regexp).match(requested_url)
-            matches.names.each { |n| redirection.gsub!(":#{n}", matches[n]) }
-
-            return redirection
+            return matches.names.reduce(redirection) do |url, name|
+              url.gsub(":#{name}") { matches[name] }
+            end
           end
         end
 

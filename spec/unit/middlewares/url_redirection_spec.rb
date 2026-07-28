@@ -72,6 +72,24 @@ describe Locomotive::Steam::Middlewares::UrlRedirection do
 
       end
 
+      describe 'the same dynamic pattern reused across requests' do
+
+        let(:redirections) { [['/old_images/:file', '/images/old/:file']] }
+
+        it 'substitutes per-request without mutating the shared redirection target' do
+          run = ->(path) {
+            env = env_for("http://models.example.com#{path}", 'steam.site' => site)
+            env['steam.request'] = Rack::Request.new(env)
+            code, env = middleware.call(env)
+            [code, env['location']]
+          }
+
+          expect(run.('/old_images/cat.png')).to eq [301, '/images/old/cat.png']
+          expect(run.('/old_images/dog.png')).to eq [301, '/images/old/dog.png']
+        end
+
+      end
+
       describe 'let the parent app know about the redirection when it happens' do
 
         let(:events) { [] }
