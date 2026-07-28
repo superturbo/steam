@@ -50,6 +50,23 @@ describe Locomotive::Steam::PageRepository do
 
   end
 
+  describe '#published' do
+
+    let(:pages) do
+      [
+        { title: { en: 'Draft' },   published: false, slug: { en: 'draft' },   _fullpath: 'draft' },
+        { title: { en: 'Child B' }, published: true, position: 2, slug: { en: 'child-b' }, _fullpath: 'parent/child-b' },
+        { title: { en: 'Child A' }, published: true, position: 1, slug: { en: 'child-a' }, _fullpath: 'parent/child-a' },
+        { title: { en: 'Home' },    published: true, slug: { en: 'index' },     _fullpath: 'index' }
+      ]
+    end
+
+    subject { repository.published.map { |p| p.title[:en] } }
+
+    it { is_expected.to eq ['Home', 'Child A', 'Child B'] }
+
+  end
+
   describe 'templatized pages' do
 
     let(:pages) do
@@ -192,6 +209,16 @@ describe Locomotive::Steam::PageRepository do
       let(:entry) { instance_double('Project', content_type_slug: 'projects', _slug: { en: 'hello-world' }) }
       it { is_expected.to eq nil }
 
+    end
+
+    it 'takes the first result through the query instead of materializing #all' do
+      relation = spy('Query', all: [], first: nil)
+      allow(repository).to receive(:query).and_return(relation)
+
+      repository.template_for(nil)
+
+      expect(relation).to have_received(:first)
+      expect(relation).not_to have_received(:all)
     end
 
   end

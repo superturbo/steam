@@ -16,17 +16,11 @@ module Locomotive
       end
 
       def all(conditions = {})
-        query do
-          where(conditions || {}).
-            order_by(depth: :asc, position: :asc)
-        end.all
+        ordered_pages(conditions).all
       end
 
       def published
-        query do
-          where(published: true).
-            order_by(depth: :asc, position: :asc)
-        end.all
+        all(published: true)
       end
 
       def only_handle_and_fullpath
@@ -53,7 +47,7 @@ module Locomotive
 
         conditions[:handle] = handle if handle
 
-        all(conditions).first.tap do |page|
+        ordered_pages(conditions).first.tap do |page|
           page.content_entry = entry if page
         end
       end
@@ -87,6 +81,15 @@ module Locomotive
         return nil if page.nil? || page.editable_elements.nil?
         page.editable_elements.first do
           where(block: block, slug: slug)
+        end
+      end
+
+      private
+
+      def ordered_pages(conditions = {})
+        query do
+          where(conditions || {}).
+            order_by(depth: :asc, position: :asc)
         end
       end
 
