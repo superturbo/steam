@@ -1,8 +1,3 @@
-require 'mimetype_fu'
-require 'mime-types'
-require 'mime/types'
-
-require 'rack/rewrite'
 require 'rack/csrf'
 require 'rack/session/moneta'
 require 'rack/builder'
@@ -25,7 +20,7 @@ module Locomotive::Steam
         server, configuration = self, self.configuration
 
         -> (stack) {          
-          use(Rack::Rewrite) { r301 %r{^/(.*)/$}, '/$1' }
+          use Middlewares::TrailingSlashRedirect
           use Middlewares::Favicon
 
           if configuration.serve_assets
