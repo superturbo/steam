@@ -1,14 +1,22 @@
 name: Continuous integration
 
-on: [push]
+on:
+  push:
+    branches: [master]
+  pull_request:
 
 jobs:
   ci_validation:
     runs-on: ubuntu-latest
-    
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ['3.3', '3.4']
+
     services:
       mongo:
-        image: mongo:6.0.14
+        image: mongo:7.0
         ports:
           - 27017:27017
         env:
@@ -37,7 +45,7 @@ jobs:
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: 3.3.5
+          ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
           cache-version: 1
 
