@@ -40,7 +40,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'pony',                   '~> 1.12'
   spec.add_dependency 'prism',                  '~> 1.9'
 
-  spec.add_dependency 'locomotivecms_common',   '~> 0.6.0.alpha2'
+  spec.add_dependency 'locomotivecms_common',   '~> 0.6.0.alpha3'
 
   spec.required_ruby_version = ['>= 3.3']
 end
