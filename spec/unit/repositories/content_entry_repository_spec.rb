@@ -523,6 +523,59 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     end
 
+    context 'ISO dash date' do
+
+      let(:value)       { '2019-09-10' }
+      let(:field)       { instance_double('DateField', name: 'launched_at', persisted_name: 'launched_at', type: :date) }
+      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field]) }
+      let(:conditions)  { { 'launched_at' => value } }
+
+      it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'launched_at' => Date.new(2019, 9, 10) }, nil]) }
+
+    end
+
+    context 'ISO date time with a UTC offset' do
+
+      let(:value)       { '2007-06-29T21:15:00+00:00' }
+      let(:field)       { instance_double('DateField', name: 'launched_at', persisted_name: 'launched_at', type: :date_time) }
+      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field]) }
+      let(:conditions)  { { 'launched_at' => value } }
+
+      it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'launched_at' => DateTime.new(2007, 6, 29, 21, 15, 0) }, nil]) }
+
+    end
+
+    context 'date-only value for a date-time field resolves to midnight' do
+
+      before { Time.zone = 'UTC' }
+
+      let(:value)       { '2019-09-10' }
+      let(:field)       { instance_double('DateField', name: 'launched_at', persisted_name: 'launched_at', type: :date_time) }
+      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field]) }
+      let(:conditions)  { { 'launched_at' => value } }
+
+      it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'launched_at' => DateTime.new(2019, 9, 10, 0, 0, 0) }, nil]) }
+
+    end
+
+    context 'invalid date values are rejected' do
+
+      let(:field)       { instance_double('DateField', name: 'launched_at', persisted_name: 'launched_at', type: :date_time) }
+      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field]) }
+      let(:conditions)  { { 'launched_at' => value } }
+
+      context 'a natural-language date value' do
+        let(:value) { 'tomorrow' }
+        it { expect { subject }.to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue) }
+      end
+
+      context 'a non-existent calendar date' do
+        let(:value) { '2025-99-99' }
+        it { expect { subject }.to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue) }
+      end
+
+    end
+
     context 'belongs_to fields' do
 
       let(:value)       { 42 }

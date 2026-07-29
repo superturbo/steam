@@ -310,13 +310,21 @@ module Locomotive
         end
 
         def value_to_date(value, type)
-          _value = if value.is_a?(String)
-            Chronic.time_class = Time.zone
-            Chronic.parse(value)
-          else
-            value
-          end
+          _value = value.is_a?(String) ? parse_date(value) : value
           type == :date ? _value&.to_date : _value&.to_datetime
+        end
+
+        def parse_date(value)
+          parsed = begin
+            Time.zone.parse(value)
+          rescue ArgumentError
+            nil
+          end
+
+          parsed || raise(
+            Locomotive::Steam::Adapters::Query::InvalidValue,
+            "invalid date: #{value.inspect}"
+          )
         end
 
       end

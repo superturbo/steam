@@ -207,6 +207,17 @@ describe Locomotive::Steam::ContentEntry do
         let(:value) { build_i18n_field(en: '2007/06/29 10:00:00', fr: datetime) }
         it { expect(subject.translations).to eq('en' => datetime, 'fr' => datetime) }
       end
+      context 'a date-only value resolves to midnight' do
+        let(:value) { '2019-09-10' }
+        it { is_expected.to eq DateTime.new(2019, 9, 10, 0, 0, 0) }
+      end
+      context 'an unparseable date-time value' do
+        let(:value) { 'tomorrow' }
+        it 'logs the cast failure and returns nil' do
+          expect(Locomotive::Common::Logger).to receive(:info).with(/Unable to cast/)
+          expect(subject).to be_nil
+        end
+      end
     end
 
     context 'a file' do

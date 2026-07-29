@@ -1,4 +1,3 @@
-require 'chronic'
 require 'bcrypt'
 
 module Locomotive::Steam
@@ -181,8 +180,9 @@ module Locomotive::Steam
         if value.is_a?(String)
           # context: time from a YAML file (String).
           # In that case, use the timezone defined by the site.
-          Chronic.time_class = Time.zone
-          Chronic.parse(value).send(end_method)
+          parsed = Time.zone.parse(value)
+          raise ArgumentError, "invalid date: #{value.inspect}" if parsed.nil?
+          parsed.public_send(end_method)
         else
           value
         end
