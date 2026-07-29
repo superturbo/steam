@@ -25,7 +25,6 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'multi_json',             '~> 1.15'
   spec.add_dependency 'liquid',                 '~> 5.13.0'
 
-  spec.add_dependency 'rack-cache',             '>= 1.7', '< 2'
   spec.add_dependency 'rack-session',           '~> 2.1'
   spec.add_dependency 'rack_csrf',              '~> 2.6'
   spec.add_dependency 'dragonfly',              '~> 1.4.0'
