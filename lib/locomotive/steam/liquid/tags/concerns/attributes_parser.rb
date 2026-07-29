@@ -1,3 +1,5 @@
+require 'prism'
+
 require_relative '../../../adapters/query'
 
 module Locomotive
@@ -6,9 +8,10 @@ module Locomotive
       module Tags
         module Concerns
 
-          # The with_scope liquid tag lets the developer use a Ruby syntax to 
-          # pass options which is difficult to implement with the Liquid parsing 
-          # approach (see the SimpleAttributesParser for instance)
+          # Parses the Ruby-like attributes DSL of the with_scope tag (e.g.
+          # `a: 1, providers.in: ['acme'], title: /foo/i, ref: some.var`) with
+          # Prism. Fail-closed: anything outside the accepted node set raises
+          # Liquid::SyntaxError.
           module AttributesParser
             extend ActiveSupport::Concern
 
@@ -17,16 +20,17 @@ module Locomotive
 
               SYMBOL_OPERATORS_REGEXP = /(\w+\.(#{OPERATORS.join('|')})){1}\s*\:/o
             end
-            
+
             def parse_markup(markup)
-              parser = self.class.current_parser
+              body = ::Prism.parse("{#{clean_markup(markup)}}").then do |r|
+                r.success? ? r.value.statements.body : []
+              end
 
-              # 'liquid_code.rb' is purely arbitrary
-              source_buffer = ::Parser::Source::Buffer.new('liquid_code.rb')
-              source_buffer.source = "{%s}" % clean_markup(markup)
+              unless body.size == 1 && body.first.is_a?(::Prism::HashNode)
+                raise ::Liquid::SyntaxError, "Invalid attributes syntax: #{markup}"
+              end
 
-              ast = parser.parse(source_buffer)
-              AstProcessor.new.process(ast)
+              visit(body.first)
             end
 
             private
@@ -36,118 +40,85 @@ module Locomotive
               markup.gsub(SYMBOL_OPERATORS_REGEXP, ':"\1" =>')
             end
 
-            class_methods do
-              def current_parser
-                (@current_parser ||= build_parser).tap do |parser|
-                  parser.reset
+            def visit(node)
+              case node
+              when ::Prism::HashNode
+                node.elements.each_with_object({}) do |element, hash|
+                  unsupported! unless element.is_a?(::Prism::AssocNode)
+                  hash[visit(element.key)] = visit(element.value)
                 end
-              end
-
-              def build_parser
-                ::Parser::CurrentRuby.new.tap do |parser|
-                  # Silent the error instead of logging them to STDERR (default behavior of the parser)
-                  parser.diagnostics.consumer = ->(message) { true }
-                end
+              when ::Prism::ArrayNode              then node.elements.map { |e| visit(e) }
+              when ::Prism::SymbolNode             then node.unescaped.to_sym
+              when ::Prism::StringNode             then node.unescaped
+              when ::Prism::IntegerNode            then node.value
+              when ::Prism::FloatNode              then node.value
+              when ::Prism::TrueNode               then true
+              when ::Prism::FalseNode              then false
+              when ::Prism::RegularExpressionNode  then visit_regexp(node)
+              when ::Prism::CallNode               then visit_call(node)
+              else
+                unsupported!
               end
             end
 
-            class AstProcessor
-              include AST::Processor::Mixin
-              
-              def on_hash(node)
-                nodes = process_all(node)
-                nodes.inject({}) { |memo, sub_hash| memo.merge(sub_hash) }
+            # `+value` and `left + right` decode to the (left) operand (no
+            # arithmetic); anything else must be a bare/dotted variable lookup.
+            def visit_call(node)
+              unsupported! if node.safe_navigation? || !node.block.nil?
+
+              if node.receiver && node.name == :+@ && node.arguments.nil?
+                return visit(node.receiver)
               end
 
-              def on_pair(node)
-                key_expr, right_expr = *node
-                { process(key_expr) => process(right_expr) }
+              if node.receiver && node.name == :+ && node.arguments&.arguments&.size == 1
+                visit(node.arguments.arguments.first) # validate the right operand, then drop it
+                return visit(node.receiver)
               end
 
-              def on_sym(node)
-                node.children.first.to_sym
+              unsupported! unless node.arguments.nil?
+
+              ::Liquid::Expression.parse(variable_path(node).join('.'))
+            end
+
+            def variable_path(node)
+              receiver = node.receiver
+
+              if receiver.nil?
+                [node.name.to_s]
+              elsif variable_chain?(receiver)
+                variable_path(receiver) << node.name.to_s
+              else
+                unsupported!
+              end
+            end
+
+            def variable_chain?(node)
+              node.is_a?(::Prism::CallNode) && !node.safe_navigation? &&
+                node.arguments.nil? && node.block.nil?
+            end
+
+            # Only i/m/x flags are supported; encoding (u/e/s/n) and once (o)
+            # flags are rejected, and an invalid pattern is reported as a syntax
+            # error rather than leaking a RegexpError.
+            def visit_regexp(node)
+              if node.once? || node.utf_8? || node.euc_jp? || node.windows_31j? || node.ascii_8bit?
+                unsupported!
               end
 
-              def on_array(node)
-                process_all(node)
+              options = 0
+              options |= Regexp::IGNORECASE if node.ignore_case?
+              options |= Regexp::MULTILINE  if node.multi_line?
+              options |= Regexp::EXTENDED   if node.extended?
+
+              begin
+                Regexp.new(node.unescaped, options)
+              rescue RegexpError
+                unsupported!
               end
+            end
 
-              def on_int(node)
-                node.children.first.to_i
-              end
-
-              def on_float(node)
-                node.children.first.to_f
-              end
-
-              def on_str(node)
-                node.children.first.to_s
-              end
-
-              def on_true(node)
-                true
-              end
-
-              def on_false(node)
-                false
-              end
-
-              def on_regexp(node)
-                regexp_expr, opts_expr = *node
-                Regexp.new(process(regexp_expr), process(opts_expr))
-              end
-
-              def on_regopt(node)
-                node.children ? node.children.join('') : nil
-              end
-
-              def on_deep_send(node)
-                source_expr, name_expr = *node
-
-                if source_expr.nil?
-                  [name_expr.to_s]
-                elsif source_expr.type == :send
-                  process(source_expr.updated(:deep_send, nil)) << name_expr.to_s
-                else
-                  raise 'NOT IMPLEMENTED [DEEP_SEND]' # TODO
-                end
-              end
-
-              def on_send(node)
-                source_expr, name_expr = *node
-
-                if source_expr.nil?
-                  ::Liquid::Expression.parse(name_expr.to_s)
-                elsif name_expr == :+ 
-                  process(source_expr)
-                elsif source_expr.type == :send
-                  ::Liquid::Expression.parse(
-                    (process(source_expr.updated(:deep_send, nil)) << name_expr.to_s).join('.')
-                  )                
-                else
-                  raise 'NOT IMPLEMENTED [SEND]' # TODO
-                end
-              end
-
-              # HACK: override the default process implementation
-              def process(node)
-                return if node.nil?
-
-                node = node.to_ast
-
-                # Invoke a specific handler
-                on_handler = :"on_#{node.type}"
-                if respond_to? on_handler
-                  new_node = send on_handler, node
-                else
-                  new_node = handler_missing(node)
-                end
-
-                # fix: the original method considered false as nil which is incorrect
-                node = new_node unless new_node.nil?
-
-                node
-              end
+            def unsupported!
+              raise ::Liquid::SyntaxError, 'Unsupported with_scope attribute expression'
             end
           end
         end

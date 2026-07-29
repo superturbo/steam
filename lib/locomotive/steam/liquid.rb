@@ -1,6 +1,4 @@
 require 'liquid'
-require 'parser/current'
-require 'ast'
 
 require_relative 'liquid/errors'
 require_relative 'liquid/patches'
