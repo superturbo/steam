@@ -5,6 +5,7 @@ require_relative '../../../../lib/locomotive/steam/adapters/query'
 describe Locomotive::Steam::Adapters::Query::Operators do
 
   let(:unsupported) { Locomotive::Steam::Adapters::Query::UnsupportedOperator }
+  let(:invalid)     { Locomotive::Steam::Adapters::Query::InvalidValue }
 
   describe '.fetch' do
 
@@ -66,6 +67,45 @@ describe Locomotive::Steam::Adapters::Query::Operators do
 
     it 'raises on a removed or unknown operator' do
       expect { described_class.key(:name, 'neq') }.to raise_error(unsupported)
+    end
+
+    it 'never builds a key from an empty or dotted field' do
+      expect { described_class.key('', 'gt') }.to raise_error(invalid)
+      expect { described_class.key('address.city', 'gt') }.to raise_error(invalid)
+    end
+
+  end
+
+  describe '.decode' do
+
+    it 'returns a plain field when there is no operator suffix' do
+      expect(described_class.decode('title')).to eq ['title', nil]
+    end
+
+    it 'splits a field and its registered operator' do
+      field, operator = described_class.decode('views.gt')
+      expect(field).to eq 'views'
+      expect(operator.name).to eq :gt
+    end
+
+    it 'resolves an alias' do
+      expect(described_class.decode('name.==').last.name).to eq :eq
+    end
+
+    it 'raises on a removed or unknown operator' do
+      %w(title.neq title.matches title.bogus).each do |key|
+        expect { described_class.decode(key) }.to raise_error(unsupported)
+      end
+    end
+
+    it 'raises on an empty field' do
+      ['', '.ne'].each do |key|
+        expect { described_class.decode(key) }.to raise_error(invalid)
+      end
+    end
+
+    it 'raises on a nested path' do
+      expect { described_class.decode('address.location.ne') }.to raise_error(invalid)
     end
 
   end

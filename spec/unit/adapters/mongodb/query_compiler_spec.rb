@@ -56,6 +56,10 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
     it 'rejects a non-operator suffix' do
       expect { filter('meta.title' => 'x') }.to raise_error(unsupported)
     end
+    it 'rejects an empty field' do
+      expect { filter('' => 'x') }.to raise_error(invalid)
+      expect { filter('.ne' => 'x') }.to raise_error(invalid)
+    end
   end
 
   describe '#compile filter — $exists cast' do

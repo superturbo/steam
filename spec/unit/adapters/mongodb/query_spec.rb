@@ -118,4 +118,17 @@ describe Locomotive::Steam::Adapters::MongoDB::Query do
 
   end
 
+  describe '#k' do
+
+    subject { query.k(:title, :in) }
+
+    it { is_expected.to eq 'title.in' }
+
+    it 'rejects unknown operators and dotted field names' do
+      expect { query.k(:title, :bogus) }.to raise_error(Locomotive::Steam::Adapters::Query::UnsupportedOperator)
+      expect { query.k('address.city', :in) }.to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+    end
+
+  end
+
 end

@@ -129,6 +129,34 @@ module QueryParity
       expected: %w(kellys-westport-inn) },
   ].freeze
 
+  # Rejected inputs must fail the same way on every adapter, not just return
+  # different rows. The table grows with each enforcement commit.
+  ERROR_CASES = [
+    { desc: 'a removed legacy operator (neq)',
+      type: 'bands', conditions: { 'name.neq' => 'The who' },
+      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
+
+    { desc: 'a removed legacy operator (matches)',
+      type: 'bands', conditions: { 'name.matches' => 'who' },
+      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
+
+    { desc: 'an unknown operator',
+      type: 'bands', conditions: { 'name.bogus' => 'x' },
+      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
+
+    { desc: 'a nested field path',
+      type: 'bands', conditions: { 'address.location.ne' => 'x' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an empty field name',
+      type: 'bands', conditions: { '' => 'x' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an empty field with an operator suffix',
+      type: 'bands', conditions: { '.ne' => 'x' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+  ].freeze
+
 end
 
 shared_examples_for 'canonical query parity' do
@@ -152,6 +180,12 @@ shared_examples_for 'canonical query parity' do
       else
         expect(slugs).to match_array(c[:expected])
       end
+    end
+  end
+
+  QueryParity::ERROR_CASES.each do |c|
+    it "rejects #{c[:desc]}" do
+      expect { parity_slugs(c[:type], c[:conditions]) }.to raise_error(c[:error])
     end
   end
 

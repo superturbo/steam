@@ -103,7 +103,7 @@ module Locomotive::Steam
         end # filtered
 
         def self.key(name, operator)
-          "#{name}.#{operator}"
+          Adapters::Query::Operators.key(name, operator)
         end
 
         def key(name, operator)

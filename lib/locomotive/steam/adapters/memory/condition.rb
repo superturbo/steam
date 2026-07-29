@@ -6,9 +6,6 @@ module Locomotive::Steam
 
       class Condition
 
-        class UnsupportedOperator < StandardError; end
-
-        OPERATORS      = %i(== eq ne neq matches gt gte lt lte size all in nin exists).freeze
         LIST_OPERATORS = %i(in nin all).freeze
 
         attr_reader :field, :operator, :value
@@ -27,7 +24,7 @@ module Locomotive::Steam
 
           case @operator
           when :==, :eq   then eq_match?(value)
-          when :ne, :neq  then !eq_match?(value)
+          when :ne        then !eq_match?(value)
           when :in        then in_match?(value)
           when :nin       then !present || !in_match?(value)
           when :all       then all_match?(value)
@@ -40,7 +37,8 @@ module Locomotive::Steam
           when :lte       then value && value <= @value
           when :size      then value.is_a?(Array) && value.size == @size
           else
-            raise UnsupportedOperator.new("#{@operator} is unknown or not implemented.")
+            raise Adapters::Query::UnsupportedOperator,
+                  "#{@operator} is unknown or not implemented."
           end
         end
 
@@ -51,10 +49,10 @@ module Locomotive::Steam
         protected
 
         def decode_operator_and_field!
-          if match = @operator_and_field.match(/^(?<field>[a-z0-9_-]+)\.(?<operator>.*)$/)
-            @field    = match[:field].to_sym
-            @operator = match[:operator].to_sym
-            check_operator!
+          field, operator = Adapters::Query::Operators.decode(@operator_and_field)
+
+          if operator
+            @field, @operator = field.to_sym, operator.name
           elsif @value.is_a?(Regexp)
             @operator = :matches
           elsif @value.is_a?(Range)
@@ -107,10 +105,6 @@ module Locomotive::Steam
           return false if @list.empty?
 
           value.is_a?(Array) ? (@list - value).empty? : @list == [value]
-        end
-
-        def check_operator!
-          raise UnsupportedOperator.new unless OPERATORS.include?(@operator)
         end
 
       end

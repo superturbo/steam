@@ -50,8 +50,30 @@ module Locomotive::Steam
         end
 
         def key(name, operator)
-          "#{name}.#{fetch(operator).name}"
+          "#{field!(name)}.#{fetch(operator).name}"
         end
+
+        # The one key grammar shared by every engine: no dot is a plain field,
+        # one dot is a field and a registered operator, more is a nested path.
+        def decode(key)
+          field, separator, suffix = key.to_s.rpartition('.')
+
+          return [field!(key.to_s), nil] if separator.empty?
+
+          [field!(field), fetch(suffix)]
+        end
+
+        def field!(name)
+          name = name.to_s
+
+          if name.empty? || name.include?('.')
+            raise InvalidValue, "invalid field name: #{name.inspect}"
+          end
+
+          name
+        end
+
+        private_class_method :field!
 
       end
 

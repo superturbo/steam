@@ -9,7 +9,8 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
   let(:operator)  { :eq }
   let(:name)      { "#{field}.#{operator}" }
   let(:value)     { 'Awesome Site' }
-  let(:invalid)   { Locomotive::Steam::Adapters::Query::InvalidValue }
+  let(:invalid)     { Locomotive::Steam::Adapters::Query::InvalidValue }
+  let(:unsupported) { Locomotive::Steam::Adapters::Query::UnsupportedOperator }
 
   subject { described_class.new(name, value, locale) }
 
@@ -204,7 +205,20 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
 
     context 'with an unsupported operator' do
       let(:name) { 'domains.unsupported' }
-      it('raises') { expect { subject }.to raise_error(described_class::UnsupportedOperator) }
+      it('raises the shared error') { expect { subject }.to raise_error(unsupported) }
+    end
+
+    context 'with a removed Memory-only operator' do
+      %w(neq matches).each do |legacy|
+        it "raises the shared error for #{legacy}" do
+          expect { described_class.new("title.#{legacy}", 'x', locale) }.to raise_error(unsupported)
+        end
+      end
+    end
+
+    context 'with a nested path' do
+      let(:name) { 'address.location.ne' }
+      it('raises') { expect { subject }.to raise_error(invalid) }
     end
   end
 end

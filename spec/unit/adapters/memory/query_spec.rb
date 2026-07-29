@@ -121,4 +121,17 @@ describe Locomotive::Steam::Adapters::Memory::Query do
     end
   end
 
+  describe '.key' do
+
+    subject { query.key(:title, :in) }
+
+    it { is_expected.to eq 'title.in' }
+
+    it 'rejects unknown operators and dotted field names' do
+      expect { query.key(:title, :bogus) }.to raise_error(Locomotive::Steam::Adapters::Query::UnsupportedOperator)
+      expect { query.key('address.city', :in) }.to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+    end
+
+  end
+
 end

@@ -50,7 +50,7 @@ module Locomotive::Steam
         end
 
         def key(name, operator)
-          "#{name}.#{operator}"
+          Adapters::Query::Operators.key(name, operator)
         end
 
         alias :k :key

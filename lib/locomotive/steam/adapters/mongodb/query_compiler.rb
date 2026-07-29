@@ -45,15 +45,9 @@ module Locomotive::Steam
         def clause_for(key, value)
           reject_raw_operators!(key, value)
 
-          field, separator, suffix = key.to_s.rpartition('.')
+          field, operator = Adapters::Query::Operators.decode(key)
 
-          if separator.empty?
-            literal(key.to_s, value)
-          elsif field.include?('.')
-            raise Adapters::Query::InvalidValue, "nested fields are not supported: #{key.inspect}"
-          else
-            expand(field, Adapters::Query::Operators.fetch(suffix), value)
-          end
+          operator ? expand(field, operator, value) : literal(field, value)
         end
 
         # Reject raw Mongo operators from user criteria (defense in depth, ahead
