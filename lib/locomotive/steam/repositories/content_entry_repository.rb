@@ -228,7 +228,7 @@ module Locomotive
         def prepare
           # _id (primary key)
           _prepare([Locomotive::Steam::ContentTypeField.new(name: '_id')]) do |_, value|
-            @target_repository.adapter.make_id(value)
+            value_to_primary_key(value)
           end
 
           # select
@@ -237,7 +237,7 @@ module Locomotive
             # we have to change the locale in the repository used to fetch the select options.
             field.select_options.locale = @locale
 
-            field.select_options.by_name(value).try(:_id)
+            value_to_option_id(field, value)
           end
 
           # date
@@ -287,6 +287,24 @@ module Locomotive
           end
         end
 
+        def value_to_primary_key(value)
+          case value
+          when Array then value.map { |element| value_to_primary_key(element) }
+          when Set   then value.map { |element| value_to_primary_key(element) }
+          else @target_repository.adapter.make_id(value)
+          end
+        end
+
+        # An unresolved name must not gain nil semantics.
+        def value_to_option_id(field, value)
+          case value
+          when nil   then nil
+          when Array then value.map { |element| value_to_option_id(field, element) }
+          when Set   then value.map { |element| value_to_option_id(field, element) }
+          else field.select_options.by_name(value).try(:_id) || false
+          end
+        end
+
         def values_to_ids(value, target_id)
           [*value].map { |_value| value_to_id(_value, target_id) }
         end
@@ -317,8 +335,22 @@ module Locomotive
         end
 
         def value_to_date(value, type)
-          _value = value.is_a?(String) ? parse_date(value) : value
-          type == :date ? _value&.to_date : _value&.to_datetime
+          case value
+          # a Range or Regexp is its own plain-field expression, not an operand
+          when nil, Range, Regexp then value
+          when Array then value.map { |element| value_to_date(element, type) }
+          when Set   then value.map { |element| value_to_date(element, type) }
+          else
+            parsed    = value.is_a?(String) ? parse_date(value) : value
+            converter = type == :date ? :to_date : :to_datetime
+
+            unless parsed.respond_to?(converter)
+              raise Locomotive::Steam::Adapters::Query::InvalidValue,
+                    "expected a date-compatible value, got #{value.inspect}"
+            end
+
+            parsed.public_send(converter)
+          end
         end
 
         # Numeric strings are coerced where field metadata is available.

@@ -484,6 +484,10 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     subject { repository.with(type).send(:conditions_without_order_by, conditions) }
 
+    def prepared_for(conditions)
+      repository.with(type).send(:conditions_without_order_by, conditions).first
+    end
+
     it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1 }, nil]) }
 
     context 'select fields' do
@@ -528,6 +532,100 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:conditions)  { { 'launched_at' => value } }
 
       it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'launched_at' => Time.zone.parse('2007/06/29 21:15:00').to_datetime }, nil]) }
+
+    end
+
+    context 'an _id list operand' do
+
+      before { allow(adapter).to receive(:make_id) { |id| "id-#{id}" } }
+
+      it 'converts every id in an Array' do
+        expect(prepared_for('_id.in' => %w(a b))).to include('_id.in' => %w(id-a id-b))
+      end
+
+      it 'converts a Set the same way' do
+        expect(prepared_for('_id.in' => Set['a'])).to include('_id.in' => %w(id-a))
+      end
+
+    end
+
+    context 'select fields carrying a list or an unknown option' do
+
+      let(:option)  { instance_double('Option', _id: 42) }
+      let(:options) { instance_double('OptionRepository', :'locale=' => nil) }
+      let(:field)   { instance_double('SelectField', name: 'category', persisted_name: 'category_id', select_options: options) }
+      let(:_fields) { instance_double('Fields', selects: [field], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: []) }
+
+      before do
+        allow(options).to receive(:by_name) { |name| name == 'CMS' ? option : nil }
+      end
+
+      it 'converts the elements of a list operand' do
+        expect(prepared_for('category.in' => %w(CMS)))
+          .to include('category_id.in' => [42])
+      end
+
+      it 'converts the elements of a Set operand' do
+        expect(prepared_for('category.in' => Set['CMS']))
+          .to include('category_id.in' => [42])
+      end
+
+      it 'maps an unknown option name to an impossible id, not nil' do
+        expect(prepared_for('category' => 'nope')).to include('category_id' => false)
+      end
+
+      it 'maps an unknown option name inside a list the same way' do
+        expect(prepared_for('category.nin' => %w(CMS nope)))
+          .to include('category_id.nin' => [42, false])
+      end
+
+      it 'still resolves a nil operand to nil' do
+        expect(prepared_for('category' => nil)).to include('category_id' => nil)
+      end
+
+    end
+
+    context 'date fields carrying a plain-field expression or a list' do
+
+      let(:field)   { instance_double('DateField', name: 'launched_at', persisted_name: 'launched_at', type: :date) }
+      let(:_fields) { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: []) }
+
+      it 'leaves a Range untouched' do
+        range = Date.new(2012, 1, 1)..Date.new(2012, 12, 31)
+        expect(prepared_for('launched_at' => range)).to include('launched_at' => range)
+      end
+
+      it 'leaves a Regexp untouched' do
+        expect(prepared_for('launched_at' => /2012/)).to include('launched_at' => /2012/)
+      end
+
+      it 'converts the elements of a list operand' do
+        expect(prepared_for('launched_at.in' => %w(2012-06-29)))
+          .to include('launched_at.in' => [Date.new(2012, 6, 29)])
+      end
+
+      it 'converts the elements of a Set operand' do
+        expect(prepared_for('launched_at.in' => Set['2012-06-29']))
+          .to include('launched_at.in' => [Date.new(2012, 6, 29)])
+      end
+
+      it 'rejects an unsupported value kind' do
+        [true, { 'a' => 1 }].each do |bad|
+          expect { prepared_for('launched_at' => bad) }
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+        end
+      end
+
+      context 'on a date time field' do
+
+        let(:field) { instance_double('DateField', name: 'launched_at', persisted_name: 'launched_at', type: :date_time) }
+
+        it 'rejects a value that cannot convert to a date time' do
+          expect { prepared_for('launched_at' => double('DateOnly', to_date: Date.new(2012, 1, 1))) }
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+        end
+
+      end
 
     end
 

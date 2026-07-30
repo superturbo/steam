@@ -28,6 +28,22 @@ module QueryParity
       type: 'bands', conditions: { featured: true },
       expected: %w(the-who) },
 
+    { desc: 'in on a select field resolves every option name',
+      type: 'bands', conditions: { 'kind.in' => %w(grunge rock) },
+      expected: %w(alice-in-chains pearl-jam the-who) },
+
+    { desc: 'nin on a select field excludes only the named options',
+      type: 'bands', conditions: { 'kind.nin' => %w(grunge) },
+      expected: %w(the-who) },
+
+    { desc: 'all on a select field resolves the option name',
+      type: 'bands', conditions: { 'kind.all' => %w(grunge) },
+      expected: %w(alice-in-chains pearl-jam) },
+
+    # 0 is not an option name, but it is a stored option id
+    { desc: 'an unresolved select name cannot collide with a stored option id',
+      type: 'bands', conditions: { kind: 0 }, expected: [] },
+
     { desc: 'ne on a scalar field',
       type: 'bands', conditions: { 'name.ne' => 'The who' },
       expected: %w(alice-in-chains pearl-jam) },
