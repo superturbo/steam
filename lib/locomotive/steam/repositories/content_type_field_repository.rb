@@ -34,6 +34,10 @@ module Locomotive
         query { where(k(:type, :in) => %i(date date_time)) }.all
       end
 
+      def numbers
+        query { where(k(:type, :in) => %i(integer float)) }.all
+      end
+
       def belongs_to
         query { where(type: :belongs_to) }.all
       end

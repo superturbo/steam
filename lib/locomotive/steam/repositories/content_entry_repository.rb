@@ -220,14 +220,9 @@ module Locomotive
 
         def initialize(conditions = {}, fields, target_repository)
           @conditions = conditions.try(:with_indifferent_access) || {}
-          @fields, @operators = fields, {}
+          @fields = fields
           @target_repository = target_repository
           @locale = target_repository.locale
-
-          @conditions.each do |name, value|
-            _name, operator = name.to_s.split('.')
-            @operators[_name] = operator if operator
-          end
         end
 
         def prepare
@@ -248,6 +243,9 @@ module Locomotive
           # date
           _prepare(@fields.dates_and_date_times) { |field, value| value_to_date(value, field.type) }
 
+          # integer / float
+          _prepare(@fields.numbers) { |field, value| value_to_number(value, field.type) }
+
           # belongs_to
           _prepare(@fields.belongs_to) { |field, value| value_to_id(value, field.target_id) }
           
@@ -259,24 +257,33 @@ module Locomotive
 
         protected
 
+        # exists takes a boolean and size an element count, so neither operand is
+        # a field value the repository should convert — the registry owns them.
+        NON_FIELD_VALUE_KINDS = %i(boolean size).freeze
+
+        private_constant :NON_FIELD_VALUE_KINDS
+
+        # Prepare every criterion independently; a field may have multiple bounds.
         def _prepare(fields, &block)
-          fields.each do |field|
-            name      = field.name.to_s
-            operator  = @operators[name]
-            _name     = operator ? "#{name}.#{operator}" : name
+          by_name = fields.index_by { |field| field.name.to_s }
 
-            if @conditions.has_key?(_name)
-              value = @conditions[_name]
+          return if by_name.empty?
 
-              # delete old name
-              @conditions.delete(_name)
+          @conditions.keys.each do |key|
+            name, operator = Adapters::Query::Operators.decode(key)
+            field = by_name[name]
 
-              # build the new name with the prefix and the operator if there is one
-              _name = field.persisted_name + (operator ? ".#{operator}" : '')
+            next if field.nil?
 
-              # store the new name
-              @conditions[_name] = yield(field, value)
-            end
+            value    = @conditions.delete(key)
+            new_name = field.persisted_name + (operator ? ".#{operator.name}" : '')
+
+            @conditions[new_name] =
+              if operator && NON_FIELD_VALUE_KINDS.include?(operator.value_kind)
+                value
+              else
+                yield(field, value)
+              end
           end
         end
 
@@ -312,6 +319,27 @@ module Locomotive
         def value_to_date(value, type)
           _value = value.is_a?(String) ? parse_date(value) : value
           type == :date ? _value&.to_date : _value&.to_datetime
+        end
+
+        # Numeric strings are coerced where field metadata is available.
+        def value_to_number(value, type)
+          case value
+          # a Range or Regexp is its own plain-field expression, not an operand
+          when nil, Numeric, Range, Regexp then value
+          when Array  then value.map { |element| value_to_number(element, type) }
+          when Set    then value.map { |element| value_to_number(element, type) }
+          when String then parse_number(value, type)
+          else
+            raise Locomotive::Steam::Adapters::Query::InvalidValue,
+                  "expected a number, got #{value.inspect}"
+          end
+        end
+
+        # Invalid strings remain non-numeric; they must not gain nil semantics.
+        def parse_number(value, type)
+          type == :integer ? Integer(value, 10) : Float(value)
+        rescue ArgumentError, TypeError
+          value
         end
 
         def parse_date(value)

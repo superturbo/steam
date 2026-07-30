@@ -144,6 +144,19 @@ module QueryParity
       type: 'events', conditions: { 'tags.in' => [['awesome', 'open bar']] },
       expected: %w(brownes-market kellys-westport-inn) },
 
+    # only two events carry a price (5.5 and 15.0), and the Mongo-only 0.0
+    # default on the others matches neither condition, so both are drift-immune
+    { desc: 'a numeric condition given as a String, the way params arrive',
+      type: 'events', conditions: { 'price.gt' => '5' },
+      expected: %w(brownes-market kellys-westport-inn) },
+
+    { desc: 'a numeric list operand given as Strings',
+      type: 'events', conditions: { 'price.in' => %w(5.5 6) },
+      expected: %w(kellys-westport-inn) },
+
+    { desc: 'a numeric condition a visitor filled with garbage matches nothing',
+      type: 'events', conditions: { 'price.gt' => 'abc' }, expected: [] },
+
     { desc: 'gt against a nil operand matches nothing',
       type: 'events', conditions: { 'price.gt' => nil }, expected: [] },
 
