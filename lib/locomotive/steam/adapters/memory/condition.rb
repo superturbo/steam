@@ -64,10 +64,11 @@ module Locomotive::Steam
           values = Adapters::Query::Values
 
           case @operator
-          when *LIST_OPERATORS then @list   = values.list(@value)
-          when :exists         then @exists = values.boolean(@value)
-          when :size           then @size   = values.size(@value)
-          when :range          then @range  = values.range(@value)
+          when *LIST_OPERATORS then @list    = values.coerce(:list, @value)
+          when :exists         then @exists  = values.coerce(:boolean, @value)
+          when :size           then @size    = values.coerce(:size, @value)
+          when :range          then @range   = values.coerce(:range, @value)
+          when :==, :eq, :ne   then @literal = values.coerce(:literal, @value)
           end
         end
 
@@ -86,25 +87,39 @@ module Locomotive::Steam
 
         private
 
-        # MongoDB equality matches scalar array elements, but arrays exactly.
+        # A query on a field matches the whole stored value or, when that value
+        # is an array, any of its direct elements — MongoDB's candidate model.
+        def candidates(value)
+          value.is_a?(Array) ? [value, *value] : [value]
+        end
+
         def eq_match?(value)
-          if @value.is_a?(Array)
-            value == @value
-          elsif value.is_a?(Array)
-            value.include?(@value)
-          else
-            value == @value
-          end
+          candidates(value).any? { |candidate| same?(candidate, @literal) }
         end
 
         def in_match?(value)
-          value.is_a?(Array) ? value.intersect?(@list) : @list.include?(value)
+          candidates(value).any? { |candidate| @list.any? { |operand| same?(candidate, operand) } }
         end
 
         def all_match?(value)
           return false if @list.empty?
 
-          value.is_a?(Array) ? (@list - value).empty? : @list == [value]
+          field_candidates = candidates(value)
+          @list.all? { |operand| field_candidates.any? { |candidate| same?(candidate, operand) } }
+        end
+
+        # MongoDB compares embedded documents by key order, which Ruby's Hash#==
+        # ignores, so equality is walked explicitly.
+        def same?(stored, operand)
+          if operand.is_a?(Hash) && stored.is_a?(Hash)
+            stored.size == operand.size &&
+              stored.to_a.zip(operand.to_a).all? { |(sk, sv), (ok, ov)| sk.to_s == ok.to_s && same?(sv, ov) }
+          elsif operand.is_a?(Array) && stored.is_a?(Array)
+            stored.size == operand.size &&
+              stored.zip(operand).all? { |element, other| same?(element, other) }
+          else
+            stored == operand
+          end
         end
 
       end

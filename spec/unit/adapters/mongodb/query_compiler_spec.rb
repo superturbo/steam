@@ -122,8 +122,8 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
       it { expect { filter('tags.in' => Set[{ '$gt' => 5 }]) }.to raise_error(unsupported) }
     end
 
-    it 'still allows a legitimate sub-document equality match' do
-      expect(filter(address: { city: 'x' })).to eq('address' => { city: 'x' })
+    it 'still allows a legitimate sub-document equality match, with String keys' do
+      expect(filter(address: { city: 'x' })).to eq('address' => { 'city' => 'x' })
     end
   end
 

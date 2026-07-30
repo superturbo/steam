@@ -190,6 +190,44 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
     it('renders field, operator and value') { expect(subject.inspect).to eq('price.gt 42') }
   end
 
+  describe '#matches? candidate model (whole value plus array elements)' do
+    def match?(name, value, stored)
+      described_class.new(name, value, :en).matches?(instance_double('Product', f: stored))
+    end
+
+    context 'a nested array operand' do
+      it('matches the whole array field') { expect(match?(:f, [1, 2], [1, 2])).to eq true }
+      it('matches an element of the array field') { expect(match?(:f, [1, 2], [[1, 2], 3])).to eq true }
+      it('does not match a reordered array') { expect(match?(:f, [1, 2], [2, 1])).to eq false }
+
+      it('in matches the whole array field') { expect(match?('f.in', [[1, 2]], [1, 2])).to eq true }
+      it('all matches the whole array field') { expect(match?('f.all', [[1, 2]], [1, 2])).to eq true }
+      it('all matches an element') { expect(match?('f.all', [[1, 2]], [[1, 2], 3])).to eq true }
+      it('nin negates the same match') { expect(match?('f.nin', [[1, 2]], [1, 2])).to eq false }
+    end
+
+    context 'an embedded document operand' do
+      it('matches the same key order') { expect(match?(:f, { 'x' => 1, 'y' => 2 }, { 'x' => 1, 'y' => 2 })).to eq true }
+      it('does not match another key order') { expect(match?(:f, { 'x' => 1, 'y' => 2 }, { 'y' => 2, 'x' => 1 })).to eq false }
+      it('ne is the exact negation') { expect(match?('f.ne', { 'x' => 1, 'y' => 2 }, { 'y' => 2, 'x' => 1 })).to eq true }
+      it('normalizes symbol keys in the operand') { expect(match?(:f, { x: 1 }, { 'x' => 1 })).to eq true }
+      it('matches a document inside an array field') { expect(match?(:f, { 'x' => 1 }, [{ 'x' => 1 }, 2])).to eq true }
+
+      it 'is ordered inside a nested array too' do
+        expect(match?(:f, [{ 'x' => 1, 'y' => 2 }], [{ 'x' => 1, 'y' => 2 }])).to eq true
+        expect(match?(:f, [{ 'x' => 1, 'y' => 2 }], [{ 'y' => 2, 'x' => 1 }])).to eq false
+      end
+
+      it('in matches a document') { expect(match?('f.in', [{ 'x' => 1 }], { 'x' => 1 })).to eq true }
+      it('all matches a document') { expect(match?('f.all', [{ 'x' => 1 }], [{ 'x' => 1 }])).to eq true }
+    end
+
+    context 'a Set operand' do
+      it('is normalized to an array') { expect(match?(:f, Set['a', 'b'], %w(a b))).to eq true }
+      it('is normalized when nested') { expect(match?(:f, Set[[1, 2]], [[1, 2]])).to eq true }
+    end
+  end
+
   describe 'decoding the field and operator' do
     context 'with a normal value' do
       it('extracts the field') { expect(subject.field).to eq field }

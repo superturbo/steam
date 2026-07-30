@@ -127,6 +127,22 @@ module QueryParity
     { desc: 'a Range on a plain field matches its bounds',
       type: 'events', conditions: { price: (5..6) },
       expected: %w(kellys-westport-inn) },
+
+    { desc: 'a Set value is normalized to an array',
+      type: 'events', conditions: { tags: Set['awesome', 'open bar'] },
+      expected: %w(brownes-market kellys-westport-inn) },
+
+    { desc: 'a reordered array value matches nothing',
+      type: 'events', conditions: { tags: ['open bar', 'awesome'] },
+      expected: [] },
+
+    { desc: 'all with a nested array operand matches the whole array field',
+      type: 'events', conditions: { 'tags.all' => [['awesome', 'open bar']] },
+      expected: %w(brownes-market kellys-westport-inn) },
+
+    { desc: 'in with a nested array operand matches the whole array field',
+      type: 'events', conditions: { 'tags.in' => [['awesome', 'open bar']] },
+      expected: %w(brownes-market kellys-westport-inn) },
   ].freeze
 
   # Rejected inputs must fail the same way on every adapter, not just return

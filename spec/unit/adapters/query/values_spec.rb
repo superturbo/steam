@@ -69,14 +69,87 @@ describe Locomotive::Steam::Adapters::Query::Values do
       expect { described_class.list(1..3) }.to raise_error(invalid)
     end
 
-    it 'rejects a Hash value' do
-      expect { described_class.list(city: 'x') }.to raise_error(invalid)
+    it 'accepts a plain Hash element — MongoDB compares embedded documents' do
+      expect(described_class.list([{ 'city' => 'x' }])).to eq [{ 'city' => 'x' }]
+      expect(described_class.list(city: 'x')).to eq [{ 'city' => 'x' }]
     end
 
-    it 'rejects non-scalar elements' do
-      [[1, [2, 3]], [1, { city: 'x' }], [/pattern/], [1..3], [Set.new([1])]].each do |value|
+    it 'accepts nested arrays — $all defines their semantics' do
+      expect(described_class.list([[1, 2], 3])).to eq [[1, 2], 3]
+    end
+
+    it 'normalizes a nested Set element to an Array' do
+      expect(described_class.list([Set.new([1, 2])])).to eq [[1, 2]]
+    end
+
+    it 'rejects a Regexp or Range element — those are plain-field expressions' do
+      [[/pattern/], [1..3]].each do |value|
         expect { described_class.list(value) }.to raise_error(invalid)
       end
+    end
+
+  end
+
+  describe '.literal' do
+
+    it 'passes scalars and nil through' do
+      [5, 'a', :sym, nil, 4.2].each { |v| expect(described_class.literal(v)).to eq v }
+    end
+
+    it 'normalizes a Set to an Array, recursively' do
+      expect(described_class.literal(Set.new([1, 2]))).to eq [1, 2]
+      expect(described_class.literal([Set.new([1, 2])])).to eq [[1, 2]]
+      expect(described_class.literal('a' => Set.new([1]))).to eq('a' => [1])
+    end
+
+    it 'accepts nested arrays' do
+      expect(described_class.literal([[1, 2], 3])).to eq [[1, 2], 3]
+    end
+
+    it 'accepts a plain Hash and stringifies its keys' do
+      expect(described_class.literal(city: 'x', n: 1)).to eq('city' => 'x', 'n' => 1)
+      expect(described_class.literal(a: { b: 1 })).to eq('a' => { 'b' => 1 })
+    end
+
+    it 'preserves the key order of a Hash — MongoDB embedded equality is ordered' do
+      expect(described_class.literal(b: 2, a: 1).keys).to eq %w(b a)
+    end
+
+    it 'rejects a key collision created by stringification' do
+      expect { described_class.literal(:x => 1, 'x' => 2) }.to raise_error(invalid)
+    end
+
+    it 'rejects a Regexp or Range — those are plain-field expressions' do
+      expect { described_class.literal(/pattern/) }.to raise_error(invalid)
+      expect { described_class.literal(1..3) }.to raise_error(invalid)
+    end
+
+    it 'never mutates or aliases the input, however nested' do
+      source = { a: [1, Set.new([2])], b: { c: 3 } }
+      before = Marshal.dump(source)
+
+      result = described_class.literal(source)
+
+      expect(Marshal.dump(source)).to eq before
+      expect(result).not_to be(source)
+      expect(result['a']).not_to be(source[:a])
+      expect(result['b']).not_to be(source[:b])
+    end
+
+  end
+
+  describe '.coerce' do
+
+    it 'dispatches to the value kind' do
+      expect(described_class.coerce(:literal, Set.new([1]))).to eq [1]
+      expect(described_class.coerce(:list, 5)).to eq [5]
+      expect(described_class.coerce(:boolean, 'true')).to eq true
+      expect(described_class.coerce(:size, '2')).to eq 2
+      expect(described_class.coerce(:range, 1..3)).to eq(1..3)
+    end
+
+    it 'rejects an unknown value kind' do
+      expect { described_class.coerce(:bogus, 1) }.to raise_error(invalid)
     end
 
   end

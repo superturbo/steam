@@ -89,21 +89,16 @@ module Locomotive::Steam
         end
 
         def operand(value_kind, value)
-          case value_kind
-          when :list    then Adapters::Query::Values.list(value)
-          when :boolean then Adapters::Query::Values.boolean(value)
-          when :size    then Adapters::Query::Values.size(value)
-          else value
-          end
+          Adapters::Query::Values.coerce(value_kind, value)
         end
 
-        # Plain field: a scalar or Regexp matches as-is; a Range becomes its
-        # bounds (honouring an exclusive end); a Set becomes an array.
+        # Plain field: a Regexp matches as-is and a Range becomes its bounds
+        # (honouring an exclusive end); everything else is a literal.
         def plain_value(value)
           case value
-          when Range then range_bounds(value)
-          when Set   then value.to_a
-          else value
+          when Regexp then value
+          when Range  then range_bounds(value)
+          else Adapters::Query::Values.literal(value)
           end
         end
 

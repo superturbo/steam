@@ -9,7 +9,53 @@ module Locomotive::Steam
       # normalized value or raises InvalidValue. See docs/query_semantics.md.
       module Values
 
+        VALUE_KINDS = %i(literal list scalar boolean size range).freeze
+
+        private_constant :VALUE_KINDS
+
         module_function
+
+        # The one entry point both engines use, so a value kind can never mean
+        # two different things.
+        def coerce(kind, value)
+          unless VALUE_KINDS.include?(kind)
+            raise InvalidValue, "unknown value kind: #{kind.inspect}"
+          end
+
+          public_send(kind, value)
+        end
+
+        # A literal operand: scalars pass through, a Set becomes an Array and a
+        # Hash gets String keys, both recursively. Regexp and Range are rejected
+        # because they carry their own plain-field semantics. Always returns new
+        # containers — callers may reuse the criteria they passed in.
+        def literal(value)
+          case value
+          when Regexp, Range
+            raise InvalidValue, "#{value.class} is only supported on a plain field: #{value.inspect}"
+          when Array then value.map { |element| literal(element) }
+          when Set   then value.map { |element| literal(element) }
+          when Hash  then literal_hash(value)
+          else value
+          end
+        end
+
+        # MongoDB compares embedded documents by key order, so the order is kept
+        # and a collision created by stringifying keys is an error rather than a
+        # silently dropped pair.
+        def literal_hash(hash)
+          hash.each_with_object({}) do |(key, value), result|
+            name = key.to_s
+
+            if result.key?(name)
+              raise InvalidValue, "duplicate key after normalization: #{name.inspect}"
+            end
+
+            result[name] = literal(value)
+          end
+        end
+
+        private_class_method :literal_hash
 
         # exists takes a real boolean; the lenient yes/1/t forms are rejected.
         def boolean(value)
@@ -49,27 +95,23 @@ module Locomotive::Steam
           value
         end
 
-        # in/nin/all take a list of scalars. A Set or a lone scalar is
-        # normalized; a Range is rejected rather than enumerated, so a wide
-        # range can't explode into a huge query. Every element must be a scalar
-        # or nil — nested arrays, hashes, ranges, regexps and sets are rejected.
+        # gt/gte/lt/lte operand. Unrestricted for now; the comparison contract
+        # lands with the nil semantics.
+        def scalar(value)
+          value
+        end
+
+        # in/nin/all take a list. A lone value becomes a one-element list and a
+        # Set becomes an Array; a Range is rejected rather than enumerated, so a
+        # wide range can't explode into a huge query. Elements are normalized as
+        # literals, which keeps nested arrays and embedded documents (both have
+        # defined MongoDB semantics) and rejects Regexp and Range.
         def list(value)
-          array =
-            case value
-            when Array then value.dup
-            when Set   then value.to_a
-            when Range then raise InvalidValue, "a Range is not allowed in a list operator: #{value.inspect}"
-            else [value]
-            end
-
-          array.each do |element|
-            case element
-            when Array, Hash, Range, Regexp, Set
-              raise InvalidValue, "a list value may contain only scalars or nil, got #{element.inspect}"
-            end
+          case value
+          when Range then raise InvalidValue, "a Range is not allowed in a list operator: #{value.inspect}"
+          when Array, Set then value.map { |element| literal(element) }
+          else [literal(value)]
           end
-
-          array
         end
 
       end
