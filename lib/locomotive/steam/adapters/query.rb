@@ -15,4 +15,5 @@ end
 
 require_relative 'query/values'
 require_relative 'query/operators'
+require_relative 'query/criteria'
 require_relative 'query/order_by'

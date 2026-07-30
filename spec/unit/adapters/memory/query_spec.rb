@@ -121,6 +121,29 @@ describe Locomotive::Steam::Adapters::Memory::Query do
     end
   end
 
+  describe '#where — raw Mongo operators' do
+
+    let(:unsupported) { Locomotive::Steam::Adapters::Query::UnsupportedOperator }
+
+    def where(conditions)
+      query.new(dataset, :en).where(conditions)
+    end
+
+    it 'rejects a raw operator in a key' do
+      expect { where('$where' => 'sleep(1000)') }.to raise_error(unsupported)
+    end
+
+    it 'rejects a raw operator nested in a value' do
+      expect { where('price' => { '$gt' => 5 }) }.to raise_error(unsupported)
+      expect { where('price' => [{ '$gt' => 5 }]) }.to raise_error(unsupported)
+    end
+
+    it 'accepts a $-prefixed string value' do
+      expect { where('name' => '$100') }.not_to raise_error
+    end
+
+  end
+
   describe '.key' do
 
     subject { query.key(:title, :in) }

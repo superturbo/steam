@@ -33,6 +33,8 @@ module Locomotive::Steam
         private
 
         def build_filter(criteria)
+          Adapters::Query::Criteria.reject_raw_operators!(criteria)
+
           clauses = criteria.map { |key, value| clause_for(key, value) }
 
           case clauses.length
@@ -43,41 +45,18 @@ module Locomotive::Steam
         end
 
         def clause_for(key, value)
-          reject_raw_operators!(key, value)
-
           field, operator = Adapters::Query::Operators.decode(key)
 
           operator ? expand(field, operator, value) : literal(field, value)
         end
 
-        # Reject raw Mongo operators from user criteria (defense in depth, ahead
-        # of the registry lookup).
-        def reject_raw_operators!(key, value)
-          reject_raw_operator!('keys', key)
-          reject_operator_values!(value)
-        end
-
-        def reject_operator_values!(value)
-          case value
-          when Hash
-            value.each do |k, v|
-              reject_raw_operator!('values', k)
-              reject_operator_values!(v)
-            end
-          when Array, Set
-            value.each { |item| reject_operator_values!(item) }
-          end
-        end
-
+        # Sort and projection are a separate boundary from the criteria — a
+        # Mongo-only field such as $natural must not reach the driver either.
         def reject_raw_operator!(subject, name)
-          return unless operator_name?(name)
+          return unless name.to_s.split('.').any? { |part| part.start_with?('$') }
 
           raise Adapters::Query::UnsupportedOperator,
                 "#{subject} may not contain a Mongo operator: #{name.inspect}"
-        end
-
-        def operator_name?(name)
-          name.to_s.split('.').any? { |part| part.start_with?('$') }
         end
 
         def literal(field, value)

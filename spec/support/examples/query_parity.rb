@@ -171,6 +171,18 @@ module QueryParity
     { desc: 'an empty field with an operator suffix',
       type: 'bands', conditions: { '.ne' => 'x' },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a raw Mongo operator in a key',
+      type: 'bands', conditions: { '$where' => 'sleep(1000)' },
+      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
+
+    { desc: 'a raw Mongo operator nested in a value',
+      type: 'bands', conditions: { 'name' => { '$ne' => 'The who' } },
+      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
+
+    { desc: 'a raw Mongo operator inside an array value',
+      type: 'bands', conditions: { 'name' => [{ '$ne' => 'The who' }] },
+      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
   ].freeze
 
 end

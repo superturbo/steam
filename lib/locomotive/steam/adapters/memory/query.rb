@@ -27,6 +27,8 @@ module Locomotive::Steam
         end
 
         def where(conditions = {})
+          Adapters::Query::Criteria.reject_raw_operators!(conditions)
+
           @conditions += conditions.map { |name, value| Condition.new(name, value, @locale) }
           self
         end
