@@ -64,7 +64,12 @@ module Locomotive::Steam
         end
 
         def expand(field, operator, value)
-          { aliased(field) => { operator.mongo_operator => operand(operator.value_kind, value) } }
+          operand = operand(operator.value_kind, value)
+
+          # Build a fresh match-none clause; compiled filters are mutable.
+          return { '_id' => { '$in' => [] } } if Adapters::Query::Values.match_none?(operand)
+
+          { aliased(field) => { operator.mongo_operator => operand } }
         end
 
         def operand(value_kind, value)

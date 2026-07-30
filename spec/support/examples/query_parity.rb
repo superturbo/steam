@@ -143,6 +143,18 @@ module QueryParity
     { desc: 'in with a nested array operand matches the whole array field',
       type: 'events', conditions: { 'tags.in' => [['awesome', 'open bar']] },
       expected: %w(brownes-market kellys-westport-inn) },
+
+    { desc: 'gt against a nil operand matches nothing',
+      type: 'events', conditions: { 'price.gt' => nil }, expected: [] },
+
+    { desc: 'gte against a nil operand matches nothing',
+      type: 'events', conditions: { 'price.gte' => nil }, expected: [] },
+
+    { desc: 'lt against a nil operand matches nothing',
+      type: 'events', conditions: { 'price.lt' => nil }, expected: [] },
+
+    { desc: 'lte against a nil operand matches nothing',
+      type: 'events', conditions: { 'price.lte' => nil }, expected: [] },
   ].freeze
 
   # Rejected inputs must fail the same way on every adapter, not just return
@@ -183,6 +195,14 @@ module QueryParity
     { desc: 'a raw Mongo operator inside an array value',
       type: 'bands', conditions: { 'name' => [{ '$ne' => 'The who' }] },
       error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
+
+    { desc: 'a structural comparison operand',
+      type: 'events', conditions: { 'price.gt' => [1] },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a boolean comparison operand',
+      type: 'events', conditions: { 'price.gt' => true },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
   ].freeze
 
 end

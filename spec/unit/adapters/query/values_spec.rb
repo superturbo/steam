@@ -138,6 +138,43 @@ describe Locomotive::Steam::Adapters::Query::Values do
 
   end
 
+  describe '.scalar' do
+
+    it 'passes comparable values through unchanged' do
+      [5, 4.2, 'a', :sym, Time.now, Date.today, BigDecimal('1.5')].each do |value|
+        expect(described_class.scalar(value)).to eq value
+      end
+    end
+
+    it 'passes a comparable value the query layer does not know about' do
+      id = BSON::ObjectId.new
+      expect(described_class.scalar(id)).to eq id
+    end
+
+    it 'turns nil into the match-none sentinel' do
+      expect(described_class.match_none?(described_class.scalar(nil))).to eq true
+    end
+
+    it 'rejects structures — their ordering is not the same on both engines' do
+      [[1], { 'a' => 1 }, Set[1], (1..3), /x/].each do |value|
+        expect { described_class.scalar(value) }.to raise_error(invalid)
+      end
+    end
+
+    it 'rejects booleans — they are not Comparable, so ordering has no contract' do
+      [true, false].each { |value| expect { described_class.scalar(value) }.to raise_error(invalid) }
+    end
+
+  end
+
+  describe '.match_none?' do
+
+    it { expect(described_class.match_none?(described_class.scalar(nil))).to eq true }
+    it { expect(described_class.match_none?(nil)).to eq false }
+    it { expect(described_class.match_none?(5)).to eq false }
+
+  end
+
   describe '.coerce' do
 
     it 'dispatches to the value kind' do

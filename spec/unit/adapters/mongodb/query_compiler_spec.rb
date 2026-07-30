@@ -60,6 +60,22 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
       expect { filter('' => 'x') }.to raise_error(invalid)
       expect { filter('.ne' => 'x') }.to raise_error(invalid)
     end
+    it 'compiles a nil comparison into a clause that cannot match' do
+      %w(gt gte lt lte).each do |operator|
+        expect(filter("price.#{operator}" => nil)).to eq('_id' => { '$in' => [] })
+      end
+    end
+    it 'builds a fresh match-none clause every time' do
+      first  = filter('price.gt' => nil)
+      second = filter('price.gt' => nil)
+
+      expect(first['_id']['$in']).not_to be(second['_id']['$in'])
+    end
+    it 'rejects a structural or boolean comparison operand' do
+      [[1], { 'a' => 1 }, Set[1], true].each do |value|
+        expect { filter('price.gt' => value) }.to raise_error(invalid)
+      end
+    end
   end
 
   describe '#compile filter — $exists cast' do

@@ -95,10 +95,30 @@ module Locomotive::Steam
           value
         end
 
-        # gt/gte/lt/lte operand. Unrestricted for now; the comparison contract
-        # lands with the nil semantics.
+        # Marks a condition that can never match. Comparing against nothing is
+        # not an error — a missing `params` value must render an empty list, not
+        # a 500 — but it must mean the same on every engine, so the engines
+        # translate this sentinel instead of passing nil to the driver.
+        MATCH_NONE = Object.new.freeze
+
+        private_constant :MATCH_NONE
+
+        def match_none?(value)
+          value.equal?(MATCH_NONE)
+        end
+
+        # gt/gte/lt/lte operand: a single comparable value. Structures are
+        # rejected because their ordering is not the same on both engines, and
+        # booleans because they are not Comparable in Ruby — ordering them has
+        # no defined contract. Anything else Comparable passes through
+        # untouched, so an ActiveSupport time or a BSON id keeps working.
         def scalar(value)
-          value
+          case value
+          when nil                              then MATCH_NONE
+          when Array, Hash, Set, Range, Regexp  then raise InvalidValue, "#{value.class} cannot be compared: #{value.inspect}"
+          when Comparable                       then value
+          else raise InvalidValue, "value is not comparable: #{value.inspect}"
+          end
         end
 
         # in/nin/all take a list. A lone value becomes a one-element list and a

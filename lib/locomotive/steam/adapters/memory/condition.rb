@@ -31,10 +31,10 @@ module Locomotive::Steam
           when :exists    then present == @exists
           when :matches   then !(@value =~ value).nil?
           when :range     then !value.nil? && @range.cover?(value)
-          when :gt        then value && value > @value
-          when :gte       then value && value >= @value
-          when :lt        then value && value < @value
-          when :lte       then value && value <= @value
+          when :gt        then compare(value) { |order| order > 0 }
+          when :gte       then compare(value) { |order| order >= 0 }
+          when :lt        then compare(value) { |order| order < 0 }
+          when :lte       then compare(value) { |order| order <= 0 }
           when :size      then value.is_a?(Array) && value.size == @size
           else
             raise Adapters::Query::UnsupportedOperator,
@@ -69,6 +69,7 @@ module Locomotive::Steam
           when :size           then @size    = values.coerce(:size, @value)
           when :range          then @range   = values.coerce(:range, @value)
           when :==, :eq, :ne   then @literal = values.coerce(:literal, @value)
+          when :gt, :gte, :lt, :lte then @scalar = values.coerce(:scalar, @value)
           end
         end
 
@@ -86,6 +87,17 @@ module Locomotive::Steam
         end
 
         private
+
+        # Ordering goes through <=> so a missing field or a value of another
+        # type is simply no match: incompatible values do not match under
+        # MongoDB type bracketing either.
+        def compare(value)
+          return false if Adapters::Query::Values.match_none?(@scalar)
+
+          order = value <=> @scalar
+
+          order.nil? ? false : yield(order)
+        end
 
         # A query on a field matches the whole stored value or, when that value
         # is an array, any of its direct elements — MongoDB's candidate model.

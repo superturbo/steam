@@ -228,6 +228,48 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
     end
   end
 
+  describe '#matches? comparison operands' do
+    let(:with_value) { instance_double('Product', f: 5) }
+    let(:null_value) { instance_double('Product', f: nil) }
+    let(:missing)    { instance_double('Product') }
+
+    def match?(name, value, entry)
+      described_class.new(name, value, :en).matches?(entry)
+    end
+
+    %w(gt gte lt lte).each do |operator|
+      context operator do
+        it 'never matches a nil operand, whatever the stored value' do
+          [with_value, null_value, missing].each do |entry|
+            expect(match?("f.#{operator}", nil, entry)).to eq false
+          end
+        end
+
+        it 'never matches a missing or null field' do
+          expect(match?("f.#{operator}", 5, null_value)).to eq false
+          expect(match?("f.#{operator}", 5, missing)).to eq false
+        end
+
+        it 'does not raise when the stored value cannot be compared' do
+          expect(match?("f.#{operator}", 'text', with_value)).to eq false
+        end
+      end
+    end
+
+    it 'still compares normally' do
+      expect(match?('f.gt', 4, with_value)).to eq true
+      expect(match?('f.lt', 4, with_value)).to eq false
+      expect(match?('f.gte', 5, with_value)).to eq true
+      expect(match?('f.lte', 5, with_value)).to eq true
+    end
+
+    it 'rejects a structural or boolean operand' do
+      [[1], { 'a' => 1 }, Set[1], true].each do |value|
+        expect { described_class.new('f.gt', value, :en) }.to raise_error(invalid)
+      end
+    end
+  end
+
   describe 'decoding the field and operator' do
     context 'with a normal value' do
       it('extracts the field') { expect(subject.field).to eq field }
