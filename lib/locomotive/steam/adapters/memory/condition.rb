@@ -29,8 +29,8 @@ module Locomotive::Steam
           when :nin       then !present || !in_match?(value)
           when :all       then all_match?(value)
           when :exists    then present == @exists
-          when :matches   then !(@value =~ value).nil?
-          when :range     then !value.nil? && @range.cover?(value)
+          when :matches   then regexp_match?(value)
+          when :range     then range_match?(value)
           when :gt        then compare(value) { |order| order > 0 }
           when :gte       then compare(value) { |order| order >= 0 }
           when :lt        then compare(value) { |order| order < 0 }
@@ -88,15 +88,30 @@ module Locomotive::Steam
 
         private
 
-        # Ordering goes through <=> so a missing field or a value of another
+        # Comparisons go through <=> so a missing field or a value of another
         # type is simply no match: incompatible values do not match under
-        # MongoDB type bracketing either.
-        def compare(value)
-          return false if Adapters::Query::Values.match_none?(@scalar)
+        # MongoDB type bracketing either. An array field matches when one of its
+        # elements does.
+        def compare(value, operand = @scalar)
+          return false if Adapters::Query::Values.match_none?(operand)
 
-          order = value <=> @scalar
+          elements(value).any? do |candidate|
+            order = candidate <=> operand
 
-          order.nil? ? false : yield(order)
+            order.nil? ? false : yield(order)
+          end
+        end
+
+        # Different array elements may satisfy a Range's bounds.
+        def range_match?(value)
+          from, to = @range.begin, @range.end
+
+          (from.nil? || compare(value, from) { |order| order >= 0 }) &&
+            (to.nil? || compare(value, to) { |order| @range.exclude_end? ? order < 0 : order <= 0 })
+        end
+
+        def elements(value)
+          value.is_a?(Array) ? value : [value]
         end
 
         # A query on a field matches the whole stored value or, when that value
@@ -107,6 +122,11 @@ module Locomotive::Steam
 
         def eq_match?(value)
           candidates(value).any? { |candidate| same?(candidate, @literal) }
+        end
+
+        # MongoDB applies a regexp to string values only, array elements included.
+        def regexp_match?(value)
+          elements(value).any? { |candidate| candidate.is_a?(String) && @value.match?(candidate) }
         end
 
         def in_match?(value)

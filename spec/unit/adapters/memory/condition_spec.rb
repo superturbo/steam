@@ -171,12 +171,6 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
       expect { described_class.new('tags.in', /red/, :en) }.to raise_error(invalid)
     end
 
-    it 'treats a plain-field Regexp as a search, not a list operator' do
-      cond = described_class.new(:name, /red/, :en)
-      expect(cond.matches?(instance_double('Product', name: 'bordeaux red'))).to eq true
-      expect(cond.matches?(instance_double('Product', name: 'green'))).to eq false
-    end
-
     it 'does not swallow a field reader error' do
       entry = instance_double('Product')
       allow(entry).to receive(:tags).and_raise('boom')
@@ -188,6 +182,36 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
     let(:name)  { 'price.gt' }
     let(:value) { 42 }
     it('renders field, operator and value') { expect(subject.inspect).to eq('price.gt 42') }
+  end
+
+  describe '#matches? a Regexp on a plain field' do
+    def match?(stored)
+      described_class.new(:f, /aw/, :en).matches?(instance_double('Product', f: stored))
+    end
+
+    it('matches a string field') { expect(match?('awesome')).to eq true }
+    it('matches an element of an array field') { expect(match?(%w(awesome x))).to eq true }
+    it('does not match when no element does') { expect(match?(%w(x y))).to eq false }
+    it('does not match a non-string field') { expect(match?(5)).to eq false }
+    it('does not match a missing or null field') { expect(match?(nil)).to eq false }
+  end
+
+  describe '#matches? comparisons against an array field' do
+    let(:entry) { instance_double('Product', f: %w(awesome open\ bar)) }
+
+    def match?(name, value)
+      described_class.new(name, value, :en).matches?(entry)
+    end
+
+    it('gt matches when an element does') { expect(match?('f.gt', 'o')).to eq true }
+    it('lt matches when an element does') { expect(match?('f.lt', 'b')).to eq true }
+    it('gte matches when an element does') { expect(match?('f.gte', 'open bar')).to eq true }
+    it('lte matches when an element does') { expect(match?('f.lte', 'awesome')).to eq true }
+    it('does not match when no element does') { expect(match?('f.gt', 'z')).to eq false }
+
+    it 'lets different elements satisfy each bound of a Range, like MongoDB' do
+      expect(match?(:f, 'f'..'m')).to eq true
+    end
   end
 
   describe '#matches? candidate model (whole value plus array elements)' do

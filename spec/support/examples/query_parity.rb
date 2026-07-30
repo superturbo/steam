@@ -128,6 +128,22 @@ module QueryParity
       type: 'events', conditions: { price: (5..6) },
       expected: %w(kellys-westport-inn) },
 
+    { desc: 'gt matches an element of an array field',
+      type: 'events', conditions: { 'tags.gt' => 'o' },
+      expected: %w(brownes-market kellys-westport-inn) },
+
+    # 'open bar' meets the lower bound, 'awesome' the upper, neither both
+    { desc: 'a Range lets different elements of an array field satisfy each bound',
+      type: 'events', conditions: { tags: ('f'..'m') },
+      expected: %w(brownes-market kellys-westport-inn) },
+
+    { desc: 'a Regexp matches an element of an array field',
+      type: 'events', conditions: { tags: /aweso/ },
+      expected: %w(brownes-market kellys-westport-inn) },
+
+    { desc: 'a Regexp against a non-string field matches nothing',
+      type: 'events', conditions: { price: /5/ }, expected: [] },
+
     { desc: 'a Set value is normalized to an array',
       type: 'events', conditions: { tags: Set['awesome', 'open bar'] },
       expected: %w(brownes-market kellys-westport-inn) },
