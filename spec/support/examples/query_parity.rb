@@ -190,8 +190,9 @@ module QueryParity
       type: 'events', conditions: { 'price.in' => %w(5.5 6) },
       expected: %w(kellys-westport-inn) },
 
-    { desc: 'a numeric condition a visitor filled with garbage matches nothing',
-      type: 'events', conditions: { 'price.gt' => 'abc' }, expected: [] },
+    # If coercion returned nil, Filesystem would match every event without a price.
+    { desc: 'an invalid numeric string does not gain nil semantics',
+      type: 'events', conditions: { price: 'abc' }, expected: [] },
 
     { desc: 'gt against a nil operand matches nothing',
       type: 'events', conditions: { 'price.gt' => nil }, expected: [] },
