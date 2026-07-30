@@ -60,6 +60,12 @@ module QueryParity
       type: 'bands', conditions: { order_by: { name: -1 } },
       expected: %w(the-who pearl-jam alice-in-chains), ordered: true },
 
+    # false is a value, not a null, and the tie it leaves has to reach the
+    # second key — the two unfeatured bands are told apart by name alone
+    { desc: 'order_by a boolean field, then a tie-breaker',
+      type: 'bands', conditions: { order_by: 'featured, name' },
+      expected: %w(alice-in-chains pearl-jam the-who), ordered: true },
+
     { desc: 'scalar equality on a string field',
       type: 'events', conditions: { state: 'Colorado' },
       expected: %w(avogadros-number avogadros-number-1

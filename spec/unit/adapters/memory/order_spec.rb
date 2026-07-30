@@ -88,7 +88,90 @@ describe Locomotive::Steam::Adapters::Memory::Order do
         ]
       }
 
-      it { expect(subject.map(&:id)).to eq([2, 1, 4, 3]) }
+      # MongoDB sorts null below strings, so it leads ascending
+      it { expect(subject.map(&:id)).to eq([3, 2, 1, 4]) }
+
+    end
+
+    context 'a nil value descending' do
+
+      let(:input) { 'title desc' }
+      let(:array) {
+        [
+          instance_double('Entry1', id: 1, title: 'b'),
+          instance_double('Entry2', id: 2, title: nil),
+          instance_double('Entry3', id: 3, title: 'c')
+        ]
+      }
+
+      it { expect(subject.map(&:id)).to eq([3, 1, 2]) }
+
+    end
+
+    context 'a nil first key' do
+
+      let(:input) { 'title asc, position asc' }
+      let(:array) {
+        [
+          instance_double('Entry1', id: 1, title: nil, position: 3),
+          instance_double('Entry2', id: 2, title: nil, position: 1),
+          instance_double('Entry3', id: 3, title: nil, position: 2)
+        ]
+      }
+
+      # nil <=> nil has to be a tie, or Array#<=> stops at the first key
+      it 'still applies the secondary key' do
+        expect(subject.map(&:id)).to eq([2, 3, 1])
+      end
+
+    end
+
+    context 'a boolean field' do
+
+      let(:input) { 'featured asc, position asc' }
+      let(:array) {
+        [
+          instance_double('Entry1', id: 1, featured: true,  position: 1),
+          instance_double('Entry2', id: 2, featured: false, position: 2),
+          instance_double('Entry3', id: 3, featured: false, position: 1)
+        ]
+      }
+
+      it 'sorts false before true, and does not read false as null' do
+        expect(subject.map(&:id)).to eq([3, 2, 1])
+      end
+
+    end
+
+    context 'a field the entity does not carry' do
+
+      let(:input) { 'notes asc, title asc' }
+      let(:array) {
+        [
+          instance_double('Entry1', id: 1, title: 'b'),
+          instance_double('Entry2', id: 2, title: 'a')
+        ]
+      }
+
+      it 'sorts it as null instead of raising' do
+        expect(subject.map(&:id)).to eq([2, 1])
+      end
+
+    end
+
+    context 'a column holding several types' do
+
+      let(:input) { 'title asc' }
+      let(:array) {
+        [
+          instance_double('Entry1', id: 1, title: 'b'),
+          instance_double('Entry2', id: 2, title: 5)
+        ]
+      }
+
+      it 'rejects values Ruby cannot compare' do
+        expect { subject }.to raise_error(ArgumentError)
+      end
 
     end
 
