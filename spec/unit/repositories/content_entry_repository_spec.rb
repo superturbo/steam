@@ -754,6 +754,16 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'tag_ids.in' => [42] }, nil]) }
 
+      context 'the documented all form, once the parser has normalized it' do
+
+        let(:conditions) { { 'tags.all' => %w(A B) } }
+
+        it 'resolves every element to an id under the persisted name' do
+          expect(subject.first).to include('tag_ids.all' => %w(A B))
+        end
+
+      end
+
       context 'the target value is a content entry' do
 
         let(:value) { [instance_double('TargetContentEntry', _id: 1), 42] }

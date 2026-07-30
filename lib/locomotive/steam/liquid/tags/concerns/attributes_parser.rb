@@ -1,4 +1,5 @@
 require 'prism'
+require 'psych'
 
 require_relative '../../../adapters/query'
 
@@ -45,7 +46,9 @@ module Locomotive
               when ::Prism::HashNode
                 node.elements.each_with_object({}) do |element, hash|
                   unsupported! unless element.is_a?(::Prism::AssocNode)
-                  hash[visit(element.key)] = visit(element.value)
+
+                  key = visit(element.key)
+                  hash[key] = visit_assoc_value(key, element.value)
                 end
               when ::Prism::ArrayNode              then node.elements.map { |e| visit(e) }
               when ::Prism::SymbolNode             then node.unescaped.to_sym
@@ -59,6 +62,54 @@ module Locomotive
               else
                 unsupported!
               end
+            end
+
+            LEGACY_ALL_LIST = /\A\s*\$and\s*:/
+
+            private_constant :LEGACY_ALL_LIST
+
+            # The documented many-to-many form is `all: "$and: ['A', 'B']"`. It
+            # is a static markup literal, so it is decoded once here rather than
+            # on every render, and a runtime value never reaches the parser.
+            def visit_assoc_value(key, node)
+              return visit(node) unless node.is_a?(::Prism::StringNode) &&
+                                        key.to_s.end_with?('.all') &&
+                                        node.unescaped.match?(LEGACY_ALL_LIST)
+
+              legacy_all_list(node.unescaped)
+            end
+
+            # Validated on the YAML AST: safe_load alone would silently keep the
+            # last of two $and keys and read only the first of two documents.
+            def legacy_all_list(source)
+              documents = ::Psych.parse_stream(source).children
+              mapping   = documents.first.children.first if documents.size == 1
+
+              invalid_all!(source) unless mapping.is_a?(::Psych::Nodes::Mapping) && mapping.children.size == 2
+
+              key, sequence = mapping.children
+
+              invalid_all!(source) unless untagged_scalar?(key) && key.value == '$and'
+              invalid_all!(source) unless sequence.is_a?(::Psych::Nodes::Sequence) && untagged?(sequence)
+              invalid_all!(source) unless sequence.children.all? { |node| untagged_scalar?(node) }
+
+              sequence.to_ruby.tap do |list|
+                invalid_all!(source) unless list.all? { |e| e.is_a?(String) || e.is_a?(Integer) }
+              end
+            rescue ::Psych::Exception
+              invalid_all!(source)
+            end
+
+            def untagged_scalar?(node)
+              node.is_a?(::Psych::Nodes::Scalar) && untagged?(node)
+            end
+
+            def untagged?(node)
+              node.tag.nil? || node.tag.empty?
+            end
+
+            def invalid_all!(source)
+              raise ::Liquid::SyntaxError, "Invalid all syntax: #{source}"
             end
 
             # `+value` and `left + right` decode to the (left) operand (no
