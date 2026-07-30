@@ -26,7 +26,7 @@ module Locomotive::Steam
           when :==, :eq   then eq_match?(value)
           when :ne        then !eq_match?(value)
           when :in        then in_match?(value)
-          when :nin       then !present || !in_match?(value)
+          when :nin       then !in_match?(value)
           when :all       then all_match?(value)
           when :exists    then present == @exists
           when :matches   then regexp_match?(value)

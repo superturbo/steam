@@ -104,13 +104,17 @@ module QueryParity
       type: 'events', conditions: { 'tags.ne' => nil },
       expected: %w(brownes-market kellys-westport-inn) },
 
-    { desc: 'nin — a missing field matches',
+    { desc: 'nin [value] matches a missing field',
       type: 'events', conditions: { 'tags.nin' => ['awesome'] },
       expected: UNTAGGED_EVENTS },
 
     { desc: 'in [nil] matches a missing field',
       type: 'events', conditions: { 'tags.in' => [nil] },
       expected: UNTAGGED_EVENTS },
+
+    { desc: 'nin [nil] excludes a missing field',
+      type: 'events', conditions: { 'tags.nin' => [nil] },
+      expected: %w(brownes-market kellys-westport-inn) },
 
     { desc: 'exists true matches present fields',
       type: 'events', conditions: { 'tags.exists' => true },

@@ -72,7 +72,7 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
 
     context 'nin' do
       it('a value in the list is excluded') { expect(match?('tags.nin', %w(red), with_tags)).to eq false }
-      it('a missing field always matches') { expect(match?('tags.nin', %w(red), without_tags)).to eq true }
+      it('a missing field matches when the list does not contain nil') { expect(match?('tags.nin', %w(red), without_tags)).to eq true }
       it('an empty list matches everything') { expect(match?('tags.nin', [], with_tags)).to eq true }
     end
 
@@ -84,14 +84,15 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
       it('a scalar matches a single-value list') { expect(match?('kind.all', %w(grunge), grunge_band)).to eq true }
     end
 
-    context '[nil] against a present null and a locale-missing field' do
+    context '[nil] against null and missing fields' do
       let(:present_null)     { instance_double('Product', tags: nil) }
       let(:locale_missing)   { instance_double('Product', tags: i18n(fr: %w(x))) }
 
       it('in [nil] matches a present null') { expect(match?('tags.in', [nil], present_null)).to eq true }
       it('nin [nil] excludes a present null') { expect(match?('tags.nin', [nil], present_null)).to eq false }
       it('in [nil] matches locale-missing') { expect(match?('tags.in', [nil], locale_missing)).to eq true }
-      it('nin [nil] matches locale-missing') { expect(match?('tags.nin', [nil], locale_missing)).to eq true }
+      it('nin [nil] excludes locale-missing') { expect(match?('tags.nin', [nil], locale_missing)).to eq false }
+      it('nin [nil] excludes a missing field') { expect(match?('tags.nin', [nil], without_tags)).to eq false }
     end
   end
 
