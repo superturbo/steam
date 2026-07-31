@@ -5,7 +5,7 @@
 .sass-cache
 coverage
 bundle
-data
+/data
 InstalledFiles
 lib/bundler/man
 pkg

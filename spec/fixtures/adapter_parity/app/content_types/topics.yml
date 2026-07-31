@@ -1,0 +1,7 @@
+name: Topics
+slug: topics
+label_field_name: name
+order_by: name
+fields:
+- name:
+    type: string

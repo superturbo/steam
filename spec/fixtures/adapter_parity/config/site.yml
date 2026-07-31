@@ -1,0 +1,6 @@
+name: Adapter parity
+subdomain: adapter-parity
+
+locales: ['en', 'fr']
+
+timezone: 'UTC'

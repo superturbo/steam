@@ -1,0 +1,59 @@
+# An absent key is missing; an empty value is explicit null.
+- All missing:
+    _slug: all-missing
+
+- Explicit nils:
+    _slug: explicit-nils
+    score:
+    flag:
+    labels:
+    payload:
+    category:
+    at:
+
+# Entry order defines inverse-association order.
+- Scalars:
+    _slug: scalars
+    title:
+      en: Scalars en
+      fr: Scalars fr
+    score: 5
+    flag: true
+    category: alpha
+    at: '2012-06-06T12:00:00Z'
+    maker: maker-one
+    topics:
+      - topic-a
+      - topic-b
+
+# fr is missing on Arrays and explicitly null on Embedded.
+- Arrays:
+    _slug: arrays
+    title:
+      en: Arrays en
+    labels:
+      - x
+      - y
+    score: 10
+    flag: false
+    maker: maker-one
+    topics:
+      - topic-b
+
+- Embedded:
+    _slug: embedded
+    title:
+      en: Embedded en
+      fr:
+    payload:
+      b: 2
+      a: 1
+    score: 5
+    flag: false
+    maker: maker-two
+
+# Zero has no associations.
+- Zero:
+    _slug: zero
+    score: 0
+    flag: false

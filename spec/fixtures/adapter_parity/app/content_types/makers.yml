@@ -1,0 +1,11 @@
+name: Makers
+slug: makers
+label_field_name: name
+order_by: name
+fields:
+- name:
+    type: string
+- specimens:
+    type: has_many
+    class_name: specimens
+    inverse_of: maker
