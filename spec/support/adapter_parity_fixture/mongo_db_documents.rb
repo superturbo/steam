@@ -3,17 +3,30 @@ module AdapterParityFixture
   # Compiles the fixture's Wagon files into the documents Engine would persist.
   module MongoDBDocuments
 
+    SITES_COLLECTION           = 'locomotive_sites'
     CONTENT_TYPES_COLLECTION   = 'locomotive_content_types'
     CONTENT_ENTRIES_COLLECTION = 'locomotive_content_entries'
 
-    COLLECTIONS = [CONTENT_TYPES_COLLECTION, CONTENT_ENTRIES_COLLECTION].freeze
+    COLLECTIONS = [SITES_COLLECTION, CONTENT_TYPES_COLLECTION, CONTENT_ENTRIES_COLLECTION].freeze
 
     module_function
 
     def documents
       {
+        SITES_COLLECTION           => [site],
         CONTENT_TYPES_COLLECTION   => WagonSite.content_types.map { |type| content_type(type.fetch('slug')) },
         CONTENT_ENTRIES_COLLECTION => WagonSite.content_types.flat_map { |type| entries(type.fetch('slug')) }
+      }
+    end
+
+    def site
+      {
+        '_id'           => WagonSite.site_id,
+        'name'          => WagonSite.site.fetch('name'),
+        'handle'        => WagonSite.site.fetch('subdomain'),
+        'timezone_name' => WagonSite.site.fetch('timezone'),
+        'locales'       => WagonSite.locales,
+        'domains'       => WagonSite.site.fetch('domains')
       }
     end
 

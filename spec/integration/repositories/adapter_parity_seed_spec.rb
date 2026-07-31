@@ -11,6 +11,16 @@ describe 'Adapter parity seed' do
 
   let(:entries) { AdapterParityFixture.mongodb_client['locomotive_content_entries'] }
 
+  it 'writes the site under the names Engine stores, not the Wagon ones' do
+    site = AdapterParityFixture.mongodb_client['locomotive_sites']
+                               .find('_id' => AdapterParityFixture::SITE_ID).first
+
+    expect(site).to include('handle' => 'adapter-parity', 'timezone_name' => 'UTC')
+    expect(site).not_to have_key('subdomain')
+    expect(site).not_to have_key('timezone')
+    expect(site['domains']).to eq %w(adapter-parity.example.com)
+  end
+
   def document(slug)
     entries.find('site_id' => AdapterParityFixture::SITE_ID, "_slug.#{AdapterParityFixture::LOCALE}" => slug).first
   end

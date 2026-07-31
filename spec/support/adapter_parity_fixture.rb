@@ -46,7 +46,9 @@ module AdapterParityFixture
   end
 
   def clean_mongodb!(client = mongodb_client)
-    MongoDBDocuments::COLLECTIONS.each do |collection|
+    client[MongoDBDocuments::SITES_COLLECTION].delete_many('_id' => SITE_ID)
+
+    (MongoDBDocuments::COLLECTIONS - [MongoDBDocuments::SITES_COLLECTION]).each do |collection|
       client[collection].delete_many('site_id' => SITE_ID)
     end
   end

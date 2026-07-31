@@ -53,7 +53,8 @@ describe 'Adapter parity' do
 
   shared_examples_for 'the adapter parity dataset' do
 
-    let(:site)            { Locomotive::Steam::Site.new(_id: site_id, locales: AdapterParityFixture::LOCALES) }
+    let(:site_repository) { Locomotive::Steam::SiteRepository.new(adapter) }
+    let(:site)            { site_repository.by_handle_or_domain('adapter-parity', nil) }
     let(:type_repository) { Locomotive::Steam::ContentTypeRepository.new(adapter, site, AdapterParityFixture::LOCALE) }
 
     def slugs(conditions)
@@ -63,6 +64,22 @@ describe 'Adapter parity' do
       repository.with(type_repository.by_slug('specimens')).all(conditions).map do |entry|
         entry._slug[AdapterParityFixture::LOCALE]
       end
+    end
+
+    describe 'the site' do
+
+      it 'is found by the domain the fixture declares' do
+        expect(site_repository.by_domain('adapter-parity.example.com').handle).to eq 'adapter-parity'
+      end
+
+      it 'exposes the same public attributes' do
+        expect(site.name).to eq 'Adapter parity'
+        expect(site.handle).to eq 'adapter-parity'
+        expect(site.locales).to eq %i(en fr)
+        expect(site.default_locale).to eq :en
+        expect(site.timezone_name).to eq 'UTC'
+      end
+
     end
 
     it 'holds the same rows in both stores' do
@@ -166,7 +183,6 @@ describe 'Adapter parity' do
 
     it_should_behave_like 'the adapter parity dataset' do
       let(:adapter)  { AdapterParityFixture.mongodb_adapter }
-      let(:site_id)  { AdapterParityFixture::SITE_ID }
 
       def filesystem?; false; end
     end
@@ -177,7 +193,6 @@ describe 'Adapter parity' do
 
     it_should_behave_like 'the adapter parity dataset' do
       let(:adapter) { AdapterParityFixture.filesystem_adapter }
-      let(:site_id) { AdapterParityFixture::SITE_ID }
 
       def filesystem?; true; end
     end
