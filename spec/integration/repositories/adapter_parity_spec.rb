@@ -82,6 +82,54 @@ describe 'Adapter parity' do
 
     end
 
+    describe 'the page tree' do
+
+      let(:pages) { Locomotive::Steam::PageRepository.new(adapter, site, AdapterParityFixture::LOCALE) }
+
+      it 'exposes the same root' do
+        expect(pages.root.fullpath[AdapterParityFixture::LOCALE]).to eq 'index'
+      end
+
+      it 'walks the same parent-child hierarchy' do
+        about = pages.by_fullpath('about')
+
+        expect(about.title[AdapterParityFixture::LOCALE]).to eq 'About'
+        expect(about.depth).to eq 1
+        expect(about.position).to eq 1
+        expect(pages.parent_of(about).fullpath[AdapterParityFixture::LOCALE]).to eq 'index'
+        expect(pages.children_of(pages.root).map { |page| page.fullpath[AdapterParityFixture::LOCALE] }).to eq %w(about)
+      end
+
+      # Engine defaults published to false and the Steam entity to true, so a
+      # dropped field reads back fine yet disappears from #published.
+      it 'keeps publication and listing behaviour' do
+        expect(pages.published.map { |page| page.fullpath[AdapterParityFixture::LOCALE] })
+          .to match_array %w(index about)
+
+        expect(pages.root).not_to be_listed
+        expect(pages.by_fullpath('about')).to be_listed
+      end
+
+      def page_source(locale, fullpath)
+        repository = Locomotive::Steam::PageRepository.new(adapter, site, locale)
+
+        Locomotive::Steam::PageFinderService.new(repository).find(fullpath).liquid_source.strip
+      end
+
+      # Filesystem reads the template file, MongoDB a localized raw_template.
+      it 'renders the same source from either store' do
+        expect(page_source(:en, 'about')).to eq 'About body en'
+        expect(page_source(:fr, 'a-propos')).to eq 'About body fr'
+      end
+
+      it 'resolves a localized fullpath in its own locale' do
+        french = Locomotive::Steam::PageRepository.new(adapter, site, :fr)
+
+        expect(french.by_fullpath('a-propos').title[:fr]).to eq 'A propos'
+      end
+
+    end
+
     it 'holds the same rows in both stores' do
       expect(slugs({})).to match_array %w(all-missing arrays embedded explicit-nils scalars zero)
     end

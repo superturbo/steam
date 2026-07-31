@@ -4,16 +4,19 @@ module AdapterParityFixture
   module MongoDBDocuments
 
     SITES_COLLECTION           = 'locomotive_sites'
+    PAGES_COLLECTION           = 'locomotive_pages'
     CONTENT_TYPES_COLLECTION   = 'locomotive_content_types'
     CONTENT_ENTRIES_COLLECTION = 'locomotive_content_entries'
 
-    COLLECTIONS = [SITES_COLLECTION, CONTENT_TYPES_COLLECTION, CONTENT_ENTRIES_COLLECTION].freeze
+    COLLECTIONS = [SITES_COLLECTION, PAGES_COLLECTION,
+                   CONTENT_TYPES_COLLECTION, CONTENT_ENTRIES_COLLECTION].freeze
 
     module_function
 
     def documents
       {
         SITES_COLLECTION           => [site],
+        PAGES_COLLECTION           => MongoDBPages.documents,
         CONTENT_TYPES_COLLECTION   => WagonSite.content_types.map { |type| content_type(type.fetch('slug')) },
         CONTENT_ENTRIES_COLLECTION => WagonSite.content_types.flat_map { |type| entries(type.fetch('slug')) }
       }

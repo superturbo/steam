@@ -25,6 +25,27 @@ describe 'Adapter parity seed' do
     entries.find('site_id' => AdapterParityFixture::SITE_ID, "_slug.#{AdapterParityFixture::LOCALE}" => slug).first
   end
 
+  it 'writes a page tree Engine can walk' do
+    pages = AdapterParityFixture.mongodb_client['locomotive_pages']
+                                .find('site_id' => AdapterParityFixture::SITE_ID).to_a
+                                .each_with_object({}) { |page, all| all[page['fullpath']['en']] = page }
+
+    expect(pages['index']).to include('depth' => 0, 'parent_ids' => [])
+    expect(pages['index']).not_to have_key('parent_id')
+    expect(pages['about']['depth']).to eq 1
+    expect(pages['about']['parent_id']).to eq pages['index']['_id']
+    expect(pages['about']['parent_ids']).to eq [pages['index']['_id']]
+  end
+
+  it 'writes the page body as a localized raw_template' do
+    about = AdapterParityFixture.mongodb_client['locomotive_pages']
+                                .find('_id' => AdapterParityFixture::MongoDBPages.page_id('about')).first
+
+    expect(about['raw_template']['en'].strip).to eq 'About body en'
+    expect(about['raw_template']['fr'].strip).to eq 'About body fr'
+    expect(about['fullpath']).to eq('en' => 'about', 'fr' => 'a-propos')
+  end
+
   it 'leaves a missing key out instead of writing a null' do
     expect(document('all-missing')).not_to have_key('score')
   end

@@ -1,4 +1,6 @@
 require_relative 'adapter_parity_fixture/wagon_site'
+require_relative 'adapter_parity_fixture/wagon_pages'
+require_relative 'adapter_parity_fixture/mongo_db_pages'
 require_relative 'adapter_parity_fixture/mongo_db_documents'
 
 # Builds both adapter datasets from the same Wagon fixture. See the fixture's
