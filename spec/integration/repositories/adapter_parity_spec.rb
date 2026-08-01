@@ -446,6 +446,81 @@ describe 'Adapter parity' do
           .to eq %w(arrays scalars)
       end
 
+      describe 'writing' do
+
+        # Each store issues its own option ids, so the fixture cannot spell one.
+        def option_id(field, name)
+          type_repository.select_options(type_repository.by_slug('specimens'), field)
+                         .detect { |option| option.name[:en] == name }._id
+        end
+
+        def build_specimen(attributes = {})
+          specimens.build({ name: 'Created', score: 41,
+                            category_id: option_id(:category, 'alpha') }.merge(attributes))
+        end
+
+        # Only Filesystem sanitizes a new entry into a slug, so reads here go
+        # through the id both stores do issue.
+        def create_specimen(attributes = {})
+          specimens.create(build_specimen(attributes)).tap { |entry| written << entry }
+        end
+
+        let(:written) { [] }
+
+        after do
+          written.each { |entry| specimens.delete(entry) if entry._id && specimens.find(entry._id) }
+        end
+
+        it 'adds an entry a later read can see' do
+          entry = nil
+
+          expect { entry = create_specimen }.to change { specimens.count }.by(1)
+
+          expect(entry._id).not_to be_nil
+          expect(specimens.find(entry._id).name).to eq 'Created'
+        end
+
+        it 'increments a numeric field' do
+          entry = create_specimen
+
+          expect(specimens.inc(entry, :score).score).to eq 42
+          expect(specimens.find(entry._id).score).to eq 42
+        end
+
+        # Updating a detached copy proves the write reaches the store instead
+        # of mutating the object the previous read handed back.
+        it 'makes an update visible to a later read' do
+          entry    = create_specimen
+          detached = entry.dup.tap do |copy|
+            copy.attributes = copy.attributes.dup
+            copy[:score]    = 99
+          end
+
+          specimens.update(detached)
+
+          expect(specimens.find(entry._id).score).to eq 99
+        end
+
+        it 'removes an entry from later reads' do
+          entry = create_specimen
+
+          expect { specimens.delete(entry) }.to change { specimens.count }.by(-1)
+          expect(specimens.find(entry._id)).to be_nil
+        end
+
+        it 'creates an entry that leaves a non-localized select unset' do
+          pending 'MongoDB cannot serialize an unset non-localized select' unless filesystem?
+
+          entry = specimens.build(name: 'Created without a category')
+
+          written << entry
+          specimens.create(entry)
+
+          expect(specimens.find(entry._id).name).to eq 'Created without a category'
+        end
+
+      end
+
     end
 
     it 'holds the same rows in both stores' do
