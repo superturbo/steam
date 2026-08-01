@@ -36,8 +36,9 @@
     title:
       en: Arrays en
     labels:
-      - x
       - y
+      - x
+      - z
     score: 10
     flag: false
     category: beta
@@ -55,6 +56,8 @@
     title:
       en: Embedded en
       fr:
+    labels:
+      - x
     payload:
       b: 2
       a: 1

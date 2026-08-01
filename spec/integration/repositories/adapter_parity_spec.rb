@@ -17,7 +17,7 @@ describe 'Adapter parity' do
       conditions: { 'score.exists' => false }, expected: %w(all-missing) },
 
     { desc: 'a scalar equals an array field element',
-      conditions: { labels: 'x' }, expected: %w(arrays) },
+      conditions: { labels: 'x' }, expected: %w(arrays embedded) },
 
     { desc: 'an embedded document matches in key order',
       conditions: { payload: { 'b' => 2, 'a' => 1 } }, expected: %w(embedded) },
