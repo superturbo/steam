@@ -234,6 +234,40 @@ describe 'Adapter parity' do
 
     end
 
+    describe 'the theme assets' do
+
+      let(:assets) { Locomotive::Steam::ThemeAssetRepository.new(adapter, site, AdapterParityFixture::LOCALE) }
+      let(:path)   { 'stylesheets/parity.css' }
+      let(:served) { filesystem? ? "/#{path}" : "/sites/#{site._id}/theme/#{path}" }
+
+      # Filesystem knows an asset by the file it read, MongoDB by its local path.
+      def asset_identity(asset)
+        [File.basename(asset[:local_path] || asset[:source]), asset.folder]
+      end
+
+      it 'holds only the files a store serves' do
+        expect(assets.all.map { |asset| asset_identity(asset) }).to eq [['parity.css', 'stylesheets']]
+      end
+
+      # The fixture site sets no fallback asset version, isolating the checksum.
+      def theme_asset_url(checksum)
+        host = Locomotive::Steam::AssetHostService.new(nil, site, nil)
+
+        Locomotive::Steam::ThemeAssetUrlService.new(assets, host, checksum).build(path.dup)
+      end
+
+      it 'builds the URL its own store serves from' do
+        expect(theme_asset_url(false)).to eq served
+      end
+
+      it 'busts the cache with the asset checksum' do
+        pending 'the filesystem loader sets neither local_path nor checksum' if filesystem?
+
+        expect(theme_asset_url(true)).to eq "#{served}?#{Digest::MD5.hexdigest("body { color: #333; }\n")}"
+      end
+
+    end
+
     it 'holds the same rows in both stores' do
       expect(slugs({})).to match_array %w(all-missing arrays embedded explicit-nils scalars zero)
     end

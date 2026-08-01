@@ -4,6 +4,7 @@ require_relative 'adapter_parity_fixture/wagon_pages'
 require_relative 'adapter_parity_fixture/wagon_sections'
 require_relative 'adapter_parity_fixture/wagon_snippets'
 require_relative 'adapter_parity_fixture/wagon_translations'
+require_relative 'adapter_parity_fixture/wagon_theme_assets'
 require_relative 'adapter_parity_fixture/mongo_db_pages'
 require_relative 'adapter_parity_fixture/mongo_db_documents'
 

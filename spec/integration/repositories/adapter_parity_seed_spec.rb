@@ -75,6 +75,15 @@ describe 'Adapter parity seed' do
     expect(translations['adapter_parity_english_only']).not_to have_key('completion')
   end
 
+  it 'writes a theme asset under the local path Engine looks it up by' do
+    written = AdapterParityFixture.mongodb_client['locomotive_theme_assets']
+                                  .find('site_id' => AdapterParityFixture::SITE_ID).to_a
+
+    expect(written.map { |asset| asset['local_path'] }).to eq %w(stylesheets/parity.css)
+    expect(written.first['folder']).to eq 'stylesheets'
+    expect(written.first['checksum']).to eq Digest::MD5.hexdigest("body { color: #333; }\n")
+  end
+
   it 'leaves a missing key out instead of writing a null' do
     expect(document('all-missing')).not_to have_key('score')
   end

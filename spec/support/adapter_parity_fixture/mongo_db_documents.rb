@@ -8,11 +8,13 @@ module AdapterParityFixture
     SECTIONS_COLLECTION        = 'locomotive_sections'
     SNIPPETS_COLLECTION        = 'locomotive_snippets'
     TRANSLATIONS_COLLECTION    = 'locomotive_translations'
+    THEME_ASSETS_COLLECTION    = 'locomotive_theme_assets'
     CONTENT_TYPES_COLLECTION   = 'locomotive_content_types'
     CONTENT_ENTRIES_COLLECTION = 'locomotive_content_entries'
 
     COLLECTIONS = [SITES_COLLECTION, PAGES_COLLECTION, SECTIONS_COLLECTION, SNIPPETS_COLLECTION,
-                   TRANSLATIONS_COLLECTION, CONTENT_TYPES_COLLECTION, CONTENT_ENTRIES_COLLECTION].freeze
+                   TRANSLATIONS_COLLECTION, THEME_ASSETS_COLLECTION,
+                   CONTENT_TYPES_COLLECTION, CONTENT_ENTRIES_COLLECTION].freeze
 
     module_function
 
@@ -23,6 +25,7 @@ module AdapterParityFixture
         SECTIONS_COLLECTION        => WagonSections.all.map { |declared| section(declared[:slug]) },
         SNIPPETS_COLLECTION        => WagonSnippets.all.map { |declared| snippet(declared[:slug]) },
         TRANSLATIONS_COLLECTION    => WagonTranslations.all.map { |declared| translation(declared[:key]) },
+        THEME_ASSETS_COLLECTION    => WagonThemeAssets.all.map { |declared| theme_asset(declared[:local_path]) },
         CONTENT_TYPES_COLLECTION   => WagonSite.content_types.map { |type| content_type(type.fetch('slug')) },
         CONTENT_ENTRIES_COLLECTION => WagonSite.content_types.flat_map { |type| entries(type.fetch('slug')) }
       }
@@ -54,6 +57,19 @@ module AdapterParityFixture
         'name'     => WagonSnippets.name(slug),
         'slug'     => slug,
         'template' => declared[:templates].transform_keys(&:to_s)
+      }
+    end
+
+    def theme_asset(local_path)
+      declared = WagonThemeAssets.asset(local_path)
+
+      {
+        '_id'        => WagonSite.oid("theme-asset:#{local_path}"),
+        'site_id'    => WagonSite.site_id,
+        'local_path' => local_path,
+        'folder'     => declared.fetch(:folder),
+        # Engine stores an MD5 of the uploaded file.
+        'checksum'   => Digest::MD5.hexdigest(File.binread(declared.fetch(:source)))
       }
     end
 
