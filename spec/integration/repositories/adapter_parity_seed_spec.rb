@@ -46,6 +46,15 @@ describe 'Adapter parity seed' do
     expect(about['fullpath']).to eq('en' => 'about', 'fr' => 'a-propos')
   end
 
+  it 'writes the section definition the author wrote, unsanitized' do
+    gallery = AdapterParityFixture.mongodb_client['locomotive_sections']
+                                  .find('site_id' => AdapterParityFixture::SITE_ID, 'slug' => 'gallery').first
+
+    expect(gallery['name']).to eq 'Gallery'
+    expect(gallery['template'].strip).to eq '<ul class="gallery"></ul>'
+    expect(gallery['definition']['default']).to eq('settings' => { 'columns' => 4 })
+  end
+
   it 'leaves a missing key out instead of writing a null' do
     expect(document('all-missing')).not_to have_key('score')
   end

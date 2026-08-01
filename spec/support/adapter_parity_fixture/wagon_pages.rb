@@ -16,7 +16,7 @@ module AdapterParityFixture
         Dir[File.join(WagonSite::PATH, DIRECTORY, '**', '*.liquid')].sort.each do |file|
           path, locale  = split_locale(relative_path(file))
           page          = pages[path] ||= { path: path, attributes: {}, titles: {}, slugs: {}, bodies: {} }
-          front, body   = parse(file)
+          front, body   = WagonTemplate.read(file)
 
           page[:titles][locale] = front.fetch('title') { raise Error, "#{path} has no title" }
           page[:slugs][locale]  = front.fetch('slug', File.basename(path))
@@ -71,14 +71,6 @@ module AdapterParityFixture
       end
 
       [directory == '.' ? base : File.join(directory, base), suffix.to_sym]
-    end
-
-    def parse(file)
-      match = File.read(file).match(/\A---\s*\n(.*?)\n---\s*\n(.*)\z/m)
-
-      raise Error, "#{File.basename(file)} has no front matter" if match.nil?
-
-      [YAML.safe_load(match[1], aliases: false) || {}, match[2]]
     end
 
   end

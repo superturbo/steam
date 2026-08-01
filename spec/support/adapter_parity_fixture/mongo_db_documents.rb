@@ -5,10 +5,11 @@ module AdapterParityFixture
 
     SITES_COLLECTION           = 'locomotive_sites'
     PAGES_COLLECTION           = 'locomotive_pages'
+    SECTIONS_COLLECTION        = 'locomotive_sections'
     CONTENT_TYPES_COLLECTION   = 'locomotive_content_types'
     CONTENT_ENTRIES_COLLECTION = 'locomotive_content_entries'
 
-    COLLECTIONS = [SITES_COLLECTION, PAGES_COLLECTION,
+    COLLECTIONS = [SITES_COLLECTION, PAGES_COLLECTION, SECTIONS_COLLECTION,
                    CONTENT_TYPES_COLLECTION, CONTENT_ENTRIES_COLLECTION].freeze
 
     module_function
@@ -17,8 +18,24 @@ module AdapterParityFixture
       {
         SITES_COLLECTION           => [site],
         PAGES_COLLECTION           => MongoDBPages.documents,
+        SECTIONS_COLLECTION        => WagonSections.all.map { |declared| section(declared[:slug]) },
         CONTENT_TYPES_COLLECTION   => WagonSite.content_types.map { |type| content_type(type.fetch('slug')) },
         CONTENT_ENTRIES_COLLECTION => WagonSite.content_types.flat_map { |type| entries(type.fetch('slug')) }
+      }
+    end
+
+    # Engine persists the definition the author wrote; only Wagon's loader
+    # rewrites it on the way in.
+    def section(slug)
+      declared = WagonSections.section(slug)
+
+      {
+        '_id'        => WagonSite.oid("section:#{slug}"),
+        'site_id'    => WagonSite.site_id,
+        'name'       => WagonSections.name(slug),
+        'slug'       => slug,
+        'template'   => declared[:template],
+        'definition' => declared[:definition]
       }
     end
 

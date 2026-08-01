@@ -130,6 +130,56 @@ describe 'Adapter parity' do
 
     end
 
+    describe 'the sections' do
+
+      let(:sections) { Locomotive::Steam::SectionRepository.new(adapter, site, AdapterParityFixture::LOCALE) }
+
+      def section(slug)
+        Locomotive::Steam::SectionFinderService.new(sections).find(slug)
+      end
+
+      def drop(slug)
+        Locomotive::Steam::Liquid::Drops::Section.new(section(slug), nil)
+      end
+
+      # Wagon names a section after its file, Engine stores the name.
+      it 'reads back the same identity' do
+        gallery = section('gallery')
+
+        expect(gallery.slug).to eq 'gallery'
+        expect(gallery.type).to eq 'gallery'
+        expect(gallery.name).to eq 'Gallery'
+        expect(gallery.definition['settings'].map { |setting| setting['id'] }).to eq %w(columns rows)
+      end
+
+      # Filesystem reads the template file, MongoDB the stored template.
+      it 'renders the same source from either store' do
+        expect(section('gallery').liquid_source.strip).to eq '<ul class="gallery"></ul>'
+      end
+
+      it 'exposes the same CSS class' do
+        expect(drop('gallery').css_class).to eq 'section-gallery'
+      end
+
+      it 'reads the content a section states for itself' do
+        expect(drop('gallery').settings['columns']).to eq 4
+      end
+
+      # The filesystem sanitizer copies each setting's declared default into the
+      # section's own content; nothing does that on the MongoDB side, so an
+      # omitted setting renders on one store and stays empty on the other.
+      it 'adds nothing to the content a section omits' do
+        pending 'the filesystem sanitizer materializes section setting defaults' if filesystem?
+
+        expect(drop('gallery').settings['rows']).to be_nil
+      end
+
+      it 'gives a section without stated content nothing to read' do
+        expect(drop('footer').settings['columns']).to be_nil
+      end
+
+    end
+
     it 'holds the same rows in both stores' do
       expect(slugs({})).to match_array %w(all-missing arrays embedded explicit-nils scalars zero)
     end

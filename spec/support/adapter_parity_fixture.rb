@@ -1,5 +1,7 @@
 require_relative 'adapter_parity_fixture/wagon_site'
+require_relative 'adapter_parity_fixture/wagon_template'
 require_relative 'adapter_parity_fixture/wagon_pages'
+require_relative 'adapter_parity_fixture/wagon_sections'
 require_relative 'adapter_parity_fixture/mongo_db_pages'
 require_relative 'adapter_parity_fixture/mongo_db_documents'
 
