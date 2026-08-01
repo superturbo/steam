@@ -13,6 +13,8 @@ fields:
     localized: true
 - score:
     type: integer
+- price:
+    type: float
 - flag:
     type: boolean
 - labels:

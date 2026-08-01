@@ -18,6 +18,7 @@
       en: Scalars en
       fr: Scalars fr
     score: 5
+    price: 15.0
     flag: true
     category: alpha
     tier:
@@ -40,6 +41,7 @@
       - x
       - z
     score: 10
+    price: 5.5
     flag: false
     category: beta
     tier:

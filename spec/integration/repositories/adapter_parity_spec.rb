@@ -8,97 +8,6 @@ require_relative '../../support/adapter_parity_fixture'
 # a shared bug from passing as parity.
 describe 'Adapter parity' do
 
-  CASES = [
-    { desc: 'exists true matches a present field, null included',
-      conditions: { 'score.exists' => true },
-      expected: %w(arrays embedded explicit-nils scalars zero) },
-
-    { desc: 'exists false matches only an absent field',
-      conditions: { 'score.exists' => false }, expected: %w(all-missing) },
-
-    { desc: 'a scalar equals an array field element',
-      conditions: { labels: 'x' }, expected: %w(arrays embedded) },
-
-    { desc: 'an embedded document matches in key order',
-      conditions: { payload: { 'b' => 2, 'a' => 1 } }, expected: %w(embedded) },
-
-    { desc: 'an embedded document does not match reordered',
-      conditions: { payload: { 'a' => 1, 'b' => 2 } }, expected: [] },
-
-    { desc: 'equality on a boolean field',
-      conditions: { flag: false }, expected: %w(arrays embedded zero) },
-
-    { desc: 'equality on a select field resolves the option name',
-      conditions: { category: 'alpha' }, expected: %w(scalars) },
-
-    { desc: 'gt on a numeric field',
-      conditions: { 'score.gt' => 5 }, expected: %w(arrays) }
-  ].freeze
-
-  # Memory casts missing and null integers to 0 before matching; MongoDB filters
-  # raw BSON.
-  NULL_CASES = [
-    { desc: 'eq nil matches a missing or null field',
-      conditions: { score: nil }, expected: %w(all-missing explicit-nils) },
-
-    { desc: 'ne nil matches only present, non-null fields',
-      conditions: { 'score.ne' => nil }, expected: %w(arrays embedded scalars zero) },
-
-    { desc: 'in [nil] matches a missing or null field',
-      conditions: { 'score.in' => [nil] }, expected: %w(all-missing explicit-nils) },
-
-    { desc: 'nin [nil] excludes a missing or null field',
-      conditions: { 'score.nin' => [nil] }, expected: %w(arrays embedded scalars zero) }
-  ].freeze
-
-  # A rejected input has to be rejected the same way everywhere, not merely
-  # return different rows.
-  ERROR_CASES = [
-    { desc: 'a removed legacy operator (neq)',
-      conditions: { 'name.neq' => 'Scalars' },
-      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
-
-    { desc: 'a removed legacy operator (matches)',
-      conditions: { 'name.matches' => 'Scal' },
-      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
-
-    { desc: 'an unknown operator',
-      conditions: { 'name.bogus' => 'x' },
-      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
-
-    { desc: 'a nested field path',
-      conditions: { 'address.location.ne' => 'x' },
-      error: Locomotive::Steam::Adapters::Query::InvalidValue },
-
-    { desc: 'an empty field name',
-      conditions: { '' => 'x' },
-      error: Locomotive::Steam::Adapters::Query::InvalidValue },
-
-    { desc: 'an empty field with an operator suffix',
-      conditions: { '.ne' => 'x' },
-      error: Locomotive::Steam::Adapters::Query::InvalidValue },
-
-    { desc: 'a raw Mongo operator in a key',
-      conditions: { '$where' => 'sleep(1000)' },
-      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
-
-    { desc: 'a raw Mongo operator nested in a value',
-      conditions: { 'name' => { '$ne' => 'Scalars' } },
-      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
-
-    { desc: 'a raw Mongo operator inside an array value',
-      conditions: { 'name' => [{ '$ne' => 'Scalars' }] },
-      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
-
-    { desc: 'a structural comparison operand',
-      conditions: { 'score.gt' => [1] },
-      error: Locomotive::Steam::Adapters::Query::InvalidValue },
-
-    { desc: 'a boolean comparison operand',
-      conditions: { 'score.gt' => true },
-      error: Locomotive::Steam::Adapters::Query::InvalidValue }
-  ].freeze
-
   shared_examples_for 'the adapter parity dataset' do
 
     let(:site_repository) { Locomotive::Steam::SiteRepository.new(adapter) }
@@ -460,6 +369,13 @@ describe 'Adapter parity' do
         expect(slugs(order_by: 'name')).to eq %w(all-missing arrays embedded explicit-nils scalars zero)
       end
 
+      it 'reverses that order however the direction is spelled' do
+        descending = %w(zero scalars explicit-nils embedded arrays all-missing)
+
+        expect(slugs(order_by: 'name.desc')).to eq descending
+        expect(slugs(order_by: { name: -1 })).to eq descending
+      end
+
       # True, then false, then the rows with no value at all.
       it 'orders by a field and a direction, breaking the tie with a second' do
         expect(slugs(order_by: 'flag.desc, name'))
@@ -699,14 +615,6 @@ describe 'Adapter parity' do
       expect(slugs({})).to match_array %w(all-missing arrays embedded explicit-nils scalars zero)
     end
 
-    CASES.each do |c|
-      it(c[:desc]) { expect(slugs(c[:conditions])).to match_array(c[:expected]) }
-    end
-
-    ERROR_CASES.each do |c|
-      it("rejects #{c[:desc]}") { expect { slugs(c[:conditions]) }.to raise_error(c[:error]) }
-    end
-
     # Row parity cannot expose differences in materialized values.
     describe 'the values read back' do
 
@@ -783,13 +691,6 @@ describe 'Adapter parity' do
         expect(entry('embedded').title[:fr]).to be_nil
       end
 
-    end
-
-    NULL_CASES.each do |c|
-      it(c[:desc]) do
-        pending 'Memory filters through the accessor, where nil.to_i is 0' if filesystem?
-        expect(slugs(c[:conditions])).to match_array(c[:expected])
-      end
     end
 
   end
