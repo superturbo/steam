@@ -90,21 +90,40 @@ describe 'Adapter parity' do
         expect(pages.root.fullpath[AdapterParityFixture::LOCALE]).to eq 'index'
       end
 
-      it 'walks the same parent-child hierarchy' do
-        about = pages.by_fullpath('about')
+      def fullpaths(list)
+        list.map { |page| page.fullpath[AdapterParityFixture::LOCALE] }
+      end
 
-        expect(about.title[AdapterParityFixture::LOCALE]).to eq 'About'
-        expect(about.depth).to eq 1
-        expect(about.position).to eq 1
-        expect(pages.parent_of(about).fullpath[AdapterParityFixture::LOCALE]).to eq 'index'
-        expect(pages.children_of(pages.root).map { |page| page.fullpath[AdapterParityFixture::LOCALE] }).to eq %w(about)
+      # contact sorts before about on position alone, so depth cannot be the
+      # only key doing the work.
+      it 'orders the whole tree by depth and then position' do
+        expect(fullpaths(pages.all)).to eq %w(index contact about about/team)
+      end
+
+      it 'narrows the tree by the conditions it is given' do
+        expect(fullpaths(pages.all('slug.ne' => 'about'))).to eq %w(index contact about/team)
+        expect(fullpaths(pages.matching_fullpath(%w(about about/team nowhere)))).to match_array %w(about about/team)
+      end
+
+      it 'walks the same parent-child hierarchy' do
+        team = pages.by_fullpath('about/team')
+
+        expect(team.title[AdapterParityFixture::LOCALE]).to eq 'Team'
+        expect(team.depth).to eq 2
+        expect(pages.parent_of(team).fullpath[AdapterParityFixture::LOCALE]).to eq 'about'
+        expect(fullpaths(pages.ancestors_of(team))).to eq %w(index about about/team)
+        expect(fullpaths(pages.children_of(pages.root))).to eq %w(contact about)
+      end
+
+      it 'finds a page by the handle it declares' do
+        expect(pages.by_handle('the-team').fullpath[AdapterParityFixture::LOCALE]).to eq 'about/team'
+        expect(fullpaths(pages.only_handle_and_fullpath)).to match_array %w(contact about/team)
       end
 
       # Engine defaults published to false and the Steam entity to true, so a
       # dropped field reads back fine yet disappears from #published.
       it 'keeps publication and listing behaviour' do
-        expect(pages.published.map { |page| page.fullpath[AdapterParityFixture::LOCALE] })
-          .to match_array %w(index about)
+        expect(fullpaths(pages.published)).to match_array %w(index contact about about/team)
 
         expect(pages.root).not_to be_listed
         expect(pages.by_fullpath('about')).to be_listed
@@ -126,6 +145,7 @@ describe 'Adapter parity' do
         french = Locomotive::Steam::PageRepository.new(adapter, site, :fr)
 
         expect(french.by_fullpath('a-propos').title[:fr]).to eq 'A propos'
+        expect(french.by_fullpath('a-propos/team').title[:fr]).to eq 'Team'
       end
 
     end

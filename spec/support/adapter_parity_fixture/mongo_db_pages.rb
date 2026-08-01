@@ -29,7 +29,10 @@ module AdapterParityFixture
         'listed'       => page[:attributes].fetch('listed'),
         'published'    => page[:attributes].fetch('published'),
         'parent_ids'   => ancestors(path).map { |ancestor| page_id(ancestor) }
-      }.tap { |document| document['parent_id'] = page_id(parent) if parent }
+      }.tap do |document|
+        document['parent_id'] = page_id(parent) if parent
+        document['handle']    = page[:attributes]['handle'] if page[:attributes].key?('handle')
+      end
     end
 
     def localized_fullpath(path)
