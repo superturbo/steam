@@ -32,6 +32,11 @@ module AdapterParityFixture
       }.tap do |document|
         document['parent_id'] = page_id(parent) if parent
         document['handle']    = page[:attributes]['handle'] if page[:attributes].key?('handle')
+
+        if (slug = page[:attributes]['content_type'])
+          document['templatized']       = true
+          document['target_klass_name'] = "Locomotive::ContentEntry#{WagonSite.type_id(slug)}"
+        end
       end
     end
 
@@ -48,10 +53,13 @@ module AdapterParityFixture
       "#{fullpath_for(parent, locale)}/#{slug}"
     end
 
+    # A page that introduces templatization is addressed by the wildcard.
     def slug_for(path, locale)
-      slugs = WagonPages.page(path)[:slugs]
+      page = WagonPages.page(path)
 
-      slugs.fetch(locale.to_sym) { slugs.fetch(WagonSite.default_locale) }
+      return Locomotive::Steam::WILDCARD if page[:attributes].key?('content_type')
+
+      page[:slugs].fetch(locale.to_sym) { page[:slugs].fetch(WagonSite.default_locale) }
     end
 
     def ancestors(path)
