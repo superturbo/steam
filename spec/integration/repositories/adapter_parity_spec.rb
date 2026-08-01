@@ -180,6 +180,33 @@ describe 'Adapter parity' do
 
     end
 
+    describe 'the snippets' do
+
+      def snippet(slug, locale)
+        repository = Locomotive::Steam::SnippetRepository.new(adapter, site, locale)
+
+        Locomotive::Steam::SnippetFinderService.new(repository).find(slug)
+      end
+
+      it 'reads back the same identity' do
+        expect(snippet('greeting', :en).slug).to eq 'greeting'
+        expect(snippet('greeting', :en).name).to eq 'Greeting'
+      end
+
+      # Filesystem keeps a template path per locale, MongoDB a template.
+      it 'renders each locale from its own source' do
+        expect(snippet('greeting', :en).liquid_source.strip).to eq 'Greeting en'
+        expect(snippet('greeting', :fr).liquid_source.strip).to eq 'Greeting fr'
+      end
+
+      # One store is missing a file where the other is missing a key, so each
+      # reaches the default locale by its own route.
+      it 'falls back to the default locale where a locale is absent' do
+        expect(snippet('banner', :fr).liquid_source.strip).to eq 'Banner en'
+      end
+
+    end
+
     it 'holds the same rows in both stores' do
       expect(slugs({})).to match_array %w(all-missing arrays embedded explicit-nils scalars zero)
     end

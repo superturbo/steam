@@ -55,6 +55,16 @@ describe 'Adapter parity seed' do
     expect(gallery['definition']['default']).to eq('settings' => { 'columns' => 4 })
   end
 
+  it 'writes a snippet template per locale, with no key where there is no file' do
+    snippets = AdapterParityFixture.mongodb_client['locomotive_snippets']
+                                   .find('site_id' => AdapterParityFixture::SITE_ID).to_a
+                                   .each_with_object({}) { |snippet, all| all[snippet['slug']] = snippet }
+
+    expect(snippets['greeting']['name']).to eq 'Greeting'
+    expect(snippets['greeting']['template']['fr'].strip).to eq 'Greeting fr'
+    expect(snippets['banner']['template'].keys).to eq %w(en)
+  end
+
   it 'leaves a missing key out instead of writing a null' do
     expect(document('all-missing')).not_to have_key('score')
   end

@@ -6,10 +6,11 @@ module AdapterParityFixture
     SITES_COLLECTION           = 'locomotive_sites'
     PAGES_COLLECTION           = 'locomotive_pages'
     SECTIONS_COLLECTION        = 'locomotive_sections'
+    SNIPPETS_COLLECTION        = 'locomotive_snippets'
     CONTENT_TYPES_COLLECTION   = 'locomotive_content_types'
     CONTENT_ENTRIES_COLLECTION = 'locomotive_content_entries'
 
-    COLLECTIONS = [SITES_COLLECTION, PAGES_COLLECTION, SECTIONS_COLLECTION,
+    COLLECTIONS = [SITES_COLLECTION, PAGES_COLLECTION, SECTIONS_COLLECTION, SNIPPETS_COLLECTION,
                    CONTENT_TYPES_COLLECTION, CONTENT_ENTRIES_COLLECTION].freeze
 
     module_function
@@ -19,6 +20,7 @@ module AdapterParityFixture
         SITES_COLLECTION           => [site],
         PAGES_COLLECTION           => MongoDBPages.documents,
         SECTIONS_COLLECTION        => WagonSections.all.map { |declared| section(declared[:slug]) },
+        SNIPPETS_COLLECTION        => WagonSnippets.all.map { |declared| snippet(declared[:slug]) },
         CONTENT_TYPES_COLLECTION   => WagonSite.content_types.map { |type| content_type(type.fetch('slug')) },
         CONTENT_ENTRIES_COLLECTION => WagonSite.content_types.flat_map { |type| entries(type.fetch('slug')) }
       }
@@ -36,6 +38,20 @@ module AdapterParityFixture
         'slug'       => slug,
         'template'   => declared[:template],
         'definition' => declared[:definition]
+      }
+    end
+
+    # A locale without a file becomes a locale without a key, so both stores
+    # have to reach the default locale on their own.
+    def snippet(slug)
+      declared = WagonSnippets.snippet(slug)
+
+      {
+        '_id'      => WagonSite.oid("snippet:#{slug}"),
+        'site_id'  => WagonSite.site_id,
+        'name'     => WagonSnippets.name(slug),
+        'slug'     => slug,
+        'template' => declared[:templates].transform_keys(&:to_s)
       }
     end
 
