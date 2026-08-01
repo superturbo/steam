@@ -5,7 +5,7 @@ module AdapterParityFixture
 
     DIRECTORY  = 'app/views/pages'.freeze
     ROOT       = 'index'.freeze
-    ATTRIBUTES = %w(handle content_type position listed published).freeze
+    ATTRIBUTES = %w(handle content_type editable_elements position listed published).freeze
 
     module_function
 

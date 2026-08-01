@@ -33,6 +33,10 @@ module AdapterParityFixture
         document['parent_id'] = page_id(parent) if parent
         document['handle']    = page[:attributes]['handle'] if page[:attributes].key?('handle')
 
+        if (elements = page[:attributes]['editable_elements'])
+          document['editable_elements'] = elements.map { |name, content| editable_element(name, content) }
+        end
+
         if (slug = page[:attributes]['content_type'])
           document['templatized']       = true
           document['target_klass_name'] = "Locomotive::ContentEntry#{WagonSite.type_id(slug)}"
@@ -51,6 +55,18 @@ module AdapterParityFixture
       return slug if parent.nil? || parent == WagonPages::ROOT
 
       "#{fullpath_for(parent, locale)}/#{slug}"
+    end
+
+    # Wagon keys an element by block and slug joined; Engine stores them apart.
+    def editable_element(name, content)
+      segments = name.to_s.split('/')
+      slug     = segments.pop
+      block    = segments.join('/')
+      block    = nil if block.empty?
+
+      { 'block'   => block,
+        'slug'    => slug,
+        'content' => { WagonSite.default_locale.to_s => content } }
     end
 
     # A page that introduces templatization is addressed by the wildcard.

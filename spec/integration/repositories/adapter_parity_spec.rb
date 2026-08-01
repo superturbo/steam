@@ -133,6 +133,12 @@ describe 'Adapter parity' do
         expect(template).not_to be_listed
       end
 
+      it 'reads an editable element by its block and slug' do
+        element = pages.editable_element_for(pages.by_fullpath('about'), 'content/banner', 'pitch')
+
+        expect(element.content[AdapterParityFixture::LOCALE]).to eq '<h2>About</h2>'
+      end
+
       # Engine defaults published to false and the Steam entity to true, so a
       # dropped field reads back fine yet disappears from #published.
       it 'keeps publication and listing behaviour' do
