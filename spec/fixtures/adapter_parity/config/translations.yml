@@ -1,0 +1,10 @@
+powered_by:
+  en: Powered by
+  fr: Propulsé par
+
+hello_name:
+  en: Hello {{ name }}
+  fr: Bonjour {{ name }}
+
+adapter_parity_english_only:
+  en: English only

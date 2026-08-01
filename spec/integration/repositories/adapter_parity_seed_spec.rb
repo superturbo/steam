@@ -65,6 +65,16 @@ describe 'Adapter parity seed' do
     expect(snippets['banner']['template'].keys).to eq %w(en)
   end
 
+  it 'writes a translation as its locale values, without Engine completion' do
+    translations = AdapterParityFixture.mongodb_client['locomotive_translations']
+                                       .find('site_id' => AdapterParityFixture::SITE_ID).to_a
+                                       .each_with_object({}) { |row, all| all[row['key']] = row }
+
+    expect(translations['powered_by']['values']).to eq('en' => 'Powered by', 'fr' => 'Propulsé par')
+    expect(translations['adapter_parity_english_only']['values'].keys).to eq %w(en)
+    expect(translations['adapter_parity_english_only']).not_to have_key('completion')
+  end
+
   it 'leaves a missing key out instead of writing a null' do
     expect(document('all-missing')).not_to have_key('score')
   end

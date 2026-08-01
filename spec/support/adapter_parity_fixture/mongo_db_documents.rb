@@ -7,11 +7,12 @@ module AdapterParityFixture
     PAGES_COLLECTION           = 'locomotive_pages'
     SECTIONS_COLLECTION        = 'locomotive_sections'
     SNIPPETS_COLLECTION        = 'locomotive_snippets'
+    TRANSLATIONS_COLLECTION    = 'locomotive_translations'
     CONTENT_TYPES_COLLECTION   = 'locomotive_content_types'
     CONTENT_ENTRIES_COLLECTION = 'locomotive_content_entries'
 
     COLLECTIONS = [SITES_COLLECTION, PAGES_COLLECTION, SECTIONS_COLLECTION, SNIPPETS_COLLECTION,
-                   CONTENT_TYPES_COLLECTION, CONTENT_ENTRIES_COLLECTION].freeze
+                   TRANSLATIONS_COLLECTION, CONTENT_TYPES_COLLECTION, CONTENT_ENTRIES_COLLECTION].freeze
 
     module_function
 
@@ -21,6 +22,7 @@ module AdapterParityFixture
         PAGES_COLLECTION           => MongoDBPages.documents,
         SECTIONS_COLLECTION        => WagonSections.all.map { |declared| section(declared[:slug]) },
         SNIPPETS_COLLECTION        => WagonSnippets.all.map { |declared| snippet(declared[:slug]) },
+        TRANSLATIONS_COLLECTION    => WagonTranslations.all.map { |declared| translation(declared[:key]) },
         CONTENT_TYPES_COLLECTION   => WagonSite.content_types.map { |type| content_type(type.fetch('slug')) },
         CONTENT_ENTRIES_COLLECTION => WagonSite.content_types.flat_map { |type| entries(type.fetch('slug')) }
       }
@@ -52,6 +54,15 @@ module AdapterParityFixture
         'name'     => WagonSnippets.name(slug),
         'slug'     => slug,
         'template' => declared[:templates].transform_keys(&:to_s)
+      }
+    end
+
+    def translation(key)
+      {
+        '_id'     => WagonSite.oid("translation:#{key}"),
+        'site_id' => WagonSite.site_id,
+        'key'     => key,
+        'values'  => WagonTranslations.translation(key).fetch(:values)
       }
     end
 

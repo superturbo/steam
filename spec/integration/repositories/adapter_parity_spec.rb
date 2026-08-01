@@ -207,6 +207,33 @@ describe 'Adapter parity' do
 
     end
 
+    describe 'the translations' do
+
+      def translator(locale)
+        repository = Locomotive::Steam::TranslationRepository.new(adapter, site, locale)
+
+        Locomotive::Steam::TranslatorService.new(repository, locale)
+      end
+
+      it 'translates a key in each locale' do
+        expect(translator(:en).translate('powered_by')).to eq 'Powered by'
+        expect(translator(:fr).translate('powered_by')).to eq 'Propulsé par'
+      end
+
+      # The value is Liquid, so both stores have to keep it renderable.
+      it 'renders a translation against the given options' do
+        expect(translator(:fr).translate('hello_name', 'name' => 'Ada')).to eq 'Bonjour Ada'
+      end
+
+      # Unlike a snippet, a translation does not fall back to the default
+      # locale; the key itself is the answer. It is namespaced so that no I18n
+      # entry another gem registers can stand in for it.
+      it 'answers with the key where a locale is absent' do
+        expect(translator(:fr).translate('adapter_parity_english_only')).to eq 'adapter_parity_english_only'
+      end
+
+    end
+
     it 'holds the same rows in both stores' do
       expect(slugs({})).to match_array %w(all-missing arrays embedded explicit-nils scalars zero)
     end
