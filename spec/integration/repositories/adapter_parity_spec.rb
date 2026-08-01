@@ -66,6 +66,12 @@ describe 'Adapter parity' do
       end
     end
 
+    # Each store issues its own option ids, so the fixture cannot spell one.
+    def option_id(field, name)
+      type_repository.select_options(type_repository.by_slug('specimens'), field)
+                     .detect { |option| option.name[:en] == name }._id
+    end
+
     describe 'the site' do
 
       it 'is found by the domain the fixture declares' do
@@ -174,7 +180,7 @@ describe 'Adapter parity' do
       let(:specimens) { type_repository.by_slug('specimens') }
 
       it 'holds the same types under the same slugs' do
-        expect(type_repository.all.map(&:slug)).to match_array %w(makers specimens topics)
+        expect(type_repository.all.map(&:slug)).to match_array %w(makers specimens submissions topics)
       end
 
       it 'reads what the fixture says about a type and its fields' do
@@ -448,12 +454,6 @@ describe 'Adapter parity' do
 
       describe 'writing' do
 
-        # Each store issues its own option ids, so the fixture cannot spell one.
-        def option_id(field, name)
-          type_repository.select_options(type_repository.by_slug('specimens'), field)
-                         .detect { |option| option.name[:en] == name }._id
-        end
-
         def build_specimen(attributes = {})
           specimens.build({ name: 'Created', score: 41,
                             category_id: option_id(:category, 'alpha') }.merge(attributes))
@@ -517,6 +517,130 @@ describe 'Adapter parity' do
           specimens.create(entry)
 
           expect(specimens.find(entry._id).name).to eq 'Created without a category'
+        end
+
+      end
+
+    end
+
+    describe 'the content entry service' do
+
+      let(:service) do
+        entries = Locomotive::Steam::ContentEntryRepository.new(
+          adapter, site, AdapterParityFixture::LOCALE, type_repository)
+
+        Locomotive::Steam::ContentEntryService.new(
+          type_repository, entries, AdapterParityFixture::LOCALE)
+      end
+
+      it 'lists what a type holds, and narrows it by conditions' do
+        expect(service.all('specimens').size).to eq 6
+        expect(service.all('specimens', flag: false).size).to eq 3
+      end
+
+      it 'lists as json' do
+        entry = service.all('specimens', { flag: true }, true).first
+
+        expect(entry.slice('name', 'score')).to eq('name' => 'Scalars', 'score' => 5)
+      end
+
+      # Filesystem ids are slugs, so only MongoDB reaches the fallback #find.
+      it 'finds an entry by its slug and by the id its store issued' do
+        scalars = service.find('specimens', 'scalars')
+
+        expect(scalars.name).to eq 'Scalars'
+        expect(service.find('specimens', scalars._id).name).to eq 'Scalars'
+      end
+
+      describe 'writing' do
+
+        let(:valid)          { { name: 'Ada', email: 'ada@example.com', message: 'Hello' } }
+        let(:writable_types) { %w(specimens submissions) }
+
+        let(:original_ids) do
+          writable_types.to_h { |type| [type, service.all(type).map(&:_id)] }
+        end
+
+        before { original_ids }
+
+        # A failed create may leave a persisted entry, so remove everything
+        # added here.
+        after do
+          writable_types.each do |type|
+            service.all(type).each do |entry|
+              service.delete(type, entry._id) unless original_ids.fetch(type).include?(entry._id)
+            end
+          end
+        end
+
+        it 'builds an entry without persisting it' do
+          entry = service.build('submissions', valid)
+
+          expect(entry['name']).to eq 'Ada'
+          expect(entry['errors']).to be_blank
+          expect(service.all('submissions').size).to eq 0
+        end
+
+        it 'creates an entry a later read can see' do
+          entry = nil
+
+          expect { entry = service.create('submissions', valid) }
+            .to change { service.all('submissions').size }.by(1)
+
+          expect(entry['name']).to eq 'Ada'
+          expect(entry['errors']).to be_blank
+        end
+
+        it 'reports every missing required field at once, and persists nothing' do
+          entry = nil
+
+          expect { entry = service.create('submissions', {}, true) }
+            .not_to change { service.all('submissions').size }
+
+          expect(entry['errors']).to eq(
+            'name'    => ["can't be blank"],
+            'email'   => ["can't be blank"],
+            'message' => ["can't be blank"]
+          )
+        end
+
+        it 'updates an entry without adding one' do
+          created = service.create('submissions', valid)
+          updated = nil
+
+          expect { updated = service.update('submissions', created._id, { name: 'Grace' }, true) }
+            .not_to change { service.all('submissions').size }
+
+          expect(updated).to be_a(Hash)
+          expect(updated['name']).to eq 'Grace'
+          expect(service.find('submissions', created._id).name).to eq 'Grace'
+        end
+
+        it 'creates an entry linked to another through a belongs_to' do
+          makers = Locomotive::Steam::ContentEntryRepository.new(
+            adapter, site, AdapterParityFixture::LOCALE, type_repository)
+            .with(type_repository.by_slug('makers'))
+          entry  = nil
+
+          expect {
+            entry = service.create('specimens',
+                                   name: 'Linked',
+                                   category_id: option_id(:category, 'alpha'),
+                                   topic_ids: [],
+                                   maker_id: makers.by_slug('maker-one')._id)
+          }.to change { service.all('specimens').size }.by(1)
+
+          expect(entry.maker.name).to eq 'Maker one'
+        end
+
+        it 'creates an entry that leaves a many_to_many unset' do
+          pending 'ContentEntry#to_hash reads a many_to_many the built entry never set'
+
+          entry = service.create('specimens',
+                                 name: 'Unlinked',
+                                 category_id: option_id(:category, 'alpha'))
+
+          expect(entry['name']).to eq 'Unlinked'
         end
 
       end
