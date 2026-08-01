@@ -172,12 +172,19 @@ module AdapterParityFixture
       document
     end
 
+    # Engine stores localized select IDs by locale.
+    def select_option_id(slug, name, value)
+      return value && WagonSite.option_id(slug, name, value) unless value.is_a?(Hash)
+
+      value.to_h { |locale, option| [locale.to_s, WagonSite.option_id_in(slug, name, locale, option)] }
+    end
+
     def write_attribute(document, slug, name, value)
       field = WagonSite.field(slug, name)
 
       case field.fetch('type')
       when :select
-        document["#{name}_id"] = value && WagonSite.option_id(slug, name, value)
+        document["#{name}_id"] = select_option_id(slug, name, value)
       when :belongs_to
         document["#{name}_id"] = value && WagonSite.entry_id(field.fetch('class_name'), value)
       when :many_to_many

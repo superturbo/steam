@@ -21,14 +21,17 @@ fields:
     type: json
 - category:
     type: select
-    select_options: ['alpha', 'beta']
+    select_options: ['alpha', 'beta', 'gamma']
 - tier:
     type: select
+    localized: true
     select_options:
       en: [Gold, Silver]
       fr: [Or, Argent]
 - at:
     type: date_time
+- held_on:
+    type: date
 - maker:
     type: belongs_to
     class_name: makers

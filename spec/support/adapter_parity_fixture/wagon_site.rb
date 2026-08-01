@@ -160,6 +160,14 @@ module AdapterParityFixture
       oid("option:#{slug}:#{name}:#{option}")
     end
 
+    # Localized labels resolve to the same option ID.
+    def option_id_in(slug, name, locale, option)
+      declared = select_options(slug, name).detect { |candidate| candidate[locale.to_s] == option } ||
+        raise(Error, "unknown option #{option.inspect} on #{slug}/#{name} in #{locale}")
+
+      option_id(slug, name, option_name(declared))
+    end
+
     def entry_id(slug, entry_slug)
       entry(slug, entry_slug)
 

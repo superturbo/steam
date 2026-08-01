@@ -194,7 +194,7 @@ describe 'Adapter parity' do
       # still has to answer the same when a locale asks for it.
       it 'reads a select option declared without a locale' do
         expect(type_repository.select_options(specimens, :category).map { |option| option.name[:en] })
-          .to eq %w(alpha beta)
+          .to eq %w(alpha beta gamma)
       end
 
     end
@@ -358,6 +358,96 @@ describe 'Adapter parity' do
 
     end
 
+    describe 'the content entry repository' do
+
+      def specimens(locale = AdapterParityFixture::LOCALE)
+        types = Locomotive::Steam::ContentTypeRepository.new(adapter, site, locale)
+
+        Locomotive::Steam::ContentEntryRepository.new(adapter, site, locale, types)
+          .with(types.by_slug('specimens'))
+      end
+
+      it 'counts what it holds' do
+        expect(specimens.count).to eq 6
+      end
+
+      it 'finds one entry by its slug' do
+        expect(specimens.by_slug('scalars').name).to eq 'Scalars'
+      end
+
+      it 'finds an entry by the id it gave it' do
+        embedded = specimens.by_slug('embedded')
+
+        expect(specimens.find(embedded._id).name).to eq 'Embedded'
+        expect(specimens.all(_id: embedded._id.to_s).map(&:name)).to eq ['Embedded']
+      end
+
+      it 'reads the ends of its own order' do
+        expect(specimens.first.name).to eq 'All missing'
+        expect(specimens.last.name).to eq 'Zero'
+      end
+
+      it 'answers whether anything matches a condition' do
+        expect(specimens.exists?(flag: true)).to be(true)
+      end
+
+      it 'reads the first entry matching a condition' do
+        expect(specimens.first(flag: true).name).to eq 'Scalars'
+      end
+
+      it 'walks to the neighbours of an entry in that order' do
+        embedded = specimens.by_slug('embedded')
+
+        expect(specimens.next(embedded).name).to eq 'Explicit nils'
+        expect(specimens.previous(embedded).name).to eq 'Arrays'
+      end
+
+      it 'orders by a field' do
+        expect(slugs(order_by: 'name')).to eq %w(all-missing arrays embedded explicit-nils scalars zero)
+      end
+
+      # True, then false, then the rows with no value at all.
+      it 'orders by a field and a direction, breaking the tie with a second' do
+        expect(slugs(order_by: 'flag.desc, name'))
+          .to eq %w(scalars arrays embedded zero all-missing explicit-nils)
+      end
+
+      it 'filters by a belongs_to and by its absence' do
+        expect(slugs(maker: 'maker-one')).to match_array %w(arrays scalars)
+        expect(slugs(maker: nil)).to match_array %w(all-missing explicit-nils zero)
+      end
+
+      it 'filters by a localized select through the name each locale gives it' do
+        expect(specimens(:en).all(tier: 'Gold').map(&:name)).to eq ['Scalars']
+        expect(specimens(:fr).all(tier: 'Or').map(&:name)).to eq ['Scalars']
+        expect(specimens(:en).all(tier: 'Silver').map(&:name)).to eq ['Arrays']
+        expect(specimens(:fr).all(tier: 'Argent').map(&:name)).to eq ['Arrays']
+      end
+
+      # A select without the localized flag resolves its option in the default
+      # locale, whichever locale asks.
+      it 'filters by a non-localized select through the default locale' do
+        expect(specimens(:fr).all(category: 'alpha').map(&:name)).to eq ['Scalars']
+      end
+
+      it 'groups by a select option, including unused options and entries without one' do
+        groups = specimens.group_by_select_option(:category)
+
+        expect(groups.map { |group| group[:name] }).to eq ['alpha', 'beta', 'gamma', nil]
+        expect(groups.map { |group| group[:entries].size }).to eq [1, 1, 0, 4]
+      end
+
+      it 'filters and orders by a date-time' do
+        expect(slugs('at.lte' => Time.utc(2020, 1, 1), order_by: 'at desc')).to eq %w(arrays scalars)
+      end
+
+      it 'filters and orders by a date' do
+        expect(slugs('held_on.lte' => Date.new(2020, 1, 1), order_by: 'held_on desc'))
+          .to eq %w(arrays scalars)
+      end
+
+    end
+
     it 'holds the same rows in both stores' do
       expect(slugs({})).to match_array %w(all-missing arrays embedded explicit-nils scalars zero)
     end
@@ -387,11 +477,12 @@ describe 'Adapter parity' do
         end
       end
 
-      it 'reads a scalar, a boolean and a date identically' do
+      it 'reads a scalar, a boolean, a date and a date-time identically' do
         expect(entry('scalars').score).to eq 5
         expect(entry('scalars').flag).to eq true
         expect(entry('zero').score).to eq 0
         expect(entry('scalars').at.to_i).to eq Time.utc(2012, 6, 6, 12, 0, 0).to_i
+        expect(entry('scalars').held_on).to eq Date.new(2013, 2, 11)
       end
 
       def slugs_of(collection)

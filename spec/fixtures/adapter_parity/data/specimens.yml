@@ -20,7 +20,11 @@
     score: 5
     flag: true
     category: alpha
+    tier:
+      en: Gold
+      fr: Or
     at: '2012-06-06T12:00:00Z'
+    held_on: '2013-02-11'
     maker: maker-one
     topics:
       - topic-a
@@ -36,6 +40,12 @@
       - y
     score: 10
     flag: false
+    category: beta
+    tier:
+      en: Silver
+      fr: Argent
+    at: '2015-03-01T08:30:00Z'
+    held_on: '2016-09-30'
     maker: maker-one
     topics:
       - topic-b
@@ -50,6 +60,8 @@
       a: 1
     score: 5
     flag: false
+    at: '2021-05-04T09:15:00Z'
+    held_on: '2022-08-17'
     maker: maker-two
 
 # Zero has no associations.

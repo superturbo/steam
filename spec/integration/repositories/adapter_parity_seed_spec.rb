@@ -96,6 +96,26 @@ describe 'Adapter parity seed' do
     expect(document('scalars')['category_id']).to be_a(BSON::ObjectId)
   end
 
+  def specimens_field(name)
+    AdapterParityFixture.mongodb_client['locomotive_content_types']
+                        .find('site_id' => AdapterParityFixture::SITE_ID, 'slug' => 'specimens').first
+                        .fetch('entries_custom_fields').detect { |field| field['name'] == name }
+  end
+
+  it 'writes a localized select as the same declared option id in each locale' do
+    options = specimens_field('tier').fetch('select_options')
+
+    expect(document('scalars')['tier_id']).to eq(
+      'en' => options.first['_id'],
+      'fr' => options.first['_id']
+    )
+
+    expect(document('arrays')['tier_id']).to eq(
+      'en' => options.last['_id'],
+      'fr' => options.last['_id']
+    )
+  end
+
   it 'writes a belongs_to as the target id, and leaves it out when unlinked' do
     expect(document('scalars')['maker_id']).to be_a(BSON::ObjectId)
     expect(document('zero')).not_to have_key('maker_id')
@@ -107,6 +127,10 @@ describe 'Adapter parity seed' do
 
   it 'writes a date time as a Time, not the string the fixture holds' do
     expect(document('scalars')['at']).to be_a(Time)
+  end
+
+  it 'writes a date as UTC midnight' do
+    expect(document('scalars')['held_on']).to eq Time.utc(2013, 2, 11)
   end
 
   it 'writes the label as a field, since only Wagon keeps it in the key' do
