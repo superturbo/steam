@@ -213,54 +213,6 @@ module QueryParity
       type: 'events', conditions: { 'price.lte' => nil }, expected: [] },
   ].freeze
 
-  # Rejected inputs must fail the same way on every adapter, not just return
-  # different rows. The table grows with each enforcement commit.
-  ERROR_CASES = [
-    { desc: 'a removed legacy operator (neq)',
-      type: 'bands', conditions: { 'name.neq' => 'The who' },
-      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
-
-    { desc: 'a removed legacy operator (matches)',
-      type: 'bands', conditions: { 'name.matches' => 'who' },
-      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
-
-    { desc: 'an unknown operator',
-      type: 'bands', conditions: { 'name.bogus' => 'x' },
-      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
-
-    { desc: 'a nested field path',
-      type: 'bands', conditions: { 'address.location.ne' => 'x' },
-      error: Locomotive::Steam::Adapters::Query::InvalidValue },
-
-    { desc: 'an empty field name',
-      type: 'bands', conditions: { '' => 'x' },
-      error: Locomotive::Steam::Adapters::Query::InvalidValue },
-
-    { desc: 'an empty field with an operator suffix',
-      type: 'bands', conditions: { '.ne' => 'x' },
-      error: Locomotive::Steam::Adapters::Query::InvalidValue },
-
-    { desc: 'a raw Mongo operator in a key',
-      type: 'bands', conditions: { '$where' => 'sleep(1000)' },
-      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
-
-    { desc: 'a raw Mongo operator nested in a value',
-      type: 'bands', conditions: { 'name' => { '$ne' => 'The who' } },
-      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
-
-    { desc: 'a raw Mongo operator inside an array value',
-      type: 'bands', conditions: { 'name' => [{ '$ne' => 'The who' }] },
-      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
-
-    { desc: 'a structural comparison operand',
-      type: 'events', conditions: { 'price.gt' => [1] },
-      error: Locomotive::Steam::Adapters::Query::InvalidValue },
-
-    { desc: 'a boolean comparison operand',
-      type: 'events', conditions: { 'price.gt' => true },
-      error: Locomotive::Steam::Adapters::Query::InvalidValue },
-  ].freeze
-
 end
 
 shared_examples_for 'canonical query parity' do
@@ -284,12 +236,6 @@ shared_examples_for 'canonical query parity' do
       else
         expect(slugs).to match_array(c[:expected])
       end
-    end
-  end
-
-  QueryParity::ERROR_CASES.each do |c|
-    it "rejects #{c[:desc]}" do
-      expect { parity_slugs(c[:type], c[:conditions]) }.to raise_error(c[:error])
     end
   end
 

@@ -51,6 +51,54 @@ describe 'Adapter parity' do
       conditions: { 'score.nin' => [nil] }, expected: %w(arrays embedded scalars zero) }
   ].freeze
 
+  # A rejected input has to be rejected the same way everywhere, not merely
+  # return different rows.
+  ERROR_CASES = [
+    { desc: 'a removed legacy operator (neq)',
+      conditions: { 'name.neq' => 'Scalars' },
+      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
+
+    { desc: 'a removed legacy operator (matches)',
+      conditions: { 'name.matches' => 'Scal' },
+      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
+
+    { desc: 'an unknown operator',
+      conditions: { 'name.bogus' => 'x' },
+      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
+
+    { desc: 'a nested field path',
+      conditions: { 'address.location.ne' => 'x' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an empty field name',
+      conditions: { '' => 'x' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an empty field with an operator suffix',
+      conditions: { '.ne' => 'x' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a raw Mongo operator in a key',
+      conditions: { '$where' => 'sleep(1000)' },
+      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
+
+    { desc: 'a raw Mongo operator nested in a value',
+      conditions: { 'name' => { '$ne' => 'Scalars' } },
+      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
+
+    { desc: 'a raw Mongo operator inside an array value',
+      conditions: { 'name' => [{ '$ne' => 'Scalars' }] },
+      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
+
+    { desc: 'a structural comparison operand',
+      conditions: { 'score.gt' => [1] },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a boolean comparison operand',
+      conditions: { 'score.gt' => true },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue }
+  ].freeze
+
   shared_examples_for 'the adapter parity dataset' do
 
     let(:site_repository) { Locomotive::Steam::SiteRepository.new(adapter) }
@@ -653,6 +701,10 @@ describe 'Adapter parity' do
 
     CASES.each do |c|
       it(c[:desc]) { expect(slugs(c[:conditions])).to match_array(c[:expected]) }
+    end
+
+    ERROR_CASES.each do |c|
+      it("rejects #{c[:desc]}") { expect { slugs(c[:conditions]) }.to raise_error(c[:error]) }
     end
 
     # Row parity cannot expose differences in materialized values.
