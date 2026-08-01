@@ -130,6 +130,36 @@ describe 'Adapter parity' do
 
     end
 
+    describe 'the content types' do
+
+      let(:specimens) { type_repository.by_slug('specimens') }
+
+      it 'holds the same types under the same slugs' do
+        expect(type_repository.all.map(&:slug)).to match_array %w(makers specimens topics)
+      end
+
+      it 'reads what the fixture says about a type and its fields' do
+        expect(specimens.description).to eq 'Every field state covered by adapter parity'
+        expect(type_repository.fields_for(specimens).by_name('name').hint).to eq 'The name the entry is labelled by'
+        expect(type_repository.look_for_unique_fields(specimens).keys).to eq %w(name)
+      end
+
+      it 'reads a localized select option in each locale' do
+        options = type_repository.select_options(specimens, :tier)
+
+        expect(options.map { |option| option.name.translations })
+          .to eq [{ 'en' => 'Gold', 'fr' => 'Or' }, { 'en' => 'Silver', 'fr' => 'Argent' }]
+      end
+
+      # A name declared without a locale is stored differently by each side, and
+      # still has to answer the same when a locale asks for it.
+      it 'reads a select option declared without a locale' do
+        expect(type_repository.select_options(specimens, :category).map { |option| option.name[:en] })
+          .to eq %w(alpha beta)
+      end
+
+    end
+
     describe 'the sections' do
 
       let(:sections) { Locomotive::Steam::SectionRepository.new(adapter, site, AdapterParityFixture::LOCALE) }

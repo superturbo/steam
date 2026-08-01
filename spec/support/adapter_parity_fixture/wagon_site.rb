@@ -137,8 +137,23 @@ module AdapterParityFixture
       oid("field:#{slug}:#{name}")
     end
 
+    # Normalize documented option forms into one translation hash per option.
+    def select_options(slug, name)
+      declared = field(slug, name).fetch('select_options')
+
+      return declared.map { |value| { default_locale.to_s => value } } unless declared.is_a?(Hash)
+
+      declared.each_with_object([]) do |(locale, values), options|
+        values.each_with_index { |value, index| (options[index] ||= {})[locale] = value }
+      end
+    end
+
+    def option_name(option)
+      option.fetch(default_locale.to_s)
+    end
+
     def option_id(slug, name, option)
-      unless field(slug, name).fetch('select_options').include?(option)
+      unless select_options(slug, name).any? { |declared| option_name(declared) == option }
         raise Error, "unknown option #{option.inspect} on #{slug}/#{name}"
       end
 

@@ -1,10 +1,13 @@
 name: Specimens
 slug: specimens
+description: Every field state covered by adapter parity
 label_field_name: name
 order_by: name
 fields:
 - name:
     type: string
+    hint: The name the entry is labelled by
+    unique: true
 - title:
     type: string
     localized: true
@@ -19,6 +22,11 @@ fields:
 - category:
     type: select
     select_options: ['alpha', 'beta']
+- tier:
+    type: select
+    select_options:
+      en: [Gold, Silver]
+      fr: [Or, Argent]
 - at:
     type: date_time
 - maker:

@@ -107,7 +107,7 @@ module AdapterParityFixture
         'order_by'              => type.fetch('order_by'),
         'order_direction'       => type.fetch('order_direction', 'asc'),
         'entries_custom_fields' => WagonSite.fields(slug).each_with_index.map { |f, i| field(slug, f, i) }
-      }
+      }.tap { |document| document['description'] = type['description'] if type.key?('description') }
     end
 
     def field(slug, field, position)
@@ -124,11 +124,13 @@ module AdapterParityFixture
         'unique'    => field.fetch('unique', false)
       }
 
-      if (options = field['select_options'])
-        document['select_options'] = options.each_with_index.map do |option, index|
-          { '_id'      => WagonSite.option_id(slug, name, option),
+      document['hint'] = field['hint'] if field.key?('hint')
+
+      if field['select_options']
+        document['select_options'] = WagonSite.select_options(slug, name).each_with_index.map do |option, index|
+          { '_id'      => WagonSite.option_id(slug, name, WagonSite.option_name(option)),
             'position' => index,
-            'name'     => { WagonSite.default_locale.to_s => option } }
+            'name'     => option }
         end
       end
 
