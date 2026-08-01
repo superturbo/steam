@@ -39,16 +39,18 @@ module AdapterParityFixture
       slug.humanize
     end
 
+    # Wagon slugifies the filename, so a file may be named more loosely than
+    # the slug it is served under.
     def split_locale(basename)
-      slug, suffix = basename.split('.', 2)
+      name, suffix = basename.split('.', 2)
 
-      return [slug, WagonSite.default_locale] if suffix.nil?
+      return [name.permalink, WagonSite.default_locale] if suffix.nil?
 
       unless WagonSite.locales.include?(suffix)
         raise Error, "#{basename}.liquid: #{suffix.inspect} is not a declared locale"
       end
 
-      [slug, suffix.to_sym]
+      [name.permalink, suffix.to_sym]
     end
 
   end

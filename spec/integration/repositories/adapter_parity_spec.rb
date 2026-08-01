@@ -182,10 +182,19 @@ describe 'Adapter parity' do
 
     describe 'the snippets' do
 
-      def snippet(slug, locale)
-        repository = Locomotive::Steam::SnippetRepository.new(adapter, site, locale)
+      def snippets(locale)
+        Locomotive::Steam::SnippetRepository.new(adapter, site, locale)
+      end
 
-        Locomotive::Steam::SnippetFinderService.new(repository).find(slug)
+      def snippet(slug, locale)
+        Locomotive::Steam::SnippetFinderService.new(snippets(locale)).find(slug)
+      end
+
+      # A file may be named more loosely than the slug it is served under, so
+      # both stores have to slugify it the same way.
+      it 'holds the same snippets under the same slugs' do
+        expect(snippets(:en).all.map(&:slug)).to match_array %w(a_complicated-one banner greeting)
+        expect(snippet('a_complicated-one', :en).liquid_source.strip).to eq 'Complicated en'
       end
 
       it 'reads back the same identity' do
@@ -209,10 +218,22 @@ describe 'Adapter parity' do
 
     describe 'the translations' do
 
-      def translator(locale)
-        repository = Locomotive::Steam::TranslationRepository.new(adapter, site, locale)
+      def translations(locale)
+        Locomotive::Steam::TranslationRepository.new(adapter, site, locale)
+      end
 
-        Locomotive::Steam::TranslatorService.new(repository, locale)
+      def translator(locale)
+        Locomotive::Steam::TranslatorService.new(translations(locale), locale)
+      end
+
+      it 'holds the same keys in both stores' do
+        expect(translations(:en).group_by_key.keys)
+          .to match_array %w(adapter_parity_english_only hello_name powered_by)
+      end
+
+      it 'finds a translation by its key' do
+        expect(translations(:en).by_key('powered_by').values)
+          .to eq('en' => 'Powered by', 'fr' => 'Propulsé par')
       end
 
       it 'translates a key in each locale' do
