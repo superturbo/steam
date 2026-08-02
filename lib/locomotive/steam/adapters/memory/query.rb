@@ -44,12 +44,12 @@ module Locomotive::Steam
         end
 
         def limit(num)
-          @limit = num
+          @limit = Adapters::Query::Window.normalize(num, :limit)
           self
         end
 
         def offset(num)
-          @offset = num
+          @offset = Adapters::Query::Window.normalize(num, :offset)
           self
         end
 
@@ -66,8 +66,8 @@ module Locomotive::Steam
         end
 
         def all
-          # TODO: instrumentation here
-          # Locomotive::Common::Logger.debug "[dataset][#{@dataset.name}] conditions = #{@conditions.map(&:inspect).join(' AND ')}"
+          return [] if @limit == 0
+
           limited sorted(filtered)
         end
 
@@ -78,15 +78,11 @@ module Locomotive::Steam
         end
 
         def limited(entries)
-          return [] if @limit == 0
           return entries if @offset == 0 && @limit.nil?
 
           subentries = entries.drop(@offset || 0)
-          if @limit.kind_of? Integer
-            subentries.take(@limit)
-          else
-            subentries
-          end
+
+          @limit.nil? ? subentries : subentries.take(@limit)
         end
 
         def filtered

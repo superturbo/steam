@@ -411,6 +411,40 @@ describe 'Adapter parity' do
         expect(slugs('at.lte' => Time.utc(2020, 1, 1), order_by: 'at desc')).to eq %w(arrays scalars)
       end
 
+      describe 'windowing' do
+
+        it 'takes the first rows of its own order' do
+          expect(specimens.all { limit(2) }.map(&:name)).to eq ['All missing', 'Arrays']
+        end
+
+        it 'skips the rows before the window' do
+          expect(specimens.all { offset(4) }.map(&:name)).to eq %w(Scalars Zero)
+        end
+
+        it 'skips before it takes' do
+          expect(specimens.all { offset(1).limit(2) }.map(&:name)).to eq %w(Arrays Embedded)
+        end
+
+        it 'returns no rows for a zero limit' do
+          expect(specimens.all { limit(0) }).to eq []
+          expect(specimens.first { limit(0) }).to be_nil
+        end
+
+        it 'validates criteria for a zero limit' do
+          expect { specimens.all('$where' => 'sleep(1)') { limit(0) } }
+            .to raise_error(Locomotive::Steam::Adapters::Query::UnsupportedOperator)
+        end
+
+        it 'refuses a window it cannot describe' do
+          [-> { specimens.all { limit(-1) } },
+           -> { specimens.all { offset(-1) } },
+           -> { specimens.all { limit('2') } }].each do |query|
+            expect(&query).to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+          end
+        end
+
+      end
+
       it 'filters and orders by a date' do
         expect(slugs('held_on.lte' => Date.new(2020, 1, 1), order_by: 'held_on desc'))
           .to eq %w(arrays scalars)

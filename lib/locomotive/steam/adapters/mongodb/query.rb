@@ -34,11 +34,11 @@ module Locomotive::Steam
         end
 
         def offset(offset)
-          self.tap { @skip = offset }
+          self.tap { @skip = Adapters::Query::Window.normalize(offset, :offset) }
         end
 
         def limit(limit)
-          self.tap { @limit = limit }
+          self.tap { @limit = Adapters::Query::Window.normalize(limit, :limit) }
         end
 
         def against(collection)

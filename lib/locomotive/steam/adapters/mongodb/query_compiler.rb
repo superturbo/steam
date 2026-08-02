@@ -18,14 +18,19 @@ module Locomotive::Steam
           @aliases = aliases
         end
 
+        # MongoDB treats limit 0 as unlimited; use a match-none filter after
+        # validating the criteria.
         def compile(criteria, sort:, fields:, skip:, limit:)
+          empty_window = limit == 0
+          filter       = build_filter(criteria)
+
           CompiledQuery.new(
-            filter: build_filter(criteria),
+            filter: empty_window ? match_none_filter : filter,
             options: {
               sort: build_sort(sort),
               projection: build_fields(fields),
               skip: skip,
-              limit: limit
+              limit: empty_window ? nil : limit
             }.compact
           )
         end
@@ -59,6 +64,11 @@ module Locomotive::Steam
                 "#{subject} may not contain a Mongo operator: #{name.inspect}"
         end
 
+        # A fresh one each time; compiled filters are mutable.
+        def match_none_filter
+          { '_id' => { '$in' => [] } }
+        end
+
         def literal(field, value)
           { aliased(field) => plain_value(value) }
         end
@@ -66,8 +76,7 @@ module Locomotive::Steam
         def expand(field, operator, value)
           operand = operand(operator.value_kind, value)
 
-          # Build a fresh match-none clause; compiled filters are mutable.
-          return { '_id' => { '$in' => [] } } if Adapters::Query::Values.match_none?(operand)
+          return match_none_filter if Adapters::Query::Values.match_none?(operand)
 
           { aliased(field) => { operator.mongo_operator => operand } }
         end
