@@ -19,7 +19,7 @@ describe Locomotive::Steam::Adapters::MongoDB::Query do
 
       before { query.where(criterion) }
 
-      it { expect(query.criteria).to eq({ fullpath: 'index' }) }
+      it { expect(query.criteria).to eq [[:fullpath, 'index']] }
 
     end
 
@@ -29,7 +29,17 @@ describe Locomotive::Steam::Adapters::MongoDB::Query do
 
       before { query.where(criterion).where(another_criterion) }
 
-      it { expect(query.criteria).to eq({ fullpath: 'index', published: true }) }
+      it { expect(query.criteria).to eq [[:fullpath, 'index'], [:published, true]] }
+
+    end
+
+    context 'twice on the same field' do
+
+      before { query.where(fullpath: 'index').where(fullpath: 'about') }
+
+      it 'keeps both, since each one still has to be met' do
+        expect(query.criteria).to eq [[:fullpath, 'index'], [:fullpath, 'about']]
+      end
 
     end
 
@@ -69,7 +79,7 @@ describe Locomotive::Steam::Adapters::MongoDB::Query do
 
     before { query.where(published: true).order_by(title: :asc) }
 
-    it { expect(query.criteria).to eq({ published: true }) }
+    it { expect(query.criteria).to eq [[:published, true]] }
     it { expect(query.sort).to eq([[:title, :asc]]) }
 
   end

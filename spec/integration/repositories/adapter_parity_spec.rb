@@ -411,6 +411,13 @@ describe 'Adapter parity' do
         expect(slugs('at.lte' => Time.utc(2020, 1, 1), order_by: 'at desc')).to eq %w(arrays scalars)
       end
 
+      it 'requires every where clause, including repeated fields' do
+        expect(specimens.all { where('score.gt' => 1).where('score.lt' => 8) }.map(&:name))
+          .to match_array %w(Embedded Scalars)
+
+        expect(specimens.all { where(name: 'Scalars').where(name: 'Zero') }).to eq []
+      end
+
       describe 'windowing' do
 
         it 'takes the first rows of its own order' do

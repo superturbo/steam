@@ -9,15 +9,17 @@ module Locomotive::Steam
         attr_reader :criteria, :sort
 
         def initialize(scope, localized_attributes, &block)
-          @criteria, @sort, @fields, @skip, @limit = {}, nil, nil, nil, nil
+          @criteria, @sort, @fields, @skip, @limit = [], nil, nil, nil, nil
           @scope, @localized_attributes = scope, localized_attributes
 
           instance_eval(&block) if block_given?
         end
 
+        # A list, not a hash: two calls naming one field are two conditions to
+        # meet, and merging would keep only the last.
         def where(criterion = nil)
           self.tap do
-            @criteria.merge!(criterion) unless criterion.nil?
+            @criteria.concat(criterion.to_a) unless criterion.nil?
           end
         end
 
