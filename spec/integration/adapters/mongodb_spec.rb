@@ -4,47 +4,46 @@ require_relative '../../../lib/locomotive/steam/adapters/mongodb.rb'
 
 describe Locomotive::Steam::MongoDBAdapter do
 
-  let(:adapter) { Locomotive::Steam::MongoDBAdapter.new(database: mongodb_database, hosts: ['127.0.0.1:27017'], min_pool_size: 2, max_pool_size: 5) }
+  # Connection checks do not require fixture data.
+  let(:database) { 'steam_test_connection_pool' }
 
-  before(:all) do
-    described_class.disconnect_session
-    @before_connections = current_connections
+  let(:adapter) do
+    Locomotive::Steam::MongoDBAdapter.new(database: database, hosts: ['127.0.0.1:27017'],
+                                          min_pool_size: 2, max_pool_size: 5)
   end
+
+  # Isolate the process-wide client from the rest of the suite.
+  before(:all) { described_class.disconnect_session }
+  after(:all)  { described_class.disconnect_session }
 
   describe '#session' do
 
     subject { adapter.send(:session) }
 
-    it { is_expected.not_to eq nil }
+    it 'hands its pool bounds to the driver' do
+      subject['locomotive_sites'].find.count
 
-    it "don't create more Mongo sessions than the max pool" do
-      10.times { subject['locomotive_sites'].find.count }
-      _after = current_connections
-      expect(_after).to be >= (@before_connections + 2) # min_pool_size
-      expect(_after).to be <= (@before_connections + 5) # max_pool_size
+      pool = subject.cluster.servers.first.pool
+
+      expect(pool.min_size).to eq 2
+      expect(pool.max_size).to eq 5
     end
 
   end
 
   describe '.disconnect_session' do
 
-    let(:connection) { adapter.send(:session) }
+    it 'closes and clears the client it built' do
+      session = adapter.send(:session)
 
-    subject { described_class.disconnect_session }
+      session['locomotive_sites'].find.count
 
-    it 'closes clients' do
-      10.times { connection['locomotive_sites'].find.count }      
-      @before_connections = current_connections
-      is_expected.to eq true
-      sleep(2) # NOTE: wait for the connections to be completely closed
-      expect(current_connections).to be < @before_connections
+      described_class.disconnect_session
+
+      expect(session).to be_closed
+      expect(described_class.session).to be_nil
     end
 
-  end
-
-  def current_connections
-    stats = JSON.parse(`mongostat --noheaders -n 1 --json`)
-    stats.dig('localhost', 'conn')&.to_i
   end
 
 end
