@@ -6,8 +6,6 @@ services:
   steam:
     build:
       context: .
-    environment:
-      MONGO_HOST: db
     network_mode: "service:db"
     volumes:
       - .:/workspace

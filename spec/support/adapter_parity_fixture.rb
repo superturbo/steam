@@ -16,10 +16,10 @@ module AdapterParityFixture
   LOCALES = WagonSite.locales
   LOCALE  = WagonSite.default_locale
 
-  # MongoDBAdapter reuses its first client process-wide, so integration fixtures
-  # must share one database until the client becomes injectable.
-  DATABASE = 'steam_test_1_8_x'
-  HOSTS    = ['127.0.0.1:27017']
+  # MongoDBAdapter memoizes one client process-wide, so its integration specs
+  # share a database. Each fixture inserts and removes its own documents.
+  DATABASE = Spec::MONGODB_DATABASE
+  HOSTS    = Spec::MONGODB_HOSTS
 
   module_function
 

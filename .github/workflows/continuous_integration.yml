@@ -19,8 +19,6 @@ jobs:
         image: mongo:7.0
         ports:
           - 27017:27017
-        env:
-          MONGO_INITDB_DATABASE: steam_test_1_8_x
         options: >-
           --health-cmd "echo 'db.runCommand("ping").ok' | mongosh --quiet"
           --health-interval 10s
@@ -31,11 +29,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
-
-      - name: Install MongoDB tools
-        run: |
-          wget https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2204-x86_64-100.9.4.deb
-          sudo apt install ./mongodb-database-tools-ubuntu2204-x86_64-100.9.4.deb
 
       - name: Install imagemagick (convert)
         run: |
@@ -48,9 +41,6 @@ jobs:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
           cache-version: 1
-
-      - name: Prepare the DB
-        run: bundle exec rake mongodb:test:seed
 
       - name: Test
         run: bundle exec rspec

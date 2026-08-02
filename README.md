@@ -78,26 +78,17 @@ docker-compose run --rm steam bash
 
 Now you are inside the container you can
 
-Init the database with demo data
-
-```
-rake mongodb:test:seed
-```
-
 Run all the test with
 
 ```
-rake spec
+bundle exec rake spec
 ```
 
 Run specific test with rspec
 
 ```
-rspec spec/unit/middlewares/locale_spec.rb
-
+bundle exec rspec spec/unit/middlewares/locale_spec.rb
 ```
-
-Note: you do not need to prefix with bundle exec as the docky-ruby image already add it automatically
 
 ## License
 

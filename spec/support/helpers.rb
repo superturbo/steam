@@ -3,14 +3,6 @@ require 'locomotive/common'
 module Spec
   module Helpers
 
-    def mongodb_database
-      'steam_test_1_8_x'
-    end
-
-    def mongodb_site_id
-      BSON::ObjectId.from_string('5baf76f4a9533004e4ae9840')
-    end
-
     def reset!
       FileUtils.rm_rf(File.expand_path('../../../site', __FILE__))
     end

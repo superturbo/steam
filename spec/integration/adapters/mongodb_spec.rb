@@ -4,11 +4,9 @@ require_relative '../../../lib/locomotive/steam/adapters/mongodb.rb'
 
 describe Locomotive::Steam::MongoDBAdapter do
 
-  # Connection checks do not require fixture data.
-  let(:database) { 'steam_test_connection_pool' }
-
   let(:adapter) do
-    Locomotive::Steam::MongoDBAdapter.new(database: database, hosts: ['127.0.0.1:27017'],
+    Locomotive::Steam::MongoDBAdapter.new(database: Spec::MONGODB_DATABASE,
+                                          hosts: Spec::MONGODB_HOSTS,
                                           min_pool_size: 2, max_pool_size: 5)
   end
 
