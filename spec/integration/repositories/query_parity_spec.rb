@@ -245,6 +245,10 @@ describe 'Query parity' do
 
     { desc: 'a float that is not finite',
       conditions: { 'price.gt' => Float::INFINITY },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an order_by criterion naming more than a field and a direction',
+      conditions: { order_by: 'name asc desc' },
       error: Locomotive::Steam::Adapters::Query::InvalidValue }
   ].freeze
 

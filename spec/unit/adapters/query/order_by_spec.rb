@@ -73,6 +73,11 @@ describe Locomotive::Steam::Adapters::Query::OrderBy do
       expect { decode([['name', 'asc', 'extra']]) }.to raise_error(invalid)
     end
 
+    it 'rejects a written criterion with too many tokens' do
+      ['name asc desc', 'name.asc.desc', 'name|asc|desc', 'title desc, name asc desc']
+        .each { |spec| expect { decode(spec) }.to raise_error(invalid) }
+    end
+
     it 'rejects a $-prefixed field on both engines' do
       expect { decode('$natural') }.to raise_error(unsupported)
       expect { decode('$where' => 1) }.to raise_error(unsupported)

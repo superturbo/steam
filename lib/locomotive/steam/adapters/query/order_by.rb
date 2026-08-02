@@ -57,7 +57,13 @@ module Locomotive::Steam
         end
 
         def parse(part)
-          pair(*part.strip.split(/[\s.|]+/).first(2))
+          tokens = part.strip.split(/[\s.|]+/)
+
+          if tokens.length > 2
+            raise InvalidValue, "an order_by criterion takes a field and an optional direction, got #{part.inspect}"
+          end
+
+          pair(*tokens)
         end
 
         def pair(field = nil, direction = nil)
