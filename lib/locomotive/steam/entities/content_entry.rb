@@ -133,11 +133,11 @@ module Locomotive::Steam
     end
 
     def _cast_integer(field)
-      _cast_convertor(field.name, &:to_i)
+      _cast_convertor(field.name) { |value| value&.to_i }
     end
 
     def _cast_float(field)
-      _cast_convertor(field.name, &:to_f)
+      _cast_convertor(field.name) { |value| value&.to_f }
     end
 
     def _cast_json(field)

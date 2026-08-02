@@ -369,6 +369,11 @@ describe 'Adapter parity' do
         expect(slugs(order_by: 'name')).to eq %w(all-missing arrays embedded explicit-nils scalars zero)
       end
 
+      it 'orders the rows with no number after the ones with zero' do
+        expect(slugs(order_by: 'score.desc, name'))
+          .to eq %w(arrays embedded scalars zero all-missing explicit-nils)
+      end
+
       it 'reverses that order however the direction is spelled' do
         descending = %w(zero scalars explicit-nils embedded arrays all-missing)
 
@@ -706,9 +711,10 @@ describe 'Adapter parity' do
         expect(entry('zero').topics.all).to eq []
       end
 
-      it 'reads a null scalar as nil, not as zero' do
-        pending 'ContentEntry#_cast_integer turns a null into 0 on both stores'
+      it 'keeps missing and null numeric values nil' do
         expect(entry('explicit-nils').score).to be_nil
+        expect(entry('all-missing').score).to be_nil
+        expect(entry('zero').price).to be_nil
       end
 
       # Translation presence and effective value are verified separately.

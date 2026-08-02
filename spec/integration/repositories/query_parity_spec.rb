@@ -142,8 +142,26 @@ describe 'Query parity' do
     { desc: 'lte against a nil operand matches nothing',
       conditions: { 'score.lte' => nil }, expected: [] },
 
-    # A field without value casting preserves the stored missing/null
-    # distinction.
+    { desc: 'eq nil matches a missing or null integer field',
+      conditions: { score: nil }, expected: %w(all-missing explicit-nils) },
+
+    { desc: 'ne nil matches only a present, non-null integer field',
+      conditions: { 'score.ne' => nil }, expected: %w(arrays embedded scalars zero) },
+
+    { desc: 'in [nil] matches a missing or null integer field',
+      conditions: { 'score.in' => [nil] }, expected: %w(all-missing explicit-nils) },
+
+    { desc: 'nin [nil] excludes a missing or null integer field',
+      conditions: { 'score.nin' => [nil] }, expected: %w(arrays embedded scalars zero) },
+
+    { desc: 'eq nil matches a missing float field',
+      conditions: { price: nil },
+      expected: %w(all-missing embedded explicit-nils zero) },
+
+    { desc: 'ne nil matches only a present float field',
+      conditions: { 'price.ne' => nil }, expected: %w(arrays scalars) },
+
+    # Untyped fields exercise the same missing/null semantics without entity casting.
     { desc: 'eq nil matches a missing or null array field',
       conditions: { labels: nil },
       expected: %w(all-missing explicit-nils scalars zero) },
@@ -173,22 +191,6 @@ describe 'Query parity' do
     { desc: 'exists false on an array field',
       conditions: { 'labels.exists' => false },
       expected: %w(all-missing scalars zero) }
-  ].freeze
-
-  # Memory casts a present null integer to 0 before matching; MongoDB filters
-  # raw BSON.
-  INTEGER_NULL_CASES = [
-    { desc: 'eq nil matches a missing or null field',
-      conditions: { score: nil }, expected: %w(all-missing explicit-nils) },
-
-    { desc: 'ne nil matches only present, non-null fields',
-      conditions: { 'score.ne' => nil }, expected: %w(arrays embedded scalars zero) },
-
-    { desc: 'in [nil] matches a missing or null field',
-      conditions: { 'score.in' => [nil] }, expected: %w(all-missing explicit-nils) },
-
-    { desc: 'nin [nil] excludes a missing or null field',
-      conditions: { 'score.nin' => [nil] }, expected: %w(arrays embedded scalars zero) }
   ].freeze
 
   # A rejected input has to be rejected the same way everywhere, not merely
@@ -274,13 +276,6 @@ describe 'Query parity' do
       it("rejects #{c[:desc]}") { expect { slugs(c[:conditions]) }.to raise_error(c[:error]) }
     end
 
-    INTEGER_NULL_CASES.each do |c|
-      it(c[:desc]) do
-        pending 'Memory filters through the accessor, where nil.to_i is 0' if filesystem?
-        expect(slugs(c[:conditions])).to match_array(c[:expected])
-      end
-    end
-
   end
 
   context 'MongoDB' do
@@ -290,8 +285,6 @@ describe 'Query parity' do
 
     it_should_behave_like 'the query semantics' do
       let(:adapter) { AdapterParityFixture.mongodb_adapter }
-
-      def filesystem?; false; end
     end
 
   end
@@ -300,8 +293,6 @@ describe 'Query parity' do
 
     it_should_behave_like 'the query semantics' do
       let(:adapter) { AdapterParityFixture.filesystem_adapter }
-
-      def filesystem?; true; end
     end
 
   end
