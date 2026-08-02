@@ -775,6 +775,78 @@ describe Locomotive::Steam::ContentEntryRepository do
         end
       end
 
+      context 'the decimal grammar a numeric string has to meet' do
+
+        it 'reads a number through surrounding whitespace' do
+          expect(subject_for('price.lt' => ' 10 ')).to include('price.lt' => 10.0)
+          expect(subject_for('price.lt' => "\t-10\n")).to include('price.lt' => -10.0)
+        end
+
+        it 'reads the sign, fraction and exponent it allows' do
+          expect(subject_for('price.lt' => '+1.5e2')).to include('price.lt' => 150.0)
+          expect(subject_for('price.lt' => '-.5')).to include('price.lt' => -0.5)
+        end
+
+        # Ruby 3.3 rejects a trailing dot where 3.4 reads 5.0, so the grammar
+        # cannot accept it without meaning different things on each.
+        ['1_5', '0x1', '1 0', '1e9999', '5.', '  ', ''].each do |bad|
+          it "leaves #{bad.inspect} as it is" do
+            expect(subject_for('price.lt' => bad)).to include('price.lt' => bad)
+          end
+        end
+
+        context 'on an integer field' do
+          let(:field_type) { :integer }
+
+          it 'reads a plain decimal' do
+            expect(subject_for('price.lt' => ' +42 ')).to include('price.lt' => 42)
+          end
+
+          ['1_5', '4.2', '0x1'].each do |bad|
+            it "leaves #{bad.inspect} as it is" do
+              expect(subject_for('price.lt' => bad)).to include('price.lt' => bad)
+            end
+          end
+
+          it 'leaves an out of range integer as it is' do
+            [2**63, -2**63 - 1].map(&:to_s).each do |beyond|
+              expect(subject_for('price.lt' => beyond)).to include('price.lt' => beyond)
+            end
+          end
+        end
+
+      end
+
+      context 'a typed number outside the supported domain' do
+
+        it 'rejects an integer beyond either end of int64' do
+          [2**63, -2**63 - 1].each do |bad|
+            expect { subject_for('price.lt' => bad) }
+              .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+          end
+        end
+
+        it 'accepts an integer at either end of int64' do
+          [2**63 - 1, -2**63].each do |edge|
+            expect(subject_for('price.lt' => edge)).to include('price.lt' => edge)
+          end
+        end
+
+        it 'rejects a float that is not finite' do
+          [Float::INFINITY, -Float::INFINITY, Float::NAN].each do |bad|
+            expect { subject_for('price.lt' => bad) }
+              .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+          end
+        end
+
+        # BSON stores it as a Decimal128; the bounds above do not apply.
+        it 'passes a BigDecimal through untouched' do
+          expect(subject_for('price.lt' => BigDecimal('1.5')))
+            .to include('price.lt' => BigDecimal('1.5'))
+        end
+
+      end
+
       context 'an unsupported value kind' do
         it 'raises' do
           [{ 'a' => 1 }, true].each do |bad|

@@ -218,6 +218,14 @@ module Locomotive
 
       class Conditions
 
+        # Numeric strings accept decimal notation only.
+        INTEGER_FORMAT = /\A[+-]?\d+\z/.freeze
+        FLOAT_FORMAT   = /\A[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?\z/.freeze
+
+        INT64_RANGE = (-2**63..2**63 - 1).freeze
+
+        private_constant :INTEGER_FORMAT, :FLOAT_FORMAT, :INT64_RANGE
+
         def initialize(conditions = {}, fields, target_repository)
           @conditions = conditions.try(:with_indifferent_access) || {}
           @fields = fields
@@ -357,7 +365,8 @@ module Locomotive
         def value_to_number(value, type)
           case value
           # a Range or Regexp is its own plain-field expression, not an operand
-          when nil, Numeric, Range, Regexp then value
+          when nil, Range, Regexp then value
+          when Numeric then validate_numeric_bounds!(value)
           when Array  then value.map { |element| value_to_number(element, type) }
           when Set    then value.map { |element| value_to_number(element, type) }
           when String then parse_number(value, type)
@@ -367,11 +376,35 @@ module Locomotive
           end
         end
 
-        # Invalid strings remain non-numeric; they must not gain nil semantics.
+        # Invalid numeric strings remain strings, avoiding errors and nil
+        # semantics.
         def parse_number(value, type)
-          type == :integer ? Integer(value, 10) : Float(value)
-        rescue ArgumentError, TypeError
-          value
+          candidate = value.strip
+          format    = type == :integer ? INTEGER_FORMAT : FLOAT_FORMAT
+
+          return value unless format.match?(candidate)
+
+          number = type == :integer ? Integer(candidate, 10) : Float(candidate)
+
+          within_numeric_bounds?(number) ? number : value
+        end
+
+        # Typed numeric operands must stay within the supported query domain.
+        def validate_numeric_bounds!(value)
+          return value if within_numeric_bounds?(value)
+
+          raise Locomotive::Steam::Adapters::Query::InvalidValue,
+                "numeric value is outside supported bounds: #{value.inspect}"
+        end
+
+        # Typed integers outside BSON int64 and non-finite floats are invalid
+        # operands. Other Numerics, BigDecimal among them, are left alone.
+        def within_numeric_bounds?(number)
+          case number
+          when Integer then INT64_RANGE.cover?(number)
+          when Float   then number.finite?
+          else true
+          end
         end
 
         def parse_date(value)

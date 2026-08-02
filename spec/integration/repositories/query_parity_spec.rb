@@ -108,6 +108,21 @@ describe 'Query parity' do
     { desc: 'a numeric condition given as a String, the way params arrive',
       conditions: { 'score.gt' => '5' }, expected: %w(arrays) },
 
+    { desc: 'a numeric String read through surrounding whitespace',
+      conditions: { 'score.gt' => ' 5 ' }, expected: %w(arrays) },
+
+    # Ruby would read these as 15 and 1.0; neither is a number here, and the
+    # integer and float fields reach that answer through their own grammar.
+    { desc: 'an underscored integer String is not a number',
+      conditions: { 'score.gt' => '1_5' }, expected: [] },
+
+    { desc: 'a hexadecimal String is not a number',
+      conditions: { 'price.gt' => '0x1' }, expected: [] },
+
+    # The decimal overflows Float and remains a non-numeric operand.
+    { desc: 'a String that overflows to infinity is not a number either',
+      conditions: { 'price.lt' => '1e9999' }, expected: [] },
+
     { desc: 'a numeric list operand given as Strings',
       conditions: { 'price.in' => %w(5.5 6) }, expected: %w(arrays) },
 
@@ -221,6 +236,15 @@ describe 'Query parity' do
 
     { desc: 'a boolean comparison operand',
       conditions: { 'score.gt' => true },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    # Typed integers outside BSON int64 and non-finite floats are invalid operands.
+    { desc: 'an integer beyond int64',
+      conditions: { 'score.gt' => 2**63 },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a float that is not finite',
+      conditions: { 'price.gt' => Float::INFINITY },
       error: Locomotive::Steam::Adapters::Query::InvalidValue }
   ].freeze
 
