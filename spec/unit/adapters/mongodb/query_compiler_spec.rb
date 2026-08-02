@@ -26,7 +26,7 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
     it { expect(filter('tags.in'  => 'awesome')).to eq('tags' => { '$in'  => ['awesome'] }) }
     it { expect(filter('tags.in'  => [1, 2])).to    eq('tags' => { '$in'  => [1, 2] }) }
     it { expect(filter('tags.in'  => Set[1, 2])).to eq('tags' => { '$in'  => [1, 2] }) }
-    it { expect(filter('type.nin' => :x)).to        eq('type' => { '$nin' => [:x] }) }
+    it { expect(filter('type.nin' => :x)).to        eq('type' => { '$nin' => ['x'] }) }
     it { expect(filter('tags.all' => %w(a b))).to   eq('tags' => { '$all' => %w(a b) }) }
     it { expect { filter('tags.in' => (1..3)) }.to raise_error(invalid) }
   end
@@ -71,8 +71,8 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
 
       expect(first['_id']['$in']).not_to be(second['_id']['$in'])
     end
-    it 'rejects a structural or boolean comparison operand' do
-      [[1], { 'a' => 1 }, Set[1], true].each do |value|
+    it 'rejects a structural comparison operand' do
+      [[1], { 'a' => 1 }, Set[1]].each do |value|
         expect { filter('price.gt' => value) }.to raise_error(invalid)
       end
     end

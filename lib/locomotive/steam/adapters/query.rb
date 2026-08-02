@@ -13,6 +13,7 @@ module Locomotive::Steam
   end
 end
 
+require_relative 'query/comparison'
 require_relative 'query/values'
 require_relative 'query/operators'
 require_relative 'query/criteria'

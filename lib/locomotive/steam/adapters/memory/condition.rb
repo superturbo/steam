@@ -88,15 +88,13 @@ module Locomotive::Steam
 
         private
 
-        # Comparisons go through <=> so a missing field or a value of another
-        # type is simply no match: incompatible values do not match under
-        # MongoDB type bracketing either. An array field matches when one of its
-        # elements does.
+        # Missing, null and incomparable values do not satisfy scalar
+        # comparisons. Array fields match when any element does.
         def compare(value, operand = @scalar)
           return false if Adapters::Query::Values.match_none?(operand)
 
           elements(value).any? do |candidate|
-            order = candidate <=> operand
+            order = Adapters::Query::Comparison.compare(candidate, operand)
 
             order.nil? ? false : yield(order)
           end
@@ -150,7 +148,8 @@ module Locomotive::Steam
             stored.size == operand.size &&
               stored.zip(operand).all? { |element, other| same?(element, other) }
           else
-            stored == operand
+            Adapters::Query::Comparison.normalize_scalar(stored) ==
+              Adapters::Query::Comparison.normalize_scalar(operand)
           end
         end
 

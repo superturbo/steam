@@ -57,7 +57,7 @@ describe Locomotive::Steam::Adapters::Query::Values do
     it { expect(described_class.list([1, 2])).to eq [1, 2] }
     it { expect(described_class.list(5)).to eq [5] }
     it { expect(described_class.list(nil)).to eq [nil] }
-    it { expect(described_class.list(['a', 1, nil, :sym])).to eq ['a', 1, nil, :sym] }
+    it { expect(described_class.list(['a', 1, nil, :sym])).to eq ['a', 1, nil, 'sym'] }
     it { expect(described_class.list(Set.new([1, 2]))).to match_array [1, 2] }
 
     it 'does not alias the caller array' do
@@ -93,7 +93,11 @@ describe Locomotive::Steam::Adapters::Query::Values do
   describe '.literal' do
 
     it 'passes scalars and nil through' do
-      [5, 'a', :sym, nil, 4.2].each { |v| expect(described_class.literal(v)).to eq v }
+      [5, 'a', nil, 4.2].each { |v| expect(described_class.literal(v)).to eq v }
+    end
+
+    it 'reads a Symbol as the string naming it' do
+      expect(described_class.literal(:sym)).to eq 'sym'
     end
 
     it 'normalizes a Set to an Array, recursively' do
@@ -141,9 +145,13 @@ describe Locomotive::Steam::Adapters::Query::Values do
   describe '.scalar' do
 
     it 'passes comparable values through unchanged' do
-      [5, 4.2, 'a', :sym, Time.now, Date.today, BigDecimal('1.5')].each do |value|
+      [5, 4.2, 'a', Time.now, Date.today, BigDecimal('1.5')].each do |value|
         expect(described_class.scalar(value)).to eq value
       end
+    end
+
+    it 'reads a Symbol as the string naming it' do
+      expect(described_class.scalar(:sym)).to eq 'sym'
     end
 
     it 'passes a comparable value the query layer does not know about' do
@@ -161,8 +169,8 @@ describe Locomotive::Steam::Adapters::Query::Values do
       end
     end
 
-    it 'rejects booleans — they are not Comparable, so ordering has no contract' do
-      [true, false].each { |value| expect { described_class.scalar(value) }.to raise_error(invalid) }
+    it 'orders booleans, which both engines sort false before true' do
+      [true, false].each { |value| expect(described_class.scalar(value)).to eq value }
     end
 
   end

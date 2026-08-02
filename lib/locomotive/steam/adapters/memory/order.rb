@@ -35,22 +35,19 @@ module Locomotive::Steam
 
         class Direction
 
-          BOOLEANS = { false => 0, true => 1 }.freeze
-
           attr_reader :obj
 
           def initialize(obj); @obj = obj; end
 
           protected
 
-          # Incomparable values must stay incomparable; treating them as equal breaks transitivity.
+          # Sorting places missing and null values before comparing present ones.
           def compare(one, other)
             return 0  if one.nil? && other.nil?
             return -1 if one.nil?
             return 1  if other.nil?
-            return BOOLEANS[one] <=> BOOLEANS[other] if BOOLEANS.key?(one) && BOOLEANS.key?(other)
 
-            one <=> other
+            Adapters::Query::Comparison.compare(one, other)
           end
 
         end

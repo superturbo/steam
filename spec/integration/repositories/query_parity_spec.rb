@@ -20,6 +20,25 @@ describe 'Query parity' do
     { desc: 'equality on a boolean field',
       conditions: { flag: false }, expected: %w(arrays embedded zero) },
 
+    { desc: 'gt treats true as greater than false',
+      conditions: { 'flag.gt' => false }, expected: %w(scalars) },
+
+    { desc: 'gte on a boolean matches both values',
+      conditions: { 'flag.gte' => false }, expected: %w(arrays embedded scalars zero) },
+
+    { desc: 'lt on a boolean excludes missing and null fields',
+      conditions: { 'flag.lt' => true }, expected: %w(arrays embedded zero) },
+
+    { desc: 'a Symbol names the same value as the string it spells',
+      conditions: { name: :Scalars }, expected: %w(scalars) },
+
+    { desc: 'a Symbol inside a list names it too',
+      conditions: { 'name.in' => [:Scalars] }, expected: %w(scalars) },
+
+    { desc: 'ne against a Symbol excludes what eq would have matched',
+      conditions: { 'name.ne' => :Scalars },
+      expected: %w(all-missing arrays embedded explicit-nils zero) },
+
     { desc: 'equality on a select field resolves the option name',
       conditions: { category: 'alpha' }, expected: %w(scalars) },
 
@@ -236,7 +255,7 @@ describe 'Query parity' do
       conditions: { 'score.gt' => [1] },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
 
-    { desc: 'a boolean comparison operand',
+    { desc: 'a boolean operand for a numeric field',
       conditions: { 'score.gt' => true },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
 

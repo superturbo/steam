@@ -36,7 +36,7 @@ module Locomotive::Steam
           when Array then value.map { |element| literal(element) }
           when Set   then value.map { |element| literal(element) }
           when Hash  then literal_hash(value)
-          else value
+          else Comparison.normalize_scalar(value)
           end
         end
 
@@ -108,15 +108,16 @@ module Locomotive::Steam
         end
 
         # gt/gte/lt/lte operand: a single comparable value. Structures are
-        # rejected because their ordering is not the same on both engines, and
-        # booleans because they are not Comparable in Ruby — ordering them has
-        # no defined contract. Anything else Comparable passes through
-        # untouched, so an ActiveSupport time or a BSON id keeps working.
+        # rejected because their ordering is not the same on both engines.
+        # Booleans are ordered, false before true, the way both engines sort
+        # them. Anything else Comparable passes through, so an ActiveSupport
+        # time or a BSON id keeps working.
         def scalar(value)
           case value
           when nil                              then MATCH_NONE
           when Array, Hash, Set, Range, Regexp  then raise InvalidValue, "#{value.class} cannot be compared: #{value.inspect}"
-          when Comparable                       then value
+          when true, false                      then value
+          when Comparable                       then Comparison.normalize_scalar(value)
           else raise InvalidValue, "value is not comparable: #{value.inspect}"
           end
         end

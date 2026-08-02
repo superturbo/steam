@@ -288,8 +288,8 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
       expect(match?('f.lte', 5, with_value)).to eq true
     end
 
-    it 'rejects a structural or boolean operand' do
-      [[1], { 'a' => 1 }, Set[1], true].each do |value|
+    it 'rejects a structural operand' do
+      [[1], { 'a' => 1 }, Set[1]].each do |value|
         expect { described_class.new('f.gt', value, :en) }.to raise_error(invalid)
       end
     end
