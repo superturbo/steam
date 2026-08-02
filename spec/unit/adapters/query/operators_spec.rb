@@ -18,7 +18,7 @@ describe Locomotive::Steam::Adapters::Query::Operators do
       lte:    [:scalar,  '$lte'],
       in:     [:list,    '$in'],
       nin:    [:list,    '$nin'],
-      all:    [:list,    '$all'],
+      all:    [:all_list, '$all'],
       size:   [:size,    '$size'],
       exists: [:boolean, '$exists'],
     }.each do |name, (value_kind, mongo_operator)|

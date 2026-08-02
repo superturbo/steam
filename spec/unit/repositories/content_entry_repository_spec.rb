@@ -570,13 +570,14 @@ describe Locomotive::Steam::ContentEntryRepository do
           .to include('category_id.in' => [42])
       end
 
-      it 'maps an unknown option name to an impossible id, not nil' do
-        expect(prepared_for('category' => 'nope')).to include('category_id' => false)
+      it 'maps an unknown option name to the unmatchable sentinel, not nil' do
+        expect(prepared_for('category' => 'nope'))
+          .to include('category_id' => Locomotive::Steam::Adapters::Query::Values.unmatchable)
       end
 
       it 'maps an unknown option name inside a list the same way' do
         expect(prepared_for('category.nin' => %w(CMS nope)))
-          .to include('category_id.nin' => [42, false])
+          .to include('category_id.nin' => [42, Locomotive::Steam::Adapters::Query::Values.unmatchable])
       end
 
       it 'still resolves a nil operand to nil' do

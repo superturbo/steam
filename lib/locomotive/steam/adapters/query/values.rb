@@ -9,7 +9,7 @@ module Locomotive::Steam
       # normalized value or raises InvalidValue. See docs/query_semantics.md.
       module Values
 
-        VALUE_KINDS = %i(literal list scalar boolean size range).freeze
+        VALUE_KINDS = %i(literal list all_list scalar boolean size range).freeze
 
         private_constant :VALUE_KINDS
 
@@ -27,15 +27,16 @@ module Locomotive::Steam
 
         # A literal operand: scalars pass through, a Set becomes an Array and a
         # Hash gets String keys, both recursively. Regexp and Range are rejected
-        # because they carry their own plain-field semantics. Always returns new
-        # containers — callers may reuse the criteria they passed in.
+        # because they carry their own plain-field semantics. Containers are
+        # rebuilt rather than mutated — callers may reuse the criteria they
+        # passed in.
         def literal(value)
           case value
           when Regexp, Range
             raise InvalidValue, "#{value.class} is only supported on a plain field: #{value.inspect}"
-          when Array then value.map { |element| literal(element) }
-          when Set   then value.map { |element| literal(element) }
-          when Hash  then literal_hash(value)
+          when Array then propagate_unmatchable(value.map { |element| literal(element) })
+          when Set   then propagate_unmatchable(value.map { |element| literal(element) })
+          when Hash  then propagate_unmatchable(literal_hash(value))
           else Comparison.normalize_scalar(value)
           end
         end
@@ -95,16 +96,17 @@ module Locomotive::Steam
           value
         end
 
-        # Marks a condition that can never match. Comparing against nothing is
-        # not an error — a missing `params` value must render an empty list, not
-        # a 500 — but it must mean the same on every engine, so the engines
-        # translate this sentinel instead of passing nil to the driver.
-        MATCH_NONE = Object.new.freeze
+        # A unique value no stored field can equal.
+        UNMATCHABLE = Object.new.freeze
 
-        private_constant :MATCH_NONE
+        private_constant :UNMATCHABLE
 
-        def match_none?(value)
-          value.equal?(MATCH_NONE)
+        def unmatchable
+          UNMATCHABLE
+        end
+
+        def unmatchable?(value)
+          value.equal?(UNMATCHABLE)
         end
 
         # gt/gte/lt/lte operand: a single comparable value. Structures are
@@ -113,8 +115,10 @@ module Locomotive::Steam
         # them. Anything else Comparable passes through, so an ActiveSupport
         # time or a BSON id keeps working.
         def scalar(value)
+          return value if unmatchable?(value)
+
           case value
-          when nil                              then MATCH_NONE
+          when nil                              then UNMATCHABLE
           when Array, Hash, Set, Range, Regexp  then raise InvalidValue, "#{value.class} cannot be compared: #{value.inspect}"
           when true, false                      then value
           when Comparable                       then Comparison.normalize_scalar(value)
@@ -128,12 +132,32 @@ module Locomotive::Steam
         # literals, which keeps nested arrays and embedded documents (both have
         # defined MongoDB semantics) and rejects Regexp and Range.
         def list(value)
+          list_elements(value).reject { |element| unmatchable?(element) }
+        end
+
+        # all requires every element; one unmatchable element makes it unsatisfiable.
+        def all_list(value)
+          elements = list_elements(value)
+
+          elements.any? { |element| unmatchable?(element) } ? UNMATCHABLE : elements
+        end
+
+        def list_elements(value)
           case value
           when Range then raise InvalidValue, "a Range is not allowed in a list operator: #{value.inspect}"
           when Array, Set then value.map { |element| literal(element) }
           else [literal(value)]
           end
         end
+
+        # A container with an unmatchable element cannot match as a literal.
+        def propagate_unmatchable(normalized)
+          values = normalized.is_a?(Hash) ? normalized.values : normalized
+
+          values.any? { |element| unmatchable?(element) } ? UNMATCHABLE : normalized
+        end
+
+        private_class_method :list_elements, :propagate_unmatchable
 
       end
 

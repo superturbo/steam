@@ -159,8 +159,8 @@ describe Locomotive::Steam::Adapters::Query::Values do
       expect(described_class.scalar(id)).to eq id
     end
 
-    it 'turns nil into the match-none sentinel' do
-      expect(described_class.match_none?(described_class.scalar(nil))).to eq true
+    it 'turns nil into the unmatchable sentinel' do
+      expect(described_class.unmatchable?(described_class.scalar(nil))).to eq true
     end
 
     it 'rejects structures — their ordering is not the same on both engines' do
@@ -175,11 +175,11 @@ describe Locomotive::Steam::Adapters::Query::Values do
 
   end
 
-  describe '.match_none?' do
+  describe '.unmatchable?' do
 
-    it { expect(described_class.match_none?(described_class.scalar(nil))).to eq true }
-    it { expect(described_class.match_none?(nil)).to eq false }
-    it { expect(described_class.match_none?(5)).to eq false }
+    it { expect(described_class.unmatchable?(described_class.scalar(nil))).to eq true }
+    it { expect(described_class.unmatchable?(nil)).to eq false }
+    it { expect(described_class.unmatchable?(5)).to eq false }
 
   end
 

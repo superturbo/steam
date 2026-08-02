@@ -299,17 +299,22 @@ module Locomotive
           case value
           when Array then value.map { |element| value_to_primary_key(element) }
           when Set   then value.map { |element| value_to_primary_key(element) }
-          else @target_repository.adapter.make_id(value)
+          else
+            id = @target_repository.adapter.make_id(value)
+
+            id == false ? Locomotive::Steam::Adapters::Query::Values.unmatchable : id
           end
         end
 
-        # An unresolved name must not gain nil semantics.
+        # An unresolved name must not gain nil semantics, and false is a value
+        # a field can hold.
         def value_to_option_id(field, value)
           case value
           when nil   then nil
           when Array then value.map { |element| value_to_option_id(field, element) }
           when Set   then value.map { |element| value_to_option_id(field, element) }
-          else field.select_options.by_name(value).try(:_id) || false
+          else field.select_options.by_name(value).try(:_id) ||
+               Locomotive::Steam::Adapters::Query::Values.unmatchable
           end
         end
 

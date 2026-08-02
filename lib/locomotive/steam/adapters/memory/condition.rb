@@ -6,8 +6,6 @@ module Locomotive::Steam
 
       class Condition
 
-        LIST_OPERATORS = %i(in nin all).freeze
-
         attr_reader :field, :operator, :value
 
         def initialize(operator_and_field, value, locale)
@@ -64,7 +62,8 @@ module Locomotive::Steam
           values = Adapters::Query::Values
 
           case @operator
-          when *LIST_OPERATORS then @list    = values.coerce(:list, @value)
+          when :all            then @list    = values.coerce(:all_list, @value)
+          when :in, :nin       then @list    = values.coerce(:list, @value)
           when :exists         then @exists  = values.coerce(:boolean, @value)
           when :size           then @size    = values.coerce(:size, @value)
           when :range          then @range   = values.coerce(:range, @value)
@@ -91,7 +90,7 @@ module Locomotive::Steam
         # Missing, null and incomparable values do not satisfy scalar
         # comparisons. Array fields match when any element does.
         def compare(value, operand = @scalar)
-          return false if Adapters::Query::Values.match_none?(operand)
+          return false if Adapters::Query::Values.unmatchable?(operand)
 
           elements(value).any? do |candidate|
             order = Adapters::Query::Comparison.compare(candidate, operand)
@@ -132,7 +131,7 @@ module Locomotive::Steam
         end
 
         def all_match?(value)
-          return false if @list.empty?
+          return false if Adapters::Query::Values.unmatchable?(@list) || @list.empty?
 
           field_candidates = candidates(value)
           @list.all? { |operand| field_candidates.any? { |candidate| same?(candidate, operand) } }

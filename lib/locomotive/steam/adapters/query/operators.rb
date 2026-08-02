@@ -20,7 +20,7 @@ module Locomotive::Steam
           Operator.new(:lte,    '$lte',    :scalar),
           Operator.new(:in,     '$in',     :list),
           Operator.new(:nin,    '$nin',    :list),
-          Operator.new(:all,    '$all',    :list),
+          Operator.new(:all,    '$all',    :all_list),
           Operator.new(:size,   '$size',   :size),
           Operator.new(:exists, '$exists', :boolean),
         ].freeze

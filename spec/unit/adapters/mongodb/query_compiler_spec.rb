@@ -13,6 +13,57 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
     compiler.compile(criteria, sort: nil, fields: nil, skip: nil, limit: nil).filter
   end
 
+  describe '#compile filter — the unmatchable sentinel' do
+
+    let(:nothing) { Locomotive::Steam::Adapters::Query::Values.unmatchable }
+    let(:none)    { { '_id' => { '$in' => [] } } }
+
+    it 'answers a plain field with a filter nothing satisfies' do
+      expect(filter('category_id' => nothing)).to eq none
+    end
+
+    it 'answers eq and a comparison the same way' do
+      expect(filter('category_id.eq' => nothing)).to eq none
+      expect(filter('category_id.gt' => nothing)).to eq none
+    end
+
+    it 'answers ne with a filter everything satisfies' do
+      expect(filter('category_id.ne' => nothing)).to eq({})
+    end
+
+    it 'drops it from in and nin, leaving what was asked for' do
+      expect(filter('category_id.in'  => ['x', nothing])).to eq('category_id' => { '$in'  => ['x'] })
+      expect(filter('category_id.nin' => ['x', nothing])).to eq('category_id' => { '$nin' => ['x'] })
+    end
+
+    it 'empties in and fills nin when it was the only element' do
+      expect(filter('category_id.in'  => [nothing])).to eq('category_id' => { '$in'  => [] })
+      expect(filter('category_id.nin' => [nothing])).to eq('category_id' => { '$nin' => [] })
+    end
+
+    it 'leaves all unsatisfiable, since every element is asked for' do
+      expect(filter('category_id.all' => ['x', nothing])).to eq none
+    end
+
+    it 'answers a plain array or document holding it the same way' do
+      expect(filter('category_id' => ['x', nothing])).to eq none
+      expect(filter('category_id' => { 'a' => nothing })).to eq none
+    end
+
+    it 'answers eq and ne on such a value the way it answers the value itself' do
+      expect(filter('category_id.eq' => ['x', nothing])).to eq none
+      expect(filter('category_id.ne' => ['x', nothing])).to eq({})
+    end
+
+    it 'drops an impossible candidate from in and nin' do
+      expect(filter('category_id.in'  => [['x', nothing], ['y']]))
+        .to eq('category_id' => { '$in' => [['y']] })
+      expect(filter('category_id.nin' => [['x', nothing], ['y']]))
+        .to eq('category_id' => { '$nin' => [['y']] })
+    end
+
+  end
+
   describe '#compile filter — operator expansion' do
     it { expect(filter('price.gt'  => 5)).to   eq('price'  => { '$gt'  => 5 }) }
     it { expect(filter('price.gte' => 5)).to   eq('price'  => { '$gte' => 5 }) }

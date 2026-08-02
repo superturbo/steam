@@ -59,6 +59,33 @@ describe 'Query parity' do
     { desc: 'an unresolved select name cannot collide with a stored option id',
       conditions: { category: 0 }, expected: [] },
 
+    { desc: 'an unresolved option matches nothing as a plain field',
+      conditions: { category: 'nope' }, expected: [] },
+
+    { desc: 'ne with an unresolved option matches everything',
+      conditions: { 'category.ne' => 'nope' },
+      expected: %w(all-missing arrays embedded explicit-nils scalars zero) },
+
+    { desc: 'in drops an unresolved option and keeps the rest',
+      conditions: { 'category.in' => %w(alpha nope) }, expected: %w(scalars) },
+
+    { desc: 'nin drops it too, excluding only what resolved',
+      conditions: { 'category.nin' => %w(alpha nope) },
+      expected: %w(all-missing arrays embedded explicit-nils zero) },
+
+    { desc: 'all with an unresolved option matches nothing',
+      conditions: { 'category.all' => %w(alpha nope) }, expected: [] },
+
+    { desc: 'in with only an unresolved option matches nothing',
+      conditions: { 'category.in' => %w(nope) }, expected: [] },
+
+    { desc: 'nin with only an unresolved option excludes nothing',
+      conditions: { 'category.nin' => %w(nope) },
+      expected: %w(all-missing arrays embedded explicit-nils scalars zero) },
+
+    { desc: 'an id absent from both stores matches nothing',
+      conditions: { _id: 'not-an-objectid' }, expected: [] },
+
     { desc: 'scalar equality on a string field',
       conditions: { name: 'Scalars' }, expected: %w(scalars) },
 

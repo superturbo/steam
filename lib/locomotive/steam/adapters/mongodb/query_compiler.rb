@@ -70,13 +70,20 @@ module Locomotive::Steam
         end
 
         def literal(field, value)
-          { aliased(field) => plain_value(value) }
+          normalized = plain_value(value)
+
+          return match_none_filter if Adapters::Query::Values.unmatchable?(normalized)
+
+          { aliased(field) => normalized }
         end
 
         def expand(field, operator, value)
           operand = operand(operator.value_kind, value)
 
-          return match_none_filter if Adapters::Query::Values.match_none?(operand)
+          if Adapters::Query::Values.unmatchable?(operand)
+            # Nothing equals an unmatchable operand, so ne matches everything.
+            return operator.name == :ne ? {} : match_none_filter
+          end
 
           { aliased(field) => { operator.mongo_operator => operand } }
         end
