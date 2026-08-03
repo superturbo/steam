@@ -570,6 +570,10 @@ describe Locomotive::Steam::ContentEntryRepository do
           .to include('category_id.in' => [42])
       end
 
+      it 'leaves a non-field operand for its own kind to judge' do
+        expect(prepared_for('category.exists' => /x/)).to include('category_id.exists' => /x/)
+      end
+
       it 'maps an unknown option name to the unmatchable sentinel, not nil' do
         expect(prepared_for('category' => 'nope'))
           .to include('category_id' => Locomotive::Steam::Adapters::Query::Values.unmatchable)

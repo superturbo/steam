@@ -295,6 +295,42 @@ describe 'Query parity' do
       conditions: { 'price.gt' => Float::INFINITY },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
 
+    { desc: 'an ordering on the primary key',
+      conditions: { '_id.gt' => 'a' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a Range on the primary key',
+      conditions: { _id: ('a'..'z') },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a Regexp on the primary key',
+      conditions: { _id: /scal/ },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an ordering on a select field',
+      conditions: { 'category.gt' => 'alpha' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a Regexp on a select field',
+      conditions: { category: /alph/ },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an ordering on a belongs_to field',
+      conditions: { 'maker.gt' => 'maker-one' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a Regexp on a many_to_many field',
+      conditions: { topics: /topic/ },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a Regexp inside a select list',
+      conditions: { 'category.in' => [/alph/] },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a Regexp inside a belongs_to document',
+      conditions: { maker: { _id: /maker/ } },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
     { desc: 'an order_by criterion naming more than a field and a direction',
       conditions: { order_by: 'name asc desc' },
       error: Locomotive::Steam::Adapters::Query::InvalidValue }

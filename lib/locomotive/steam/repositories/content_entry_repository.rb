@@ -235,12 +235,12 @@ module Locomotive
 
         def prepare
           # _id (primary key)
-          _prepare([Locomotive::Steam::ContentTypeField.new(name: '_id')]) do |_, value|
+          _prepare([Locomotive::Steam::ContentTypeField.new(name: '_id')], id_backed: true) do |_, value|
             value_to_primary_key(value)
           end
 
           # select
-          _prepare(@fields.selects) do |field, value|
+          _prepare(@fields.selects, id_backed: true) do |field, value|
             # FIXME: [only in Wagon], if the user changes the locale, since all content is stored in memory,
             # we have to change the locale in the repository used to fetch the select options.
             field.select_options.locale = @locale
@@ -255,10 +255,10 @@ module Locomotive
           _prepare(@fields.numbers) { |field, value| value_to_number(value, field.type) }
 
           # belongs_to
-          _prepare(@fields.belongs_to) { |field, value| value_to_id(value, field.target_id) }
+          _prepare(@fields.belongs_to, id_backed: true) { |field, value| value_to_id(value, field.target_id) }
           
           # many_to_many
-          _prepare(@fields.many_to_many) { |field, value| values_to_ids(value, field.target_id) }
+          _prepare(@fields.many_to_many, id_backed: true) { |field, value| values_to_ids(value, field.target_id) }
 
           @conditions
         end
@@ -272,7 +272,7 @@ module Locomotive
         private_constant :NON_FIELD_VALUE_KINDS
 
         # Prepare every criterion independently; a field may have multiple bounds.
-        def _prepare(fields, &block)
+        def _prepare(fields, id_backed: false, &block)
           by_name = fields.index_by { |field| field.name.to_s }
 
           return if by_name.empty?
@@ -283,7 +283,11 @@ module Locomotive
 
             next if field.nil?
 
-            value    = @conditions.delete(key)
+            value       = @conditions.delete(key)
+            field_value = operator.nil? || !NON_FIELD_VALUE_KINDS.include?(operator.value_kind)
+
+            validate_id_query!(name, operator, value) if id_backed && field_value
+
             new_name = field.persisted_name + (operator ? ".#{operator.name}" : '')
 
             @conditions[new_name] =
@@ -303,6 +307,34 @@ module Locomotive
             id = @target_repository.adapter.make_id(value)
 
             id == false ? Locomotive::Steam::Adapters::Query::Values.unmatchable : id
+          end
+        end
+
+        ORDERING_OPERATORS = %i(gt gte lt lte).freeze
+
+        private_constant :ORDERING_OPERATORS
+
+        # A field matched by id has no order the stores agree on: a Filesystem
+        # _id is a slug and a select option is its position, where MongoDB
+        # issues an ObjectId.
+        def validate_id_query!(name, operator, value)
+          if operator && ORDERING_OPERATORS.include?(operator.name)
+            raise Locomotive::Steam::Adapters::Query::InvalidValue,
+                  "#{name} is matched by id, which has no order: #{operator.name}"
+          end
+
+          return unless contains_range_or_pattern?(value)
+
+          raise Locomotive::Steam::Adapters::Query::InvalidValue,
+                "#{name} is matched by id, which a range or pattern cannot describe"
+        end
+
+        def contains_range_or_pattern?(value)
+          case value
+          when Range, Regexp then true
+          when Array, Set    then value.any? { |element| contains_range_or_pattern?(element) }
+          when Hash          then value.values.any? { |element| contains_range_or_pattern?(element) }
+          else false
           end
         end
 
