@@ -22,15 +22,47 @@ module Locomotive
 
             protected
 
+            # The tag is parsed once and rendered many times, so a render reads
+            # its own criteria rather than storing them on the tag.
             def evaluate_attributes(context)
-              @attributes = context[attributes_var_name] || {} if attributes_var_name.present?
+              criteria = attributes_var_name.present? ? context[attributes_var_name] || {} : attributes
 
-              attributes.inject({}) do |memo, (key, value)|
+              unless criteria.is_a?(Hash)
+                raise ::Liquid::SyntaxError,
+                      "Invalid with_scope criteria: expected a hash, got #{criteria.class}"
+              end
+
+              evaluated = criteria.each_with_object({}) do |(key, value), memo|
                 # _slug instead of _permalink
                 _key = key.to_s == '_permalink' ? '_slug' : key.to_s
 
-                memo.merge({ _key => evaluate_attribute(context, value) })
+                validate_criterion!(_key)
+
+                memo[_key] = evaluate_attribute(context, value)
               end
+
+              as_syntax_error { Locomotive::Steam::Adapters::Query::Criteria.reject_raw_operators!(evaluated) }
+            end
+
+            # A criterion means the same whether it was written in the markup or
+            # handed over at render time, so a mistake in either reads the same.
+            def validate_criterion!(key)
+              operator = as_syntax_error do
+                Locomotive::Steam::Adapters::Query::Operators.decode(key).last
+              end
+
+              return if operator.nil? ||
+                        Locomotive::Steam::Adapters::Query::Operators::PUBLIC.include?(operator.name)
+
+              raise ::Liquid::SyntaxError,
+                    "Invalid with_scope criterion: #{key} is not an operator you can use here"
+            end
+
+            def as_syntax_error
+              yield
+            rescue Locomotive::Steam::Adapters::Query::InvalidValue,
+                   Locomotive::Steam::Adapters::Query::UnsupportedOperator => e
+              raise ::Liquid::SyntaxError, "Invalid with_scope criterion: #{e.message}"
             end
 
             def evaluate_attribute(context, value)

@@ -25,6 +25,34 @@ describe Locomotive::Steam::Liquid::Tags::WithScope do
 
   end
 
+  describe 'a criterion handed over at render time' do
+
+    let(:source) { '{% with_scope my_filters %}42{% endwith_scope %}' }
+
+    { 'an operator the tag does not offer'  => { 'price.eq' => 1 },
+      'a removed operator'                  => { 'price.near' => 1 },
+      'a raw Mongo operator'                => { '$where' => 'sleep(1)' },
+      'a nested field path'                 => { 'address.location.ne' => 1 },
+      'a raw Mongo operator inside a value'  => { 'price' => { '$gt' => 1 } } }.each do |what, filters|
+
+      context what do
+        let(:assigns) { { 'my_filters' => filters } }
+        it { expect { output }.to raise_error(::Liquid::SyntaxError) }
+      end
+    end
+
+    context 'an operator the tag does offer' do
+      let(:assigns) { { 'my_filters' => { 'price.gte' => 1 } } }
+      it { expect { output }.not_to raise_error }
+    end
+
+    context 'a value that is not a set of criteria at all' do
+      let(:assigns) { { 'my_filters' => 'price.gte' } }
+      it { expect { output }.to raise_error(::Liquid::SyntaxError) }
+    end
+
+  end
+
   describe 'valid syntax' do
 
     before { output }
