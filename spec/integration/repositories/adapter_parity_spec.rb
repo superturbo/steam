@@ -480,8 +480,9 @@ describe 'Adapter parity' do
         expect(slugs(maker: nil)).to match_array %w(all-missing explicit-nils zero)
       end
 
+      # A missing locale must not inherit the default locale's option.
       it 'filters by a localized select through the name each locale gives it' do
-        expect(specimens(:en).all(tier: 'Gold').map(&:name)).to eq ['Scalars']
+        expect(specimens(:en).all(tier: 'Gold').map(&:name)).to eq %w(Embedded Scalars)
         expect(specimens(:fr).all(tier: 'Or').map(&:name)).to eq ['Scalars']
         expect(specimens(:en).all(tier: 'Silver').map(&:name)).to eq ['Arrays']
         expect(specimens(:fr).all(tier: 'Argent').map(&:name)).to eq ['Arrays']
@@ -866,8 +867,6 @@ describe 'Adapter parity' do
 
       # Translation presence and effective value are verified separately.
       it 'keeps a missing locale distinct from an explicitly null one' do
-        pending 'the filesystem sanitizer materializes the default locale' if filesystem?
-
         expect(entry('arrays').title.translations.key?('fr')).to eq false
         expect(entry('embedded').title.translations.key?('fr')).to eq true
         expect(entry('embedded').title.translations['fr']).to be_nil
@@ -878,9 +877,14 @@ describe 'Adapter parity' do
         expect(entry('scalars').title[:fr]).to eq 'Scalars fr'
       end
 
-      it 'reads no effective value for a missing or explicitly null locale' do
-        pending 'the filesystem sanitizer materializes the default locale' if filesystem?
+      # A localized select carries both its own name and the id an entry stores.
+      it 'leaves an untranslated select and metadata locale absent' do
+        expect(entry('embedded').tier.translations.keys).to eq %w(en)
+        expect(entry('embedded').tier_id.translations.keys).to eq %w(en)
+        expect(entry('embedded').seo_title.translations.keys).to eq %w(en)
+      end
 
+      it 'reads no effective value for a missing or explicitly null locale' do
         expect(entry('arrays').title[:fr]).to be_nil
         expect(entry('embedded').title[:fr]).to be_nil
       end

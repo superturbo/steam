@@ -80,6 +80,19 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     end
 
+    # The slug is generated metadata and covers every locale, while the label
+    # the author never translated stays untranslated.
+    describe 'an entry whose localized label has one locale' do
+
+      let(:entries) { [{ content_type_id: 1, _position: 0, _label: 'English only' }] }
+
+      subject { repository.with(type).all.first }
+
+      it { expect(subject.title.translations).to eq('en' => 'English only') }
+      it { expect(subject._slug.translations).to eq('en' => 'english-only', 'fr' => 'english-only') }
+
+    end
+
     describe 'including also the not visible entries' do
 
       let(:entries) { [

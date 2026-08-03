@@ -180,7 +180,11 @@ module AdapterParityFixture
       value.to_h { |locale, option| [locale.to_s, WagonSite.option_id_in(slug, name, locale, option)] }
     end
 
+    ENTRY_METADATA = %w(seo_title meta_description meta_keywords).freeze
+
     def write_attribute(document, slug, name, value)
+      return document[name] = value if ENTRY_METADATA.include?(name)
+
       field = WagonSite.field(slug, name)
 
       case field.fetch('type')

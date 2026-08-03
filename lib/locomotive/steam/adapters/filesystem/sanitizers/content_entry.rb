@@ -10,10 +10,6 @@ module Locomotive::Steam
           def apply_to_entity(entity)
             super
             add_label(entity)
-
-            locales.each do |locale|
-              set_automatic_translations(entity, locale)
-            end
           end
 
           def apply_to_dataset(dataset)
@@ -58,25 +54,21 @@ module Locomotive::Steam
             end
           end
 
-          def set_automatic_translations(entity, locale)
-            return if locale == default_locale
-
-            entity.localized_attributes.each do |(name, _)|
-              next if entity[name].blank?
-              entity[name][locale] ||= entity[name][default_locale]
-            end
-          end
-
           def set_slug(entity, dataset)
-            if entity._slug.blank?
-              if entity._label.respond_to?(:translations)
-                entity._label.each do |locale, label|
-                  entity[:_slug][locale] = slugify(entity._id, label, dataset, locale)
-                end
-              else
-                # same value for any locale
-                entity[:_slug].translations = slugify(entity._id, entity._label, dataset)
-              end
+            return unless entity._slug.blank?
+
+            unless entity._label.respond_to?(:translations)
+              # same value for any locale
+              entity[:_slug].translations = slugify(entity._id, entity._label, dataset)
+              return
+            end
+
+            # An entry is reachable by slug in every locale, even the ones its
+            # label was never translated into.
+            locales.each do |locale|
+              label = entity._label[locale] || entity._label[default_locale]
+
+              entity[:_slug][locale] = slugify(entity._id, label, dataset, locale)
             end
           end
 

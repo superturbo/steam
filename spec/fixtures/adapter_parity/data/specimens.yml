@@ -60,6 +60,10 @@
 
 - Embedded:
     _slug: embedded
+    seo_title:
+      en: Embedded SEO en
+    tier:
+      en: Gold
     title:
       en: Embedded en
       fr:
