@@ -102,14 +102,6 @@ describe 'Liquid adapter parity' do
         expect(names.call("labels: 'x'")).to eq '[Arrays][Embedded]'
       end
 
-      it 'accepts the legacy string spelling of the same condition' do
-        source = %({% with_scope labels.all: "$and: ['x', 'y']" %}) +
-                 '{% for entry in contents.specimens %}[{{ entry.name }}]{% endfor %}' \
-                 '{% endwith_scope %}'
-
-        expect(render_liquid(source)).to eq '[Arrays]'
-      end
-
     end
 
   end

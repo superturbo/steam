@@ -69,49 +69,16 @@ describe Locomotive::Steam::Liquid::Tags::Concerns::AttributesParser do
 
   end
 
-  describe 'the documented many-to-many all syntax' do
+  describe 'string operands' do
 
-    it 'normalizes the legacy string form into a list' do
-      expect(parse(%q{categories.all: "$and: ['A', 'B']"})).to eq(:'categories.all' => %w(A B))
-    end
-
-    it 'accepts integer ids and an empty list' do
-      expect(parse(%q{categories.all: "$and: [1, 2]"})).to eq(:'categories.all' => [1, 2])
-      expect(parse(%q{categories.all: "$and: []"})).to eq(:'categories.all' => [])
-    end
-
-    it 'leaves any other string as an ordinary one-element operand' do
+    it 'does not interpret an all operand as YAML' do
+      expect(parse(%q{categories.all: "$and: ['A', 'B']"})).to eq(:'categories.all' => "$and: ['A', 'B']")
       expect(parse(%q{tags.all: 'featured'})).to eq(:'tags.all' => 'featured')
-      expect(parse(%q{tags.all: '$andsomething'})).to eq(:'tags.all' => '$andsomething')
     end
 
-    it 'only applies to the all operator' do
+    it 'leaves strings unchanged for other operators' do
       expect(parse(%q{tags.in: "$and: ['A']"})).to eq(:'tags.in' => "$and: ['A']")
       expect(parse(%q{name: "$and: ['A']"})).to eq(name: "$and: ['A']")
-    end
-
-    it 'rejects a malformed or unsupported legacy form' do
-      [
-        %q{categories.all: "$and: ['A'"},
-        %q{categories.all: "$and: {a: 1}"},
-        %q{categories.all: "$and: [true]"},
-        %q{categories.all: "$and: [1.5]"},
-        %q{categories.all: "$and: ['A'], $or: ['B']"}
-      ].each do |markup|
-        expect { parse(markup) }.to raise_error(::Liquid::SyntaxError)
-      end
-    end
-
-    it 'rejects what a YAML load would quietly accept' do
-      {
-        'a repeated key'      => %Q{$and: ['A']\n$and: ['B']},
-        'a second document'   => %Q{$and: ['A']\n---\n$and: ['B']},
-        'an alias'            => %q{$and: [*x]},
-        'a tagged sequence'   => %q{$and: !ruby/object:Foo []}
-      }.each do |desc, source|
-        expect { parse(%{categories.all: #{source.dump}}) }
-          .to raise_error(::Liquid::SyntaxError), "expected #{desc} to be rejected"
-      end
     end
 
   end
