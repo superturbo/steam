@@ -52,7 +52,7 @@ describe Locomotive::Steam::ContentEntryRepository do
       repository.build({})
 
       copy          = repository.dup
-      reloaded_type = build_content_type('Articles', _id: 1)
+      reloaded_type = build_content_type('Articles', _id: 1, fields_with_default: [])
       copy.with(reloaded_type)
 
       expect(copy.build({}).content_type).to be(reloaded_type)
@@ -102,6 +102,26 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     it { expect(subject.title[:en]).to eq 'Hello world' }
     it { expect(subject.content_type).to eq type }
+
+    context 'a select default naming no option' do
+
+      let(:field) do
+        instance_double('Field', name: 'visibility', persisted_name: 'visibility_id',
+                        type: :select, localized?: false, default: 'nope')
+      end
+      let(:type) do
+        build_content_type('Articles', label_field_name: :title, fields: _fields,
+                           fields_with_default: [field])
+      end
+
+      it 'says which option it looked for' do
+        allow(content_type_repository).to receive(:select_options).and_return([])
+
+        expect { subject }.to raise_error(described_class::InvalidDefault,
+                                          'articles.visibility has no option named "nope"')
+      end
+
+    end
 
   end
 

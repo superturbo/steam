@@ -5,6 +5,8 @@
 - Explicit nils:
     _slug: explicit-nils
     score:
+    status:
+    visibility:
     flag:
     labels:
     payload:
@@ -14,6 +16,7 @@
 # Entry order defines inverse-association order.
 - Scalars:
     _slug: scalars
+    status: published
     title:
       en: Scalars en
       fr: Scalars fr
@@ -21,6 +24,7 @@
     price: 15.0
     flag: true
     category: alpha
+    visibility: public
     tier:
       en: Gold
       fr: Or
@@ -44,6 +48,7 @@
     price: 5.5
     flag: false
     category: beta
+    visibility: private
     tier:
       en: Silver
       fr: Argent

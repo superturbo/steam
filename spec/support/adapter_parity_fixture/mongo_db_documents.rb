@@ -125,6 +125,7 @@ module AdapterParityFixture
       }
 
       document['hint'] = field['hint'] if field.key?('hint')
+      document['default'] = field['default'] if field.key?('default')
 
       if field['select_options']
         document['select_options'] = WagonSite.select_options(slug, name).each_with_index.map do |option, index|

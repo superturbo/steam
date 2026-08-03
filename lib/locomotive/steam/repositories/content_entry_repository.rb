@@ -5,6 +5,8 @@ module Locomotive
 
       include Models::Repository
 
+      class InvalidDefault < ArgumentError; end
+
       attr_accessor :content_type_repository, :content_type
 
       def initialize(adapter, site = nil, locale = nil, content_type_repository = nil)
@@ -43,6 +45,10 @@ module Locomotive
 
       def all(conditions = {}, &block)
         ordered_entries(conditions, &block).all
+      end
+
+      def build(attributes, &block)
+        super(with_field_defaults(attributes), &block)
       end
 
       def count(conditions = {})
@@ -125,6 +131,41 @@ module Locomotive
       ORDERABLE_SYSTEM_FIELDS = %w(_slug _position _visible created_at updated_at).freeze
 
       private_constant :ORDERABLE_FIELD_TYPES, :ORDERABLE_SYSTEM_FIELDS
+
+      # A default fills a field the attributes leave out. An explicit null is a
+      # value, and a stored entry is never revisited, so the two stay apart.
+      def with_field_defaults(attributes)
+        content_type.fields_with_default.each_with_object(attributes.dup) do |field, memo|
+          name = field.persisted_name.to_s
+
+          next if memo.key?(name) || memo.key?(name.to_sym)
+
+          # Defaults must not be shared between entries.
+          memo[name] = default_value_for(field).deep_dup
+        end
+      end
+
+      # A select default names an option, while an entry stores the option id.
+      def default_value_for(field)
+        value = field.type == :select ? select_default_id(field) : field.default
+
+        # Materialize scalar localized defaults for persistence.
+        return value unless field.localized? && !value.is_a?(Hash)
+
+        site.locales.to_h { |locale| [locale.to_s, value] }
+      end
+
+      def select_default_id(field)
+        option = content_type_repository.select_options(content_type, field.name)
+                   .detect { |candidate| candidate.name[site.default_locale] == field.default }
+
+        unless option
+          raise InvalidDefault,
+                "#{content_type.slug}.#{field.name} has no option named #{field.default.inspect}"
+        end
+
+        option._id
+      end
 
       def ordered_entries(conditions = {}, &block)
         conditions, order_by = conditions_without_order_by(conditions)

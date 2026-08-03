@@ -20,15 +20,12 @@ module Locomotive::Steam
             dataset.all.each do |entity|
               _apply_to_dataset(entity, dataset)
             end
-            clean
           end
 
           def apply_to_entity_with_dataset(entity, dataset)
             # Note: this statement attaches the site to the entity
             apply_to_entity(entity)
 
-
-            # make sure it gets an unique slug and an _id + set default values
             _apply_to_dataset(entity, dataset)
           end
 
@@ -37,7 +34,6 @@ module Locomotive::Steam
           def _apply_to_dataset(entity, dataset)
             set_slug(entity, dataset)
             set_id(entity)
-            set_default_values(entity)
           end
 
           def add_label(entity)
@@ -71,21 +67,6 @@ module Locomotive::Steam
             end
           end
 
-          def set_default_values(entity)
-            each_field_with_default(entity) do |field|
-              name  = field.type == 'select' ? "#{field.name}_id" : field.name
-              value = field.localized? ? entity[name][default_locale] : entity[name]
-
-              return unless value.nil?
-
-              if field.localized?
-                entity[name].translations = field.default
-              else
-                entity[name] = field.default
-              end
-            end
-          end
-
           def set_slug(entity, dataset)
             if entity._slug.blank?
               if entity._label.respond_to?(:translations)
@@ -112,15 +93,6 @@ module Locomotive::Steam
 
           def is_slug_unique?(id, slug, dataset, locale)
             dataset.query(locale) { where(_slug: slug, k(:_id, :ne) => id) }.first.nil?
-          end
-
-          def each_field_with_default(entity, &block)
-            @fields_with_default ||= entity.content_type.fields_with_default
-            @fields_with_default.each(&block)
-          end
-
-          def clean
-            @fields_with_default = nil
           end
 
         end

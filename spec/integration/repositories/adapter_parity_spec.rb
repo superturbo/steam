@@ -606,6 +606,56 @@ describe 'Adapter parity' do
           expect(specimens.find(entry._id)).to be_nil
         end
 
+        # rank follows status, so a default must not stop at the first field
+        # the attributes already carry.
+        it 'fills the fields a new entry leaves out' do
+          given = build_specimen(status: 'live')
+
+          expect(build_specimen.status).to eq 'draft'
+          expect(given.status).to eq 'live'
+          expect(given.rank).to eq 7
+        end
+
+        it 'preserves an explicit null' do
+          spelled = build_specimen(status: nil)
+
+          expect(spelled.status).to be_nil
+          expect(spelled.rank).to eq 7
+        end
+
+        it 'keeps a localized default as its content type spells it' do
+          expect(build_specimen.blurb.translations).to eq('en' => 'Pending', 'fr' => 'En attente')
+          expect(build_specimen(blurb: { en: 'given' }).blurb[:fr]).to be_nil
+          expect(build_specimen(blurb: nil).blurb[:en]).to be_nil
+        end
+
+        # Both defaults name the second option, so picking any option is not
+        # the same as picking the named one.
+        it 'resolves a select default to the option id its own store issued' do
+          silver = option_id(:tier, 'Silver')
+
+          expect(build_specimen.visibility_id).to eq option_id(:visibility, 'private')
+          expect(build_specimen.tier_id.translations).to eq('en' => silver, 'fr' => silver)
+          expect(build_specimen(visibility_id: nil).visibility_id).to be_nil
+        end
+
+        it 'gives each entry its own copy of a default' do
+          build_specimen.status << ' changed'
+
+          expect(build_specimen.status).to eq 'draft'
+        end
+
+        it 'persists and reloads applied defaults' do
+          stored = specimens.find(create_specimen(status: nil)._id)
+          silver = option_id(:tier, 'Silver')
+
+          expect(stored.status).to be_nil
+          expect(stored.rank).to eq 7
+          expect(stored.blurb.translations).to eq('en' => 'Pending', 'fr' => 'En attente')
+          expect(stored.visibility_id).to eq option_id(:visibility, 'private')
+          expect(stored.tier_id.translations).to eq('en' => silver, 'fr' => silver)
+        end
+
         it 'creates an entry that leaves a non-localized select unset' do
           pending 'MongoDB cannot serialize an unset non-localized select' unless filesystem?
 
@@ -797,6 +847,15 @@ describe 'Adapter parity' do
         expect(slugs_of(entry('scalars').topics.all)).to eq %w(topic-a topic-b)
         expect(slugs_of(entry('arrays').topics.all)).to eq %w(topic-b)
         expect(entry('zero').topics.all).to eq []
+      end
+
+      it 'never fills a stored field from its content type default' do
+        expect(entry('all-missing').status).to be_nil
+        expect(entry('explicit-nils').status).to be_nil
+        expect(entry('scalars').status).to eq 'published'
+        expect(entry('scalars').rank).to be_nil
+        expect(entry('scalars').blurb[:en]).to be_nil
+        expect(entry('explicit-nils').visibility_id).to be_nil
       end
 
       it 'keeps missing and null numeric values nil' do

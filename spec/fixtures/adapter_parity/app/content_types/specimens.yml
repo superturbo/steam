@@ -21,12 +21,29 @@ fields:
     type: tags
 - payload:
     type: json
+- status:
+    type: string
+    default: draft
+- rank:
+    type: integer
+    default: 7
+- blurb:
+    type: string
+    localized: true
+    default:
+      en: Pending
+      fr: En attente
+- visibility:
+    type: select
+    default: private
+    select_options: ['public', 'private']
 - category:
     type: select
     select_options: ['alpha', 'beta', 'gamma']
 - tier:
     type: select
     localized: true
+    default: Silver
     select_options:
       en: [Gold, Silver]
       fr: [Or, Argent]
