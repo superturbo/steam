@@ -331,6 +331,34 @@ describe 'Query parity' do
       conditions: { maker: { _id: /maker/ } },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
 
+    { desc: 'an order_by on the primary key',
+      conditions: { order_by: '_id' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an order_by on a select field',
+      conditions: { order_by: 'tier' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an order_by on an association',
+      conditions: { order_by: 'topics' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an order_by on an array field',
+      conditions: { order_by: 'labels' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an order_by on a json field',
+      conditions: { order_by: 'payload' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an order_by on a field the type does not declare',
+      conditions: { order_by: 'nonexistent' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an order_by on a position no association of this type keeps',
+      conditions: { order_by: 'position_in_nothing' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
     { desc: 'an order_by criterion naming more than a field and a direction',
       conditions: { order_by: 'name asc desc' },
       error: Locomotive::Steam::Adapters::Query::InvalidValue }

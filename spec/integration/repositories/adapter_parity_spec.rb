@@ -338,6 +338,21 @@ describe 'Adapter parity' do
         expect(specimens.by_slug('scalars').name).to eq 'Scalars'
       end
 
+      def makers
+        types = Locomotive::Steam::ContentTypeRepository.new(adapter, site, AdapterParityFixture::LOCALE)
+
+        Locomotive::Steam::ContentEntryRepository.new(adapter, site, AdapterParityFixture::LOCALE, types)
+          .with(types.by_slug('makers'))
+      end
+
+      # A Filesystem id is the slug itself, so a slug spelling a legal ObjectId
+      # is read as that id by MongoDB and as the slug it is by Filesystem.
+      it 'finds an entry whose slug spells an object id' do
+        pending 'MongoDB reads a 24-hex string as an id it never issued' unless filesystem?
+
+        expect(makers.find('0123456789abcdef01234567').name).to eq 'Hex slug'
+      end
+
       it 'finds an entry by the id it gave it' do
         embedded = specimens.by_slug('embedded')
 

@@ -119,19 +119,51 @@ module Locomotive
 
       private
 
+      # Only field types with the same ordering in both adapters are allowed.
+      ORDERABLE_FIELD_TYPES = %i(string text integer float boolean date date_time).freeze
+
+      ORDERABLE_SYSTEM_FIELDS = %w(_slug _position _visible created_at updated_at).freeze
+
+      private_constant :ORDERABLE_FIELD_TYPES, :ORDERABLE_SYSTEM_FIELDS
+
       def ordered_entries(conditions = {}, &block)
         conditions, order_by = conditions_without_order_by(conditions)
 
         # priority:
         # 1/ order_by passed in the conditions parameter
         # 2/ the default order (_position) defined in the content type
-        order_by ||= content_type.order_by
+        order_by = validate_order_by(order_by || content_type.order_by)
 
         query {
           (block_given? ? instance_eval(&block) : where).
             where(conditions).
               order_by(order_by)
         }
+      end
+
+      def validate_order_by(spec)
+        Adapters::Query::OrderBy.decode(spec).each do |name, _|
+          field = content_type.fields_by_name[name.to_s]
+
+          next if orderable?(field, name.to_s)
+
+          raise Adapters::Query::InvalidValue,
+                "#{name} cannot order entries of #{content_type.slug}"
+        end
+      end
+
+      def orderable?(field, name)
+        return ORDERABLE_FIELD_TYPES.include?(field.type) if field
+
+        ORDERABLE_SYSTEM_FIELDS.include?(name) || inverse_position?(name)
+      end
+
+      # Inverse positions are named after their belongs_to field.
+      def inverse_position?(name)
+        prefix = 'position_in_'
+        return false unless name.start_with?(prefix)
+
+        content_type.fields_by_name[name.delete_prefix(prefix)]&.type == :belongs_to
       end
 
       def mapper
