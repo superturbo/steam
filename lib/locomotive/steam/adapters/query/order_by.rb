@@ -12,8 +12,24 @@ module Locomotive::Steam
         def decode(*spec)
           return [pair(*spec)] if positional_pair?(spec)
 
-          spec.flat_map { |criterion| criteria(criterion) }
+          validate_unique_fields!(spec.flat_map { |criterion| criteria(criterion) })
         end
+
+        # Mongo compiles the sequence into a Hash, so a second direction for a
+        # field would replace the first while Memory keeps both.
+        def validate_unique_fields!(criteria)
+          seen = {}
+
+          criteria.each do |field, _|
+            raise InvalidValue, "duplicate order field: #{field.inspect}" if seen.key?(field)
+
+            seen[field] = true
+          end
+
+          criteria
+        end
+
+        private_class_method :validate_unique_fields!
 
         def positional_pair?(spec)
           spec.size == 2 && spec.all? { |element| element.is_a?(Symbol) }

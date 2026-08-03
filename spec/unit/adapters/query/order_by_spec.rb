@@ -78,6 +78,19 @@ describe Locomotive::Steam::Adapters::Query::OrderBy do
         .each { |spec| expect { decode(spec) }.to raise_error(invalid) }
     end
 
+    it 'rejects a field named twice, whatever the directions' do
+      ['score.asc, score.desc', 'score.desc, score.asc', 'score, score'].each do |spec|
+        expect { decode(spec) }.to raise_error(invalid, /duplicate order field: :score/)
+      end
+    end
+
+    it 'rejects a field named twice across separate criteria' do
+      expect { decode('name', 'name.desc') }.to raise_error(invalid)
+      expect { decode(['name', 'name.desc']) }.to raise_error(invalid)
+      expect { decode([['name', 'asc'], ['name', 'desc']]) }.to raise_error(invalid)
+      expect { decode(name: :asc, 'name' => :desc) }.to raise_error(invalid)
+    end
+
     it 'rejects a $-prefixed field on both engines' do
       expect { decode('$natural') }.to raise_error(unsupported)
       expect { decode('$where' => 1) }.to raise_error(unsupported)

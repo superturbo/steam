@@ -402,6 +402,12 @@ describe 'Adapter parity' do
           .to eq %w(zero scalars explicit-nils embedded arrays all-missing)
       end
 
+      # Mongo would keep the last direction, the filesystem the first.
+      it 'refuses a field named twice in the sequence' do
+        expect { slugs(order_by: 'score.asc, score.desc') }
+          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+      end
+
       it 'reverses that order however the direction is spelled' do
         descending = %w(zero scalars explicit-nils embedded arrays all-missing)
 
