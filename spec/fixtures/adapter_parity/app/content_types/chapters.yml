@@ -1,0 +1,12 @@
+# Navigation over a localized key with ties and a null group.
+name: Chapters
+slug: chapters
+label_field_name: name
+order_by: part
+order_direction: asc
+fields:
+- name:
+    type: string
+- part:
+    type: string
+    localized: true

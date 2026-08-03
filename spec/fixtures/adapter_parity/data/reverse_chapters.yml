@@ -1,0 +1,24 @@
+# The chapters dataset, read by a type that orders the other way.
+- Prologue:
+    _slug: prologue
+
+- Middle:
+    _slug: middle
+    part:
+      en: b
+      fr: a
+
+- Finale:
+    _slug: finale
+    part:
+      en: a
+      fr: b
+
+- Opening:
+    _slug: opening
+    part:
+      en: b
+      fr: c
+
+- Epilogue:
+    _slug: epilogue

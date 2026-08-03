@@ -1,0 +1,26 @@
+# File order matches no locale's order, so _position cannot stand in for part.
+# Prologue and Epilogue have no part at all; Middle and Opening tie in en,
+# Finale and Middle swap places between en and fr.
+- Prologue:
+    _slug: prologue
+
+- Middle:
+    _slug: middle
+    part:
+      en: b
+      fr: a
+
+- Finale:
+    _slug: finale
+    part:
+      en: a
+      fr: b
+
+- Opening:
+    _slug: opening
+    part:
+      en: b
+      fr: c
+
+- Epilogue:
+    _slug: epilogue

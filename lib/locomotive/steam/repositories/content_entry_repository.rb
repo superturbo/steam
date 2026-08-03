@@ -92,11 +92,11 @@ module Locomotive
       end
 
       def next(entry)
-        next_or_previous(entry, 'gt', 'lt')
+        navigate(entry, :next)
       end
 
       def previous(entry)
-        next_or_previous(entry, 'lt', 'gt')
+        navigate(entry, :previous)
       end
 
       def group_by_select_option(name)
@@ -232,20 +232,55 @@ module Locomotive
         repository.content_type_repository = content_type_repository
       end
 
-      def next_or_previous(entry, asc_op, desc_op)
+      def navigate(entry, direction)
         return nil if entry.nil?
 
         with(entry.content_type)
 
-        order_by = self.content_type.order_by
-        name, direction = order_by.first
-        op = direction == 'asc' ? asc_op : desc_op
+        navigation_queries(entry, navigation_sequence(direction)).each do |conditions, order_by|
+          neighbour = first(conditions.merge(order_by: order_by))
 
-        conditions = prepare_conditions({ k(name, op) => i18n_value_of(entry, name) })
-
-        public_send(asc_op == 'gt' ? :first : :last) do
-          where(conditions).order_by(order_by)
+          return neighbour if neighbour
         end
+
+        nil
+      end
+
+      # Navigation follows the default sequence, read backwards for previous.
+      def navigation_sequence(direction)
+        sequence = order_sequence_for(content_type.order_by)
+
+        return sequence if direction == :next
+
+        sequence.map { |field, order| [field, order == :asc ? :desc : :asc] }
+      end
+
+      # The next slug sharing the ordering key, then the first entry of the
+      # group the sequence reaches after it. Null sorts below every value, so
+      # an ascending key steps out of the null group and a descending one ends
+      # in it. A content type orders by one field, so _slug ends the sequence.
+      def navigation_queries(entry, sequence)
+        name, key_direction = sequence.first
+        slug_direction      = sequence.last.last
+        by_slug             = [[:_slug, slug_direction]]
+        slug_step           = k(:_slug, slug_direction == :asc ? 'gt' : 'lt')
+        slug                = i18n_value_of(entry, :_slug)
+
+        # A type ordered by the slug puts one entry in every group.
+        return [[{ slug_step => slug }, by_slug]] if name == :_slug
+
+        value   = i18n_value_of(entry, name)
+        queries = [[{ name => value, slug_step => slug }, by_slug]]
+
+        if value.nil?
+          queries << [{ k(name, 'ne') => nil }, sequence] if key_direction == :asc
+        elsif key_direction == :asc
+          queries << [{ k(name, 'gt') => value }, sequence]
+        else
+          queries << [{ k(name, 'lt') => value }, sequence] << [{ name => nil }, by_slug]
+        end
+
+        queries
       end
 
       def groups_to_array(name, groups)

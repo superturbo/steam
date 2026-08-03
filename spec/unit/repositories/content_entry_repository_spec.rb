@@ -177,90 +177,60 @@ describe Locomotive::Steam::ContentEntryRepository do
 
   end
 
-  describe '#next or #previous' do
+  describe '#next and #previous' do
 
-    let(:direction) { 'asc' }
-    let(:type)      { build_content_type('Articles', order_by: { _position: direction }, label_field_name: :title, localized_names: [:title], fields: _fields, fields_by_name: { title: instance_double('Field', name: :title, type: :string) }, fields_with_default: []) }
-    let(:entry)     { nil }
-    let(:entries) do
-      [
-        { content_type_id: 1, _position: 0, _label: 'Update #1', title: { fr: 'Mise a jour #1' }, text: { en: 'added some free stuff', fr: 'phrase FR' }, date: '2009/05/12', category: 'General' },
-        { content_type_id: 1, _position: 1, _label: 'Update #2', title: { fr: 'Mise a jour #2' }, text: { en: 'bla bla', fr: 'blabbla' }, date: '2009/05/12', category: 'General' },
-        { content_type_id: 1, _position: 2, _label: 'Update #3', title: { fr: 'Mise a jour #3' }, text: { en: 'bla bla', fr: 'blabbla' }, date: '2009/05/12', category: 'General' },
-        { content_type_id: 1, _position: 3, _label: 'Update #4', title: { fr: 'Mise a jour #4' }, text: { en: 'bla bla', fr: 'blabbla' }, date: '2009/05/12', category: 'General' }
-      ]
+    it 'have nothing to look for without an entry' do
+      expect(repository.next(nil)).to be_nil
+      expect(repository.previous(nil)).to be_nil
     end
 
-    describe '#next' do
+    describe 'over a type ordered by the slug itself' do
 
-      subject { repository.next(entry) }
-
-      it { is_expected.to eq nil }
-
-      context 'being last' do
-
-        let(:entry) { instance_double('Entry', content_type: type, _position: 3) }
-        it { is_expected.to eq nil }
-
+      let(:type) do
+        build_content_type('Articles', order_by: { _slug: 'asc' }, label_field_name: :title,
+                           fields: _fields, fields_with_default: [],
+                           fields_by_name: { title: instance_double('Field', name: :title, type: :string) })
       end
 
-      context 'being middle' do
+      let(:entries) do
+        [{ content_type_id: 1, _position: 0, _label: 'Alpha' },
+         { content_type_id: 1, _position: 1, _label: 'Bravo' }]
+      end
 
-        let(:entry) { instance_double('Entry', content_type: type, _position: 0) }
-        it { expect(subject._position).to eq 1 }
+      before { repository.with(type) }
 
-        describe 'another example' do
+      it 'queries once because a slug identifies one entry' do
+        alpha = repository.by_slug('alpha')
+        allow(repository).to receive(:first).and_call_original
 
-          let(:entry) { instance_double('Entry', content_type: type, _position: 1) }
-          it { expect(subject._position).to eq 2 }
-
-        end
-
-        context 'changing direction' do
-
-          let(:direction) { 'desc' }
-          let(:entry) { instance_double('Entry', content_type: type, _position: 2) }
-          it { expect(subject._position).to eq 1 }
-
-        end
-
+        expect(repository.next(alpha)._slug[:en]).to eq 'bravo'
+        expect(repository).to have_received(:first).once
       end
 
     end
 
-    describe '#previous' do
+    describe 'over the order a manually sorted type has' do
 
-      subject { repository.previous(entry) }
-
-      it { is_expected.to eq nil }
-
-      context 'being first' do
-
-        let(:entry) { instance_double('Entry', content_type: type, _position: 0) }
-        it { is_expected.to eq nil }
-
+      let(:type) do
+        build_content_type('Articles', order_by: { _position: 'asc' }, label_field_name: :title,
+                           fields: _fields, fields_with_default: [],
+                           fields_by_name: { title: instance_double('Field', name: :title, type: :string) })
       end
 
-      context 'being middle' do
+      # Slug order would read alpha, mike, zulu.
+      let(:entries) do
+        [{ content_type_id: 1, _position: 0, _label: 'Zulu' },
+         { content_type_id: 1, _position: 1, _label: 'Alpha' },
+         { content_type_id: 1, _position: 2, _label: 'Mike' }]
+      end
 
-        let(:entry) { instance_double('Entry', content_type: type, _position: 1) }
-        it { expect(subject._position).to eq 0 }
+      before { repository.with(type) }
 
-        describe 'another example' do
-
-          let(:entry) { instance_double('Entry', content_type: type, _position: 2) }
-          it { expect(subject._position).to eq 1 }
-
-        end
-
-        context 'changing direction' do
-
-          let(:direction) { 'desc' }
-          let(:entry) { instance_double('Entry', content_type: type, _position: 2) }
-          it { expect(subject._position).to eq 3 }
-
-        end
-
+      it 'walks the positions and stops at their ends' do
+        expect(repository.next(repository.by_slug('alpha'))._slug[:en]).to eq 'mike'
+        expect(repository.previous(repository.by_slug('alpha'))._slug[:en]).to eq 'zulu'
+        expect(repository.previous(repository.by_slug('zulu'))).to be_nil
+        expect(repository.next(repository.by_slug('mike'))).to be_nil
       end
 
     end

@@ -1,0 +1,12 @@
+# The same navigation dataset ordered the other way.
+name: Reverse chapters
+slug: reverse_chapters
+label_field_name: name
+order_by: part
+order_direction: desc
+fields:
+- name:
+    type: string
+- part:
+    type: string
+    localized: true

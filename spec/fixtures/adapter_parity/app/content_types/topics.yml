@@ -1,7 +1,7 @@
 name: Topics
 slug: topics
 label_field_name: name
-order_by: name
+order_by: _slug
 fields:
 - name:
     type: string
