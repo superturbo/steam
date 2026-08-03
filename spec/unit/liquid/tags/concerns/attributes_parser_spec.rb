@@ -37,8 +37,10 @@ describe Locomotive::Steam::Liquid::Tags::Concerns::AttributesParser do
       expect(parse('title: /foo/imx')).to eq(title: /foo/mix)
     end
 
-    it 'keeps the last value on a repeated key' do
-      expect(parse('a: 1, a: 2')).to eq(a: 2)
+    it 'refuses a key named twice, however it is spelled' do
+      expect { parse('a: 1, a: 2') }.to raise_error(::Liquid::SyntaxError)
+      expect { parse('a: 1, "a" => 2') }.to raise_error(::Liquid::SyntaxError)
+      expect { parse('a: { b: 1, b: 2 }') }.to raise_error(::Liquid::SyntaxError)
     end
 
     it 'turns an operator suffix into a dotted symbol key' do

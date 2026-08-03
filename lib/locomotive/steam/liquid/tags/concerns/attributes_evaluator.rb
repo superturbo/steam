@@ -32,13 +32,14 @@ module Locomotive
                       "Invalid with_scope criteria: expected a hash, got #{criteria.class}"
               end
 
-              evaluated = criteria.each_with_object({}) do |(key, value), memo|
+              evaluated = evaluate_hash(context, criteria) do |key|
+                name = key.to_s
                 # _slug instead of _permalink
-                _key = key.to_s == '_permalink' ? '_slug' : key.to_s
+                name = '_slug' if name == '_permalink'
 
-                validate_criterion!(_key)
+                validate_criterion!(name)
 
-                memo[_key] = evaluate_attribute(context, value)
+                name
               end
 
               as_syntax_error { Locomotive::Steam::Adapters::Query::Criteria.reject_raw_operators!(evaluated) }
@@ -65,12 +66,22 @@ module Locomotive
               raise ::Liquid::SyntaxError, "Invalid with_scope criterion: #{e.message}"
             end
 
+            def evaluate_hash(context, hash)
+              hash.each_with_object({}) do |(key, value), memo|
+                name = yield(key)
+
+                raise ::Liquid::SyntaxError, "Duplicate with_scope key: #{name}" if memo.key?(name)
+
+                memo[name] = evaluate_attribute(context, value)
+              end
+            end
+
             def evaluate_attribute(context, value)
               case value
               when Array 
                 value.map { |v| evaluate_attribute(context, v) }
               when Hash
-                Hash[value.map { |k, v| [k.to_s, evaluate_attribute(context, v)] }]
+                evaluate_hash(context, value, &:to_s)
               when StrictRegexpFragment
                 create_regexp($1, $2)
               when ::Liquid::VariableLookup

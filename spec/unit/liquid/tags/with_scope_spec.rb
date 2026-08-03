@@ -46,6 +46,21 @@ describe Locomotive::Steam::Liquid::Tags::WithScope do
       it { expect { output }.not_to raise_error }
     end
 
+    context 'one field named twice under different spellings' do
+      let(:assigns) { { 'my_filters' => { :a => 1, 'a' => 2 } } }
+      it { expect { output }.to raise_error(::Liquid::SyntaxError) }
+    end
+
+    context 'a key named twice inside a value' do
+      let(:assigns) { { 'my_filters' => { 'payload' => { :a => 1, 'a' => 2 } } } }
+      it { expect { output }.to raise_error(::Liquid::SyntaxError) }
+    end
+
+    context 'a field named twice, once by its old name' do
+      let(:assigns) { { 'my_filters' => { '_permalink' => 'x', '_slug' => 'y' } } }
+      it { expect { output }.to raise_error(::Liquid::SyntaxError) }
+    end
+
     context 'a value that is not a set of criteria at all' do
       let(:assigns) { { 'my_filters' => 'price.gte' } }
       it { expect { output }.to raise_error(::Liquid::SyntaxError) }

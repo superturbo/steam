@@ -43,10 +43,18 @@ module Locomotive
             def visit(node)
               case node
               when ::Prism::HashNode
+                seen = {}
+
                 node.elements.each_with_object({}) do |element, hash|
                   unsupported! unless element.is_a?(::Prism::AssocNode)
 
-                  hash[visit(element.key)] = visit(element.value)
+                  key  = visit(element.key)
+                  name = key.to_s
+
+                  duplicate!(name) if seen.key?(name)
+                  seen[name] = true
+
+                  hash[key] = visit(element.value)
                 end
               when ::Prism::ArrayNode              then node.elements.map { |e| visit(e) }
               when ::Prism::SymbolNode             then node.unescaped.to_sym
@@ -116,6 +124,10 @@ module Locomotive
               rescue RegexpError
                 unsupported!
               end
+            end
+
+            def duplicate!(key)
+              raise ::Liquid::SyntaxError, "Duplicate with_scope key: #{key}"
             end
 
             def unsupported!
