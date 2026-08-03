@@ -132,7 +132,7 @@ module Locomotive
         # priority:
         # 1/ order_by passed in the conditions parameter
         # 2/ the default order (_position) defined in the content type
-        order_by = validate_order_by(order_by || content_type.order_by)
+        order_by = order_sequence_for(order_by || content_type.order_by)
 
         query {
           (block_given? ? instance_eval(&block) : where).
@@ -141,8 +141,11 @@ module Locomotive
         }
       end
 
-      def validate_order_by(spec)
-        Adapters::Query::OrderBy.decode(spec).each do |name, _|
+      # Equal sort values have no defined order in either adapter.
+      def order_sequence_for(spec)
+        criteria = Adapters::Query::OrderBy.decode(spec)
+
+        criteria.each do |name, _|
           field = content_type.fields_by_name[name.to_s]
 
           next if orderable?(field, name.to_s)
@@ -150,6 +153,10 @@ module Locomotive
           raise Adapters::Query::InvalidValue,
                 "#{name} cannot order entries of #{content_type.slug}"
         end
+
+        return criteria if criteria.any? { |name, _| name.to_s == '_slug' }
+
+        criteria + [[:_slug, :asc]]
       end
 
       def orderable?(field, name)

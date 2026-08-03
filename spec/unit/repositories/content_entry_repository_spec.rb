@@ -486,6 +486,28 @@ describe Locomotive::Steam::ContentEntryRepository do
 
   end
 
+  describe '#all without a runtime order' do
+
+    let(:type) do
+      build_content_type('Chapters', order_by: { part: 'asc' }, label_field_name: :title,
+                         fields: _fields, fields_with_default: [],
+                         fields_by_name: { part:  instance_double('Field', name: :part,  type: :string),
+                                           title: instance_double('Field', name: :title, type: :string) })
+    end
+
+    # Input and slug order disagree within part "a"; Alpha sorts last by part.
+    let(:entries) do
+      [{ content_type_id: 1, _position: 0, _label: 'Alpha', part: 'b' },
+       { content_type_id: 1, _position: 1, _label: 'Zulu',  part: 'a' },
+       { content_type_id: 1, _position: 2, _label: 'Mike',  part: 'a' }]
+    end
+
+    it 'follows the type default and breaks its tie by slug' do
+      expect(repository.with(type).all.map { |entry| entry._slug[:en] }).to eq %w(mike zulu alpha)
+    end
+
+  end
+
   describe '#conditions_without_order_by' do
 
     let(:conditions) { {} }

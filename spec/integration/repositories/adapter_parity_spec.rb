@@ -389,6 +389,19 @@ describe 'Adapter parity' do
           .to eq %w(arrays embedded scalars zero all-missing explicit-nils)
       end
 
+      # Embedded and Scalars both have score 5.
+      it 'breaks a tie by slug, ascending and descending alike' do
+        expect(slugs(order_by: 'score'))
+          .to eq %w(all-missing explicit-nils zero embedded scalars arrays)
+        expect(slugs(order_by: 'score.desc'))
+          .to eq %w(arrays embedded scalars zero all-missing explicit-nils)
+      end
+
+      it 'preserves an explicit slug direction' do
+        expect(slugs(order_by: '_slug.desc'))
+          .to eq %w(zero scalars explicit-nils embedded arrays all-missing)
+      end
+
       it 'reverses that order however the direction is spelled' do
         descending = %w(zero scalars explicit-nils embedded arrays all-missing)
 
