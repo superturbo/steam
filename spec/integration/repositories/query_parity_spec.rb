@@ -331,6 +331,14 @@ describe 'Query parity' do
       conditions: { maker: { _id: /maker/ } },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
 
+    { desc: 'one field named twice under different spellings',
+      conditions: { :name => 'Scalars', 'name' => 'Zero' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a key named twice inside a value',
+      conditions: { payload: { :a => 1, 'a' => 2 } },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
     { desc: 'an order_by on the primary key',
       conditions: { order_by: '_id' },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },

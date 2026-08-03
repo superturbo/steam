@@ -259,7 +259,7 @@ module Locomotive
         private_constant :INTEGER_FORMAT, :FLOAT_FORMAT, :INT64_RANGE
 
         def initialize(conditions = {}, fields, target_repository)
-          @conditions = conditions.try(:with_indifferent_access) || {}
+          @conditions = Adapters::Query::Criteria.normalize(conditions)
           @fields = fields
           @target_repository = target_repository
           @locale = target_repository.locale

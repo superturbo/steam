@@ -41,4 +41,29 @@ describe Locomotive::Steam::Adapters::Query::Criteria do
     expect { check('address' => { 'city' => 'x' }) }.not_to raise_error
   end
 
+  describe '.normalize' do
+
+    it 'stringifies keys' do
+      expect(described_class.normalize(name: 'a', 'score' => 1)).to eq('name' => 'a', 'score' => 1)
+      expect(described_class.normalize(nil)).to eq({})
+    end
+
+    it 'rejects duplicate keys at any depth' do
+      [{ :name => 'a', 'name' => 'b' },
+       { 'payload' => { :a => 1, 'a' => 2 } },
+       { 'payload' => [{ :a => 1, 'a' => 2 }] }].each do |criteria|
+        expect { described_class.normalize(criteria) }
+          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+      end
+    end
+
+    it 'rejects a non-Hash criteria value' do
+      ['name', 42, [1, 2]].each do |criteria|
+        expect { described_class.normalize(criteria) }
+          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+      end
+    end
+
+  end
+
 end
