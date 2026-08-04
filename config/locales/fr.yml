@@ -18,6 +18,7 @@ fr:
   errors:
     messages:
       blank: "doit être rempli(e)"
+      invalid: n'est pas valide
       taken: n'est pas disponible
       confirmation: "ne concorde pas avec %{attribute}"
       too_short:

@@ -981,6 +981,51 @@ describe 'Adapter parity' do
             .to eq('en' => 'Hello', 'fr' => 'Salut')
         end
 
+        def readable_specimen(attributes)
+          service.create('specimens', { name: 'Readable', topic_ids: [],
+                                        category_id: option_id(:category, 'alpha') }.merge(attributes))
+        end
+
+        it 'stores the value the field keeps, not the text the form sent' do
+          created = readable_specimen(score: ' 12 ', price: '1.5', flag: '1',
+                                      held_on: '2013-02-11', at: '2012-06-06T12:00:00Z')
+          stored  = stored_specimen(created._id).attributes
+
+          expect(stored.values_at(:score, :price, :flag)).to eq [12, 1.5, true]
+          expect(stored[:held_on]).to eq Date.new(2013, 2, 11)
+          expect(stored[:at].to_i).to eq Time.utc(2012, 6, 6, 12).to_i
+        end
+
+        def ids_matching(conditions)
+          entries_of('specimens').all(conditions).map(&:_id)
+        end
+
+        # A store that kept the text would still read back as a date; only a query
+        # the store answers itself can tell what it holds.
+        it 'stores a date the store can be queried by' do
+          created = readable_specimen(held_on: '2013-02-11', at: '2012-06-06T12:00:00Z')
+
+          expect(ids_matching(held_on: Date.new(2013, 2, 11))).to include created._id
+          expect(ids_matching(at: Time.utc(2012, 6, 6, 12))).to include created._id
+        end
+
+        it 'leaves a field the entry never filled out of the store' do
+          created = readable_specimen(score: 12)
+
+          service.update('specimens', created._id, score: 77)
+
+          expect(stored_specimen(created._id).attributes).not_to have_key('price')
+        end
+
+        it 'refuses text the field cannot read, and writes nothing' do
+          entry = nil
+
+          expect { entry = readable_specimen(score: 'abc') }
+            .not_to change { service.all('specimens').size }
+
+          expect(entry.errors.to_hash).to eq('score' => ['is invalid'])
+        end
+
         it 'writes the links a new entry declares' do
           entry = nil
 

@@ -17,6 +17,7 @@ pt-BR:
   errors:
     messages:
       blank: "não pode ficar em branco"
+      invalid: não é válido
       taken: já está em uso
       confirmation: não é igual a %{attribute}
       too_short:

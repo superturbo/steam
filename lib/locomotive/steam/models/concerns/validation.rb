@@ -8,7 +8,7 @@ module Locomotive
         module Validation
 
           def errors
-            @errors ||= Errors.new(self)
+            @errors ||= Errors.new
           end
 
           def valid?
@@ -26,14 +26,8 @@ module Locomotive
 
             alias_method :blank?, :empty?
 
-            def initialize(base)
-              @base     = base
+            def initialize
               @messages = HashWithIndifferentAccess.new({})
-            end
-
-            def add_on_blank(attribute)
-              value = @base.send(attribute)
-              add(attribute, :blank) if value.blank?
             end
 
             def add(attribute, message, options = {})

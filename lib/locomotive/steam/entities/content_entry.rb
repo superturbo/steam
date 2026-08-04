@@ -8,6 +8,11 @@ module Locomotive::Steam
 
     attr_accessor :content_type, :site
 
+    NIL_IS_THE_ONLY_BLANK    = %i(boolean integer float date date_time).freeze
+    REQUIRED_FROM_ATTRIBUTES = %i(belongs_to many_to_many file).freeze
+
+    private_constant :NIL_IS_THE_ONLY_BLANK, :REQUIRED_FROM_ATTRIBUTES
+
     def initialize(attributes = {})
       super({
         _visible:     true,
@@ -44,9 +49,9 @@ module Locomotive::Steam
 
     def valid?
       errors.clear
-      content_type.fields.required.each do |field|
-        errors.add_on_blank(field.name.to_sym)
-      end
+
+      validate_required_fields(normalize_fields)
+
       errors.empty?
     end
 
@@ -116,6 +121,52 @@ module Locomotive::Steam
 
     private
 
+    # Invalid input remains in the attributes.
+    def normalize_fields
+      content_type.fields_by_name.each_value.with_object([]) do |field, invalid|
+        name = field.persisted_name
+        next unless name && attributes.key?(name)
+
+        begin
+          attributes[name] = normalized_value(field, attributes[name])
+        rescue ContentFieldValues::ParseError
+          errors.add(field.name.to_sym, :invalid)
+          invalid << field.name.to_sym
+        end
+      end
+    end
+
+    def normalized_value(field, value)
+      return ContentFieldValues.normalize_input(field.type, value, site) unless value.respond_to?(:translations)
+
+      value.dup.apply { |translated| ContentFieldValues.normalize_input(field.type, translated, site) }
+    end
+
+    def validate_required_fields(invalid)
+      content_type.fields.required.each do |field|
+        name = field.name.to_sym
+        # Nothing points at an entry being created, so a has_many cannot answer.
+        next if field.type == :has_many || invalid.include?(name)
+
+        errors.add(name, :blank) if missing?(field)
+      end
+    end
+
+    def missing?(field)
+      value = required_value_for(field)
+      value = value[site.default_locale] if value.respond_to?(:translations)
+
+      NIL_IS_THE_ONLY_BLANK.include?(field.type) ? value.nil? : value.blank?
+    end
+
+    # An association proxy and a file read back as objects whether or not they
+    # hold anything.
+    def required_value_for(field)
+      return attributes[field.persisted_name] if REQUIRED_FROM_ATTRIBUTES.include?(field.type)
+
+      send(field.name)
+    end
+
     def localized?(name)
       (localized_attributes || {})[name.to_sym]
     end
@@ -157,11 +208,15 @@ module Locomotive::Steam
     end
 
     def _cast_integer(field)
-      _cast_convertor(field.name) { |value| value&.to_i }
+      _cast_number(field, :integer)
     end
 
     def _cast_float(field)
-      _cast_convertor(field.name) { |value| value&.to_f }
+      _cast_number(field, :float)
+    end
+
+    def _cast_number(field, type)
+      _cast_convertor(field.name) { |value| ContentFieldValues.normalize_input(type, value, site) }
     end
 
     def _cast_json(field)

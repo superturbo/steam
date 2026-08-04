@@ -17,6 +17,7 @@ nl:
   errors:
     messages:
       blank: "mag niet leeg zijn"
+      invalid: is ongeldig
       taken: is al in gebruik
       confirmation: komt niet overeen met %{attribute}
       too_short:

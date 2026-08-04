@@ -34,7 +34,8 @@ module Locomotive
         end
       end
 
-      # Warning: do not work with localized and file fields
+      # Warning: does not work with file fields, and a localized field must be
+      # given a value per locale — a lone value is written as no value at all.
       def create(type_slug, attributes, as_json = false)
         with_repository(type_slug) do |_repository|
           _attributes = prepare_attributes(_repository.content_type, attributes)
@@ -55,7 +56,7 @@ module Locomotive
         end
       end
 
-      # Warning: do not work with localized and file fields
+      # Warning: does not work with file fields
       def update(type_slug, id_or_slug, attributes, as_json = false)
         with_repository(type_slug) do |_repository|
           entry       = _repository.by_slug(id_or_slug) || _repository.find(id_or_slug)
@@ -76,7 +77,7 @@ module Locomotive
         end
       end
 
-      # Warning: do not work with localized and file fields
+      # Warning: does not work with file fields
       def update_decorated_entry(decorated_entry, attributes)
         with_repository(decorated_entry.content_type) do |_repository|
           entry       = decorated_entry.__getobj__
@@ -163,6 +164,8 @@ module Locomotive
         # check if the entry has unique values for its
         # fields marked as unique
         content_type_repository.look_for_unique_fields(entry.content_type).each do |name, _|
+          next if entry.errors[name].present?
+
           if _repository.exists?(name => entry.send(name), :"_id.ne" => entry._id)
             entry.errors.add(name, :taken)
           end

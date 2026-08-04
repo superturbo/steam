@@ -15,7 +15,7 @@ describe Locomotive::Steam::ContentEntryService do
     let(:attributes)        { { title: 'Hello world' } }
     let(:unique_fields)     { {} }
     let(:first_validation)  { false }
-    let(:errors)            { [:title] }
+    let(:errors)            { Locomotive::Steam::Models::Concerns::Validation::Errors.new }
     let(:type)              { instance_double('Comments') }
     let(:entry_id)          { nil }
     let(:entry)             { instance_double('Entry', _id: entry_id, title: 'Hello world', content_type: type, valid?: first_validation, errors: errors, attributes: { title: 'Hello world' }, localized_attributes: []) }
@@ -31,7 +31,6 @@ describe Locomotive::Steam::ContentEntryService do
     context 'valid' do
 
       let(:first_validation) { true }
-      let(:errors) { {} }
 
       it { is_expected.to eq true }
       it { subject; expect(entry.errors.empty?).to eq true }
@@ -40,25 +39,23 @@ describe Locomotive::Steam::ContentEntryService do
 
     context 'not valid' do
 
+      before { errors.add(:body, :blank) }
+
       it { is_expected.to eq false }
-      it { subject; expect(entry.errors).to eq([:title]) }
 
       context 'with unique fields' do
 
         let(:unique_fields) { { title: instance_double('Field', name: 'title') } }
 
         before do
-          expect(entry.errors).to receive(:add).with(:title, :taken).and_return(true)
+          allow(entry_repository).to receive(:exists?)
+            .with(title: 'Hello world', :'_id.ne' => entry_id).and_return(true)
         end
 
         context 'the entry has never been persisted before' do
 
-          before do
-            allow(entry_repository).to receive(:exists?).with(title: 'Hello world', :'_id.ne' => nil).and_return(true)
-          end
-
           it { is_expected.to eq false }
-          it { subject; expect(entry.errors).to eq([:title]) }
+          it { subject; expect(entry.errors[:title]).to eq(['must be unique']) }
 
         end
 
@@ -66,12 +63,21 @@ describe Locomotive::Steam::ContentEntryService do
 
           let(:entry_id) { 42 }
 
-          before do
-            allow(entry_repository).to receive(:exists?).with(title: 'Hello world', :'_id.ne' => 42).and_return(true)
+          it { is_expected.to eq false }
+          it { subject; expect(entry.errors[:title]).to eq(['must be unique']) }
+
+        end
+
+        context 'the field already has an error' do
+
+          before { errors.add(:title, :invalid) }
+
+          it 'does not look for a duplicate of a value the entry rejected' do
+            expect(entry_repository).not_to receive(:exists?)
+            subject
           end
 
-          it { is_expected.to eq false }
-          it { subject; expect(entry.errors).to eq([:title]) }
+          it { subject; expect(entry.errors[:title]).to eq(['is invalid']) }
 
         end
 

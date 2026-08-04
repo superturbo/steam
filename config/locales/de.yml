@@ -17,6 +17,7 @@ de:
   errors:
     messages:
       blank: "leer"
+      invalid: ist nicht gültig
       taken: ist bereits vergeben
       confirmation: stimmt nicht mit %{attribute} überein
       too_short:

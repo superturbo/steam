@@ -28,6 +28,7 @@ en:
       session_assign: "Syntax Error in 'session_assign' - Valid syntax: session_assign [var] = [source]"
     messages:
       blank: "can't be blank"
+      invalid: "is invalid"
       taken: "must be unique"
       confirmation: doesn't match %{attribute}
       too_short:

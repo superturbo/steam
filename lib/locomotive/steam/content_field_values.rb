@@ -139,8 +139,66 @@ module Locomotive::Steam
       value.apply { |translated| deserialize(type, translated, zone) }
     end
 
+    # Normalizes caller input; stored values use #deserialize.
+    def normalize_input(type, value, site = nil)
+      return value if value.nil?
+
+      case type
+      when :integer, :float               then input_number(value, type)
+      when :boolean                       then blank_text?(value) ? nil : boolean(value)
+      when :date                          then input_date(value, site)
+      when :date_time                     then input_date_time(value, site)
+      when :string, :text, :email, :color then input_string(value)
+      else value
+      end
+    end
+
+    def input_number(value, type)
+      return nil if blank_text?(value)
+      return number(value, type) if value.is_a?(String)
+
+      wanted = type == :integer ? Integer : Float
+      parsed = wanted == Float && value.is_a?(Integer) ? value.to_f : value
+
+      unless parsed.instance_of?(wanted) && Adapters::NumericBounds.within?(parsed)
+        raise ParseError, "expected #{type}, got #{value.inspect}"
+      end
+
+      parsed
+    end
+
+    # A moment names the day it falls on where the site stands, which is not
+    # always the day it falls on in UTC.
+    def input_date(value, site)
+      return nil if blank_text?(value)
+      return date(value) if value.is_a?(String)
+      return value if plain_date?(value)
+      return value.to_time.in_time_zone(zone_of(site)).to_date if value.respond_to?(:to_time)
+
+      raise ParseError, "expected a date, got #{value.inspect}"
+    end
+
+    def input_date_time(value, site)
+      return nil if blank_text?(value)
+      return date_time(value, zone_of(site)).getutc if value.is_a?(String)
+      return date_at_midnight(value, zone_of(site)) if plain_date?(value)
+      return value.to_time.getutc if value.respond_to?(:to_time)
+
+      raise ParseError, "expected a date and time, got #{value.inspect}"
+    end
+
+    def input_string(value)
+      return value if value.is_a?(String)
+
+      raise ParseError, "expected text, got #{value.inspect}"
+    end
+
+    def blank_text?(value)
+      value.is_a?(String) && value.strip.empty?
+    end
+
     def zone_of(site)
-      raise ConfigurationError, 'a site timezone is required to read a date-time value' if site.nil?
+      raise ConfigurationError, 'a site timezone is required to read this value' if site.nil?
 
       site.timezone ||
         raise(ConfigurationError, "unknown timezone: #{site.timezone_name.inspect}")

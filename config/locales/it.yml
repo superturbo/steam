@@ -17,6 +17,7 @@ it:
   errors:
     messages:
       blank: "non può essere lasciato in bianco"
+      invalid: non è valido
       taken: è già presente
       confirmation: non coincide con %{attribute}
       too_short:

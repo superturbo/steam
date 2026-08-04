@@ -17,6 +17,7 @@ ru:
   errors:
     messages:
       blank: не может быть пустым
+      invalid: имеет неверное значение
       taken: уже существует
       confirmation: не совпадает со значением поля %{attribute}
       too_short:

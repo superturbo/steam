@@ -17,6 +17,7 @@ pl:
   errors:
     messages:
       blank: "nie może być puste"
+      invalid: jest nieprawidłowe
       taken: zostało już zajęte
       confirmation: nie zgadza się z polem %{attribute}
       too_short:

@@ -17,6 +17,7 @@ et:
   errors:
     messages:
       blank: "tühi"
+      invalid: ei ole korrektne
       taken: on juba võetud
       confirmation: ei vasta kinnitusele
       too_short: on liiga lühike (miinimum on %{count} tähemärki)

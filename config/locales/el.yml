@@ -17,6 +17,7 @@ el:
   errors:
     messages:
       blank: "Δεν μπορεί να είναι κενό"
+      invalid: δεν είναι έγκυρο
 
   pagination:
     previous: "&laquo; Προηγούμενο"

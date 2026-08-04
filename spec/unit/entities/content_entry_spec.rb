@@ -69,11 +69,13 @@ describe Locomotive::Steam::ContentEntry do
 
   describe '#valid?' do
 
-    let(:fields) { [instance_double('Field', name: :title, type: :string, required: true)] }
+    let(:field)           { instance_double('Field', name: :title, type: :string, persisted_name: :title) }
+    let(:fields)          { [field] }
+    let(:required_fields) { fields }
 
     before do
-      allow(repository).to receive(:required).and_return(fields)
-      allow(type).to receive(:fields_by_name).and_return({ title: fields.first })
+      allow(repository).to receive(:required).and_return(required_fields)
+      allow(type).to receive(:fields_by_name).and_return(fields.index_by(&:name))
     end
 
     subject { content_entry.valid? }
@@ -85,6 +87,312 @@ describe Locomotive::Steam::ContentEntry do
       it { is_expected.to eq false }
       it { subject; expect(content_entry.errors[:title]).to eq(["can't be blank"]) }
       it { subject; expect(content_entry.errors.empty?).to eq false }
+
+    end
+
+    context 'a required text field holding only spaces' do
+
+      let(:attributes) { { title: '   ' } }
+
+      it { is_expected.to eq false }
+      it { subject; expect(content_entry.errors[:title]).to eq(["can't be blank"]) }
+
+    end
+
+    context 'a number field' do
+
+      let(:field)           { instance_double('Field', name: :score, type: :integer, persisted_name: :score) }
+      let(:required_fields) { [] }
+      let(:attributes)      { { score: ' 12 ' } }
+
+      it { is_expected.to eq true }
+
+      it 'keeps the value the field would store' do
+        subject
+        expect(content_entry.attributes[:score]).to eq(12)
+      end
+
+      context 'holding a number no store can keep' do
+
+        let(:field)      { instance_double('Field', name: :price, type: :float, persisted_name: :price) }
+        let(:attributes) { { price: 10**400 } }
+
+        it { subject; expect(content_entry.errors[:price]).to eq(['is invalid']) }
+
+      end
+
+      context 'holding text the field cannot read' do
+
+        let(:attributes) { { score: 'abc' } }
+
+        it { is_expected.to eq false }
+        it { subject; expect(content_entry.errors[:score]).to eq(['is invalid']) }
+
+        it 'leaves the value the caller sent' do
+          subject
+          expect(content_entry.attributes[:score]).to eq('abc')
+        end
+
+        it 'reports the same errors when asked twice' do
+          content_entry.valid?
+          expect { content_entry.valid? }.not_to change { content_entry.errors.to_hash }
+        end
+
+      end
+
+      context 'localized' do
+
+        let(:attributes) { { score: build_i18n_field(en: ' 12 ', fr: '13') } }
+
+        before { content_entry.localized_attributes = { score: true } }
+
+        it 'keeps the value of every locale' do
+          subject
+          expect(content_entry.attributes[:score].translations).to eq('en' => 12, 'fr' => 13)
+        end
+
+        context 'unreadable in one locale' do
+
+          let(:attributes) { { score: build_i18n_field(en: '12', fr: 'abc') } }
+
+          it { is_expected.to eq false }
+
+          it 'leaves every locale as the caller sent it' do
+            subject
+            expect(content_entry.attributes[:score].translations).to eq('en' => '12', 'fr' => 'abc')
+          end
+
+        end
+
+      end
+
+      context 'required and set to zero' do
+
+        let(:required_fields) { fields }
+        let(:attributes)      { { score: 0 } }
+
+        it { is_expected.to eq true }
+
+      end
+
+    end
+
+    context 'a date field' do
+
+      let(:field)           { instance_double('Field', name: :held_on, type: :date, persisted_name: :held_on) }
+      let(:required_fields) { [] }
+      let(:attributes)      { { held_on: Time.utc(2020, 1, 2, 2) } }
+
+      before do
+        content_entry.site = instance_double('Site',
+          timezone: ActiveSupport::TimeZone['America/New_York'], default_locale: :en)
+      end
+
+      it 'keeps the day the moment falls on where the site stands' do
+        subject
+        expect(content_entry.attributes[:held_on]).to eq Date.new(2020, 1, 1)
+      end
+
+      context 'given a day rather than a moment' do
+
+        let(:attributes) { { held_on: '2020-01-02' } }
+
+        before { content_entry.site = instance_double('Site', timezone: nil) }
+
+        it 'reads it without asking where the site stands' do
+          subject
+          expect(content_entry.attributes[:held_on]).to eq Date.new(2020, 1, 2)
+        end
+
+      end
+
+    end
+
+    context 'a required boolean field' do
+
+      let(:field)      { instance_double('Field', name: :flag, type: :boolean, persisted_name: :flag) }
+      let(:attributes) { { flag: false } }
+
+      it { is_expected.to eq true }
+
+      context 'never answered' do
+
+        let(:attributes) { {} }
+
+        it { subject; expect(content_entry.errors[:flag]).to eq(["can't be blank"]) }
+
+      end
+
+    end
+
+    context 'a required localized boolean field' do
+
+      let(:field)      { instance_double('Field', name: :flag, type: :boolean, persisted_name: :flag) }
+      let(:attributes) { { flag: build_i18n_field(en: false, fr: true) } }
+
+      before do
+        content_entry.localized_attributes = { flag: true }
+        content_entry.site = instance_double('Site', timezone: ActiveSupport::TimeZone['UTC'],
+                                                     default_locale: :en)
+      end
+
+      it { is_expected.to eq true }
+
+    end
+
+    context 'a required association' do
+
+      let(:field) { instance_double('Field', name: :maker, type: :belongs_to, persisted_name: 'maker_id') }
+
+      let(:proxy) { Locomotive::Steam::Models::BelongsToAssociation.allocate }
+
+      context 'the entry names none' do
+
+        let(:attributes) { { maker: proxy, maker_id: nil } }
+
+        it { subject; expect(content_entry.errors[:maker]).to eq(["can't be blank"]) }
+
+      end
+
+      context 'the entry names one' do
+
+        let(:attributes) { { maker: proxy, maker_id: 42 } }
+
+        it { is_expected.to eq true }
+
+      end
+
+      context 'many to many' do
+
+        let(:field) { instance_double('Field', name: :topics, type: :many_to_many, persisted_name: 'topic_ids') }
+        let(:proxy) { Locomotive::Steam::Models::ManyToManyAssociation.allocate }
+
+        context 'holding no id' do
+
+          let(:attributes) { { topics: proxy, topic_ids: [] } }
+
+          it { subject; expect(content_entry.errors[:topics]).to eq(["can't be blank"]) }
+
+        end
+
+        context 'holding one' do
+
+          let(:attributes) { { topics: proxy, topic_ids: [42] } }
+
+          it { is_expected.to eq true }
+
+        end
+
+      end
+
+      context 'has many' do
+
+        let(:field)      { instance_double('Field', name: :reviews, type: :has_many, persisted_name: nil) }
+        let(:attributes) { {} }
+
+        it { is_expected.to eq true }
+
+      end
+
+    end
+
+    context 'a required file field' do
+
+      let(:field) { instance_double('Field', name: :cover, type: :file, persisted_name: :cover) }
+
+      context 'the entry names no file' do
+
+        let(:attributes) { { cover: nil } }
+
+        it { subject; expect(content_entry.errors[:cover]).to eq(["can't be blank"]) }
+
+      end
+
+      context 'the entry names one' do
+
+        let(:attributes) { { cover: 'poster.png' } }
+
+        it { is_expected.to eq true }
+
+      end
+
+      context 'localized, named in the default locale only' do
+
+        let(:attributes) { { cover: build_i18n_field(en: 'poster.png', fr: nil) } }
+
+        before do
+          content_entry.localized_attributes = { cover: true }
+          content_entry.site = instance_double('Site', timezone: ActiveSupport::TimeZone['UTC'],
+                                                       default_locale: :en)
+        end
+
+        it { is_expected.to eq true }
+
+      end
+
+    end
+
+    context 'a required select field' do
+
+      let(:options)    { instance_double('SelectOptionRepository') }
+      let(:field)      { instance_double('Field', name: :category, type: :select,
+                                                  persisted_name: 'category_id', select_options: options) }
+      let(:attributes) { {} }
+
+      before do
+        allow(options).to receive(:by_id_or_name).and_return(nil)
+        content_entry.site = instance_double('Site', timezone: ActiveSupport::TimeZone['UTC'],
+                                                     default_locale: :en)
+      end
+
+      it { subject; expect(content_entry.errors[:category]).to eq(["can't be blank"]) }
+
+      context 'holding an option' do
+
+        let(:attributes) { { category_id: 42 } }
+
+        before do
+          allow(options).to receive(:by_id_or_name).with(42)
+            .and_return(instance_double('SelectOption', name: build_i18n_field(en: 'alpha')))
+        end
+
+        it { is_expected.to eq true }
+
+      end
+
+    end
+
+    context 'a required date field the value does not read as' do
+
+      let(:field)      { instance_double('Field', name: :held_on, type: :date, persisted_name: :held_on) }
+      let(:attributes) { { held_on: 'nope' } }
+
+      it 'reports what is wrong with it, not that it is missing' do
+        subject
+        expect(content_entry.errors[:held_on]).to eq(['is invalid'])
+      end
+
+    end
+
+    context 'a required localized field' do
+
+      let(:attributes) { { title: build_i18n_field(en: 'Hello', fr: '') } }
+
+      before do
+        content_entry.localized_attributes = { title: true }
+        content_entry.site = instance_double('Site', timezone: ActiveSupport::TimeZone['UTC'],
+                                                     default_locale: :en)
+      end
+
+      it { is_expected.to eq true }
+
+      context 'blank in the default locale' do
+
+        let(:attributes) { { title: build_i18n_field(en: '', fr: 'Bonjour') } }
+
+        it { subject; expect(content_entry.errors[:title]).to eq(["can't be blank"]) }
+
+      end
 
     end
 
@@ -213,10 +521,44 @@ describe Locomotive::Steam::ContentEntry do
       end
     end
 
+    context 'a value no number can be read from' do
+      let(:field_type)  { :integer }
+      let(:value)       { 'abc' }
+
+      it { is_expected.to eq nil }
+
+      it 'leaves the stored value alone' do
+        subject
+        expect(content_entry.attributes[:my_field]).to eq 'abc'
+      end
+
+      context 'a fraction of one' do
+        let(:value) { 12.7 }
+
+        it { is_expected.to eq nil }
+
+        it 'leaves the stored value alone' do
+          subject
+          expect(content_entry.attributes[:my_field]).to eq 12.7
+        end
+      end
+
+      context 'a number of another kind' do
+        let(:field_type) { :float }
+        let(:value)      { BigDecimal('1.5') }
+
+        it { is_expected.to eq nil }
+      end
+    end
+
     context 'a float' do
       let(:field_type)  { :float }
       let(:value)       { '42.0' }
       it { is_expected.to eq 42.0 }
+      context 'given a whole number' do
+        let(:value) { 42 }
+        it { is_expected.to eql 42.0 }
+      end
       context 'localized' do
         let(:value) { build_i18n_field(en: 42.0, fr: '42.0') }
         it { expect(subject.translations).to eq('en' => 42.0, 'fr' => 42.0) }

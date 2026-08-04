@@ -17,6 +17,7 @@ es:
   errors:
     messages:
       blank: "no puede estar en blanco"
+      invalid: no es válido
       taken: ya está en uso
       confirmation: no coincide
       too_short:
