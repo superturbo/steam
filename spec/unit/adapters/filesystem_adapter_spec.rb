@@ -91,6 +91,29 @@ describe Locomotive::Steam::FilesystemAdapter do
       expect(adapter.find(mapper, scope, 1).name).to eq 'My post'
     end
 
+    it 'starts a field the record never set at zero' do
+      expect(adapter.inc(mapper, scope, entity, :reads).reads).to eq 1
+    end
+
+    it 'refuses a stored value no store would increment' do
+      stored.views = 'lots'
+
+      expect { subject }.to raise_error(Locomotive::Steam::InvalidIncrement, 'views holds "lots"')
+    end
+
+    it 'refuses a stored null, which is not a field it may create' do
+      stored.views = nil
+
+      expect { subject }.to raise_error(Locomotive::Steam::InvalidIncrement, 'views holds nil')
+    end
+
+    it 'refuses a stored value with no room for the amount' do
+      stored.views = 2**63 - 1
+
+      expect { subject }.to raise_error(Locomotive::Steam::InvalidIncrement, 'views has no room for 1')
+      expect(stored.views).to eq 2**63 - 1
+    end
+
     describe 'by an amount different from 1' do
 
       subject { adapter.inc(mapper, scope, entity, :views, 3) }

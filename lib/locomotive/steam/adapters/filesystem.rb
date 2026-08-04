@@ -1,4 +1,5 @@
 require_relative 'memory'
+require_relative 'numeric_bounds'
 
 require_relative 'filesystem/simple_cache_store'
 
@@ -50,8 +51,15 @@ module Locomotive::Steam
     end
 
     def inc(mapper, scope, entity, attribute, amount = 1)
-      record = memoized_dataset(mapper, scope).find(entity._id)
-      value  = (record[attribute] || 0) + amount
+      record    = memoized_dataset(mapper, scope).find(entity._id)
+      current   = increment_base(record, attribute, amount)
+      low, high = Adapters::NumericBounds.room_for(amount)
+
+      unless (low..high).cover?(current)
+        raise InvalidIncrement, "#{attribute} has no room for #{amount.inspect}"
+      end
+
+      value = current + amount
 
       record[attribute] = value
       entity[attribute] = value
@@ -80,6 +88,17 @@ module Locomotive::Steam
     end
 
     private
+
+    # Missing fields start at zero; stored values must keep the amount's type.
+    def increment_base(record, attribute, amount)
+      return amount.instance_of?(Integer) ? 0 : 0.0 unless record.respond_to?(attribute)
+
+      current = record[attribute]
+
+      return current if current.instance_of?(amount.class)
+
+      raise InvalidIncrement, "#{attribute} holds #{current.inspect}"
+    end
 
     def _query(mapper, scope, &block)
       Locomotive::Steam::Adapters::Memory::Query.new(all(mapper, scope), scope.locale, &block)

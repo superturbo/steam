@@ -18,6 +18,9 @@ module Locomotive::Steam
   class PageNotFoundException < ::Exception
   end
 
+  class InvalidIncrement < ::ArgumentError
+  end
+
   class TemplateError < ::Liquid::Error
 
     LINES_RANGE = 10

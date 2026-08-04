@@ -1,3 +1,5 @@
+require_relative '../adapters/numeric_bounds'
+
 module Locomotive
   module Steam
 
@@ -97,6 +99,10 @@ module Locomotive
         end
       end
 
+      def inc(entity, attribute, amount = 1)
+        super(entity, attribute, increment_amount(attribute, amount))
+      end
+
       def next(entry)
         navigate(entry, :next)
       end
@@ -130,7 +136,9 @@ module Locomotive
 
       ORDERABLE_SYSTEM_FIELDS = %w(_slug _position _visible created_at updated_at).freeze
 
-      private_constant :ORDERABLE_FIELD_TYPES, :ORDERABLE_SYSTEM_FIELDS
+      INCREMENTABLE_FIELD_TYPES = %i(integer float).freeze
+
+      private_constant :ORDERABLE_FIELD_TYPES, :ORDERABLE_SYSTEM_FIELDS, :INCREMENTABLE_FIELD_TYPES
 
       # A default fills a field the attributes leave out. An explicit null is a
       # value, and a stored entry is never revisited, so the two stay apart.
@@ -165,6 +173,24 @@ module Locomotive
         end
 
         option._id
+      end
+
+      def increment_amount(attribute, amount)
+        field = content_type.fields_by_name[attribute.to_s]
+
+        unless field && INCREMENTABLE_FIELD_TYPES.include?(field.type)
+          raise InvalidIncrement, "#{content_type.slug}.#{attribute} is not a number"
+        end
+
+        # A float field keeps its type whatever whole number it is given.
+        integer = field.type == :integer
+        amount  = amount.to_f if !integer && amount.is_a?(Integer)
+
+        unless amount.instance_of?(integer ? Integer : Float) && Adapters::NumericBounds.within?(amount)
+          raise InvalidIncrement, "#{content_type.slug}.#{attribute} cannot take #{amount.inspect}"
+        end
+
+        amount
       end
 
       def ordered_entries(conditions = {}, &block)
@@ -337,9 +363,7 @@ module Locomotive
         INTEGER_FORMAT = /\A[+-]?\d+\z/.freeze
         FLOAT_FORMAT   = /\A[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?\z/.freeze
 
-        INT64_RANGE = (-2**63..2**63 - 1).freeze
-
-        private_constant :INTEGER_FORMAT, :FLOAT_FORMAT, :INT64_RANGE
+        private_constant :INTEGER_FORMAT, :FLOAT_FORMAT
 
         def initialize(conditions = {}, fields, target_repository)
           @conditions = Adapters::Query::Criteria.normalize(conditions)
@@ -553,8 +577,7 @@ module Locomotive
         # operands. Other Numerics, BigDecimal among them, are left alone.
         def within_numeric_bounds?(number)
           case number
-          when Integer then INT64_RANGE.cover?(number)
-          when Float   then number.finite?
+          when Integer, Float then Adapters::NumericBounds.within?(number)
           else true
           end
         end
