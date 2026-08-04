@@ -951,6 +951,36 @@ describe 'Adapter parity' do
           [stored.maker&.name, stored.topics.all.map(&:name)]
         end
 
+        def service_in(locale)
+          types = Locomotive::Steam::ContentTypeRepository.new(adapter, site, locale)
+
+          Locomotive::Steam::ContentEntryService.new(
+            types, Locomotive::Steam::ContentEntryRepository.new(adapter, site, locale, types), locale)
+        end
+
+        def localized_specimen
+          service.create('specimens', name: 'Localized', category_id: option_id(:category, 'alpha'),
+                                      topic_ids: [], title: { 'en' => 'Hello', 'fr' => 'Bonjour' })
+        end
+
+        it 'keeps a localized field localized through an update' do
+          created = localized_specimen
+
+          service.update('specimens', created._id, title: 'Only en now')
+
+          expect(entries_of('specimens').find(created._id).title.translations)
+            .to eq('en' => 'Only en now', 'fr' => 'Bonjour')
+        end
+
+        it 'writes a lone value into the locale being edited' do
+          created = localized_specimen
+
+          service_in(:fr).update('specimens', created._id, title: 'Salut')
+
+          expect(entries_of('specimens').find(created._id).title.translations)
+            .to eq('en' => 'Hello', 'fr' => 'Salut')
+        end
+
         it 'writes the links a new entry declares' do
           entry = nil
 

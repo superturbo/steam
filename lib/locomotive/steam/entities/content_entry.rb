@@ -17,6 +17,13 @@ module Locomotive::Steam
       }.merge(attributes))
     end
 
+    # Positional locale preserves calls such as change(title: 'x').
+    def change(new_attributes, locale = nil)
+      super((new_attributes || {}).each_with_object({}) do |(name, value), changed|
+        changed[name] = localized?(name) ? localized_change(name, value, locale) : value
+      end)
+    end
+
     def _id; self[:_id] || self[:id]; end
 
     def _visible?; !!self[:_visible]; end
@@ -108,6 +115,21 @@ module Locomotive::Steam
     end
 
     private
+
+    def localized?(name)
+      (localized_attributes || {})[name.to_sym]
+    end
+
+    def localized_change(name, value, locale)
+      return value if value.respond_to?(:translations)
+
+      current = self[name]
+      field   = current.respond_to?(:translations) ? current.dup : Models::I18nField.new(name.to_sym, {})
+
+      value.is_a?(Hash) ? field.translations = value : field[locale || site.default_locale] = value
+
+      field
+    end
 
     def is_dynamic_attribute?(name)
       content_type.fields_by_name.has_key?(name)

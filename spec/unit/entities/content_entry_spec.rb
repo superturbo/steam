@@ -26,6 +26,45 @@ describe Locomotive::Steam::ContentEntry do
     it { expect(subject.title).to eq('Hello world!') }
     it { expect(subject._slug).to eq('hello-world') }
 
+    context 'a localized field' do
+
+      let(:attributes) do
+        { title: build_i18n_field(en: 'Hello', fr: 'Bonjour'), _slug: 'hello-world' }
+      end
+
+      before do
+        content_entry.localized_attributes = { title: true }
+        content_entry.site = instance_double('Site', timezone: ActiveSupport::TimeZone['UTC'],
+                                                     default_locale: :en)
+      end
+
+      it 'writes one value into the site default locale, keeping the rest' do
+        expect(subject[:title].translations).to eq('en' => 'Hello world!', 'fr' => 'Bonjour')
+      end
+
+      context 'while another locale is being edited' do
+        subject { content_entry.change({ 'title' => 'Salut' }, :fr) }
+
+        it { expect(subject[:title].translations).to eq('en' => 'Hello', 'fr' => 'Salut') }
+      end
+
+      context 'given a value per locale' do
+        subject { content_entry.change('title' => { 'en' => 'Hi', 'fr' => 'Salut' }) }
+
+        it 'keeps a field the store can write' do
+          expect(subject[:title]).to be_a(Locomotive::Steam::Models::I18nField)
+          expect(subject[:title].translations).to eq('en' => 'Hi', 'fr' => 'Salut')
+        end
+      end
+
+      context 'a field the entry does not carry yet' do
+        let(:attributes) { { _slug: 'hello-world' } }
+
+        it { expect(subject[:title].translations).to eq('en' => 'Hello world!') }
+      end
+
+    end
+
   end
 
   describe '#valid?' do

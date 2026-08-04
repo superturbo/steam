@@ -63,7 +63,7 @@ module Locomotive
 
           # A rejected update must not mutate the memoized or filesystem-backed entry.
           candidate       = entry.dup
-          decorated_entry = i18n_decorate { candidate.change(_attributes) }
+          decorated_entry = i18n_decorate { candidate.change(_attributes, locale) }
 
           if validate(_repository, decorated_entry)
             _repository.update(candidate)
@@ -82,7 +82,7 @@ module Locomotive
           entry       = decorated_entry.__getobj__
           _attributes = prepare_attributes(_repository.content_type, attributes)
 
-          entry.change(_attributes)
+          entry.change(_attributes, locale)
 
           # An unset non-localized select still holds a value MongoDB refuses.
           _repository.content_type.select_fields.each do |field|
