@@ -6,7 +6,7 @@ module Locomotive::Steam
 
     include Locomotive::Steam::Models::Entity
 
-    attr_accessor :content_type
+    attr_accessor :content_type, :site
 
     def initialize(attributes = {})
       super({
@@ -118,6 +118,8 @@ module Locomotive::Steam
 
       begin
         _cast_value(field)
+      rescue ContentFieldValues::ConfigurationError
+        raise
       rescue Exception => e
         Locomotive::Common::Logger.info "[#{content_type.slug}][#{_label}] Unable to cast the \"#{name}\" field, reason: #{e.message}".yellow
         nil
@@ -177,15 +179,11 @@ module Locomotive::Steam
 
     def _cast_time(field, end_method)
       _cast_convertor(field.name) do |value|
-        if value.is_a?(String)
-          # context: time from a YAML file (String).
-          # In that case, use the timezone defined by the site.
-          parsed = Time.zone.parse(value)
-          raise ArgumentError, "invalid date: #{value.inspect}" if parsed.nil?
-          parsed.public_send(end_method)
-        else
-          value
-        end
+        next value unless value.is_a?(String)
+
+        next ContentFieldValues.date(value) if end_method == :to_date
+
+        ContentFieldValues.date_time(value, ContentFieldValues.zone_of(site)).getutc
       end
     end
 

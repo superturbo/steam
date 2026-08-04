@@ -1059,6 +1059,18 @@ describe 'Adapter parity' do
         expect(entry('explicit-nils').visibility_id).to be_nil
       end
 
+      it 'reads a date and a date-time as the same value from either store' do
+        stored = entry('scalars')
+
+        expect(stored[:held_on]).to eql Date.new(2013, 2, 11)
+        expect(stored[:at]).to eql Time.utc(2012, 6, 6, 12)
+      end
+
+      it 'leaves a field the store never wrote missing' do
+        expect(entry('all-missing').attributes).not_to have_key('held_on')
+        expect(entry('explicit-nils').attributes['at']).to be_nil
+      end
+
       it 'keeps missing and null numeric values nil' do
         expect(entry('explicit-nils').score).to be_nil
         expect(entry('all-missing').score).to be_nil

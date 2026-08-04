@@ -27,7 +27,7 @@ module Locomotive::Steam
       end
 
       def build(attributes, &block)
-        mapper.to_entity(attributes)
+        mapper.build_entity(attributes)
       end
 
       def create(entity)

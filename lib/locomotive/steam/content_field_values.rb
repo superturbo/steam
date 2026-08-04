@@ -2,10 +2,11 @@ require_relative 'adapters/numeric_bounds'
 
 module Locomotive::Steam
 
-  # Parses scalar field values without deciding how callers handle invalid input.
+  # Normalizes content field values independently of their storage adapter.
   module ContentFieldValues
 
     class ParseError < StandardError; end
+    class ConfigurationError < StandardError; end
 
     # Numeric strings accept decimal notation only.
     INTEGER_FORMAT = /\A[+-]?\d+\z/.freeze
@@ -53,9 +54,9 @@ module Locomotive::Steam
       end
     end
 
-    # A date on its own resolves to midnight in the current zone; an offset the
-    # value carries decides the instant on its own.
-    def date_time(value)
+    # A date on its own resolves to midnight in the zone it is given; an offset
+    # the value carries decides the instant on its own.
+    def date_time(value, zone)
       candidate = value.strip
 
       unless DASH_DATE.match?(candidate) || ISO_TIME.match?(candidate)
@@ -63,12 +64,86 @@ module Locomotive::Steam
       end
 
       parsed = begin
-        Time.zone.parse(candidate)
+        zone.parse(candidate)
       rescue ArgumentError
         nil
       end
 
       parsed || raise(ParseError, "invalid date: #{value.inspect}")
+    end
+
+    # A value the grammar cannot read is left exactly as it is.
+    def deserialize(type, value, zone)
+      case type
+      when :date      then stored_date(value)
+      when :date_time then stored_date_time(value, zone)
+      else value
+      end
+    end
+
+    def stored_date(value)
+      return date(value) if value.is_a?(String)
+      return value if plain_date?(value)
+      return value.to_time.getutc.to_date if value.respond_to?(:to_time)
+
+      value
+    rescue ParseError
+      value
+    end
+
+    def stored_date_time(value, zone)
+      return date_time(value, zone).getutc if value.is_a?(String)
+      return date_at_midnight(value, zone) if plain_date?(value)
+      return value.to_time.getutc if value.respond_to?(:to_time)
+
+      value
+    rescue ParseError
+      value
+    end
+
+    def plain_date?(value)
+      value.is_a?(Date) && !value.is_a?(DateTime)
+    end
+
+    # A calendar date names a day, not an instant: the zone decides which.
+    def date_at_midnight(value, zone)
+      zone.local(value.year, value.month, value.day).getutc
+    end
+
+    STORED_DIFFERENTLY = %i(date date_time).freeze
+
+    private_constant :STORED_DIFFERENTLY
+
+    # Preserve missing fields and resolve the timezone only when needed.
+    def deserialize_entry(entity)
+      zone = nil
+
+      entity.content_type.fields_by_name.each_value do |field|
+        next unless STORED_DIFFERENTLY.include?(field.type)
+
+        name = field.persisted_name
+        next unless name && entity.attributes.key?(name)
+
+        zone ||= zone_of(entity.site) if field.type == :date_time
+
+        entity.attributes[name] = deserialize_attribute(field.type, entity.attributes[name], zone)
+      end
+
+      entity
+    end
+
+    # Preserve scalar fallbacks and absent translations.
+    def deserialize_attribute(type, value, zone)
+      return deserialize(type, value, zone) unless value.respond_to?(:translations)
+
+      value.apply { |translated| deserialize(type, translated, zone) }
+    end
+
+    def zone_of(site)
+      raise ConfigurationError, 'a site timezone is required to read a date-time value' if site.nil?
+
+      site.timezone ||
+        raise(ConfigurationError, "unknown timezone: #{site.timezone_name.inspect}")
     end
 
     def boolean(value)

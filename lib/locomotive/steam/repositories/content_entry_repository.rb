@@ -30,6 +30,9 @@ module Locomotive
         localized_attributes :_slug, :seo_title, :meta_description, :meta_keywords
 
         default_attribute :content_type, -> (repository) { repository.content_type }
+        default_attribute :site,         -> (repository) { repository.site }
+
+        after_load { |entity, _| Locomotive::Steam::ContentFieldValues.deserialize_entry(entity) }
       end
 
       # this is the starting point of all the next methods.
@@ -524,14 +527,14 @@ module Locomotive
           when Set    then value.map { |element| value_to_date(element, type) }
           when String then parse_date(value, type)
           else
-            converter = type == :date ? :to_date : :to_datetime
+            converter = type == :date ? :to_date : :to_time
 
             unless value.respond_to?(converter)
               raise Locomotive::Steam::Adapters::Query::InvalidValue,
                     "expected a date-compatible value, got #{value.inspect}"
             end
 
-            value.public_send(converter)
+            typed_date_operand(value, type)
           end
         end
 
@@ -571,6 +574,17 @@ module Locomotive
           Locomotive::Steam::Adapters::Query::Values.unmatchable
         end
 
+        def typed_date_operand(value, type)
+          return value.to_date if type == :date
+          return ContentFieldValues.date_at_midnight(value, site_zone) if ContentFieldValues.plain_date?(value)
+
+          value.to_time.getutc
+        end
+
+        def site_zone
+          ContentFieldValues.zone_of(@target_repository.site)
+        end
+
         def parse_boolean(value)
           Locomotive::Steam::ContentFieldValues.boolean(value)
         rescue Locomotive::Steam::ContentFieldValues::ParseError
@@ -595,9 +609,9 @@ module Locomotive
         end
 
         def parse_date(value, type)
-          parsed = Locomotive::Steam::ContentFieldValues.public_send(type, value)
+          return ContentFieldValues.date(value) if type == :date
 
-          type == :date ? parsed : parsed.to_datetime
+          ContentFieldValues.date_time(value, site_zone).getutc
         rescue Locomotive::Steam::ContentFieldValues::ParseError
           Locomotive::Steam::Adapters::Query::Values.unmatchable
         end

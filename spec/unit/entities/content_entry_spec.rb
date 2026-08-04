@@ -8,7 +8,10 @@ describe Locomotive::Steam::ContentEntry do
   let(:attributes)  { { title: 'Hello world', _slug: 'hello-world' } }
   let(:content_entry) { described_class.new(attributes) }
 
-  before { content_entry.content_type = type }
+  before do
+    content_entry.content_type = type
+    content_entry.site         = instance_double('Site', timezone: ActiveSupport::TimeZone['UTC'])
+  end
 
   describe '#change' do
 
@@ -197,19 +200,31 @@ describe Locomotive::Steam::ContentEntry do
       end
     end
 
+    context 'a date time without a site to read it in' do
+
+      before { content_entry.site = nil }
+
+      let(:field_type) { :date_time }
+      let(:value)      { '2007-06-29T10:00:00' }
+
+      it 'says so instead of reading it as no value' do
+        expect { subject }.to raise_error(Locomotive::Steam::ContentFieldValues::ConfigurationError)
+      end
+
+    end
+
     context 'a date time' do
-      before { Time.zone = 'UTC' }
       let(:field_type)  { :date_time }
-      let(:value)       { '2007/06/29 10:00:00' }
-      let(:datetime)    { DateTime.parse('2007/06/29 10:00:00') }
-      it { is_expected.to eq datetime }
+      let(:value)       { '2007-06-29T10:00:00' }
+      let(:time)        { Time.utc(2007, 6, 29, 10) }
+      it { is_expected.to eql time }
       context 'localized' do
-        let(:value) { build_i18n_field(en: '2007/06/29 10:00:00', fr: datetime) }
-        it { expect(subject.translations).to eq('en' => datetime, 'fr' => datetime) }
+        let(:value) { build_i18n_field(en: '2007-06-29T10:00:00', fr: time) }
+        it { expect(subject.translations).to eq('en' => time, 'fr' => time) }
       end
       context 'a date-only value resolves to midnight' do
         let(:value) { '2019-09-10' }
-        it { is_expected.to eq DateTime.new(2019, 9, 10, 0, 0, 0) }
+        it { is_expected.to eql Time.utc(2019, 9, 10) }
       end
       context 'an unparseable date-time value' do
         let(:value) { 'tomorrow' }
