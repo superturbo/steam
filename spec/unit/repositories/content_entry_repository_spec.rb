@@ -710,7 +710,11 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       context 'a natural-language date value' do
         let(:value) { 'tomorrow' }
-        it { expect { subject }.to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue) }
+
+        it 'names the value it could not read' do
+          expect { subject }.to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue,
+                                            'invalid date: "tomorrow"')
+        end
       end
 
       context 'a non-existent calendar date' do

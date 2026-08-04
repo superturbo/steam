@@ -1,4 +1,5 @@
 require_relative '../adapters/numeric_bounds'
+require_relative '../content_field_values'
 
 module Locomotive
   module Steam
@@ -359,12 +360,6 @@ module Locomotive
 
       class Conditions
 
-        # Numeric strings accept decimal notation only.
-        INTEGER_FORMAT = /\A[+-]?\d+\z/.freeze
-        FLOAT_FORMAT   = /\A[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?\z/.freeze
-
-        private_constant :INTEGER_FORMAT, :FLOAT_FORMAT
-
         def initialize(conditions = {}, fields, target_repository)
           @conditions = Adapters::Query::Criteria.normalize(conditions)
           @fields = fields
@@ -555,14 +550,9 @@ module Locomotive
         # Invalid numeric strings remain strings, avoiding errors and nil
         # semantics.
         def parse_number(value, type)
-          candidate = value.strip
-          format    = type == :integer ? INTEGER_FORMAT : FLOAT_FORMAT
-
-          return value unless format.match?(candidate)
-
-          number = type == :integer ? Integer(candidate, 10) : Float(candidate)
-
-          within_numeric_bounds?(number) ? number : value
+          Locomotive::Steam::ContentFieldValues.number(value, type)
+        rescue Locomotive::Steam::ContentFieldValues::ParseError
+          value
         end
 
         # Typed numeric operands must stay within the supported query domain.
@@ -583,16 +573,9 @@ module Locomotive
         end
 
         def parse_date(value)
-          parsed = begin
-            Time.zone.parse(value)
-          rescue ArgumentError
-            nil
-          end
-
-          parsed || raise(
-            Locomotive::Steam::Adapters::Query::InvalidValue,
-            "invalid date: #{value.inspect}"
-          )
+          Locomotive::Steam::ContentFieldValues.time(value)
+        rescue Locomotive::Steam::ContentFieldValues::ParseError => e
+          raise Locomotive::Steam::Adapters::Query::InvalidValue, e.message
         end
 
       end
