@@ -20,6 +20,18 @@ describe 'Query parity' do
     { desc: 'equality on a boolean field',
       conditions: { flag: false }, expected: %w(arrays embedded zero) },
 
+    { desc: 'a boolean written the way a form sends it',
+      conditions: { flag: '1' }, expected: %w(scalars) },
+
+    { desc: 'a boolean the grammar cannot read matches nothing',
+      conditions: { flag: 'yes' }, expected: [] },
+
+    { desc: 'a date written with the slash form the documentation spells',
+      conditions: { 'held_on.lte' => '2020/01/01' }, expected: %w(arrays scalars) },
+
+    { desc: 'a date the grammar cannot read matches nothing',
+      conditions: { 'held_on.lte' => 'tomorrow' }, expected: [] },
+
     { desc: 'gt treats true as greater than false',
       conditions: { 'flag.gt' => false }, expected: %w(scalars) },
 
@@ -165,7 +177,7 @@ describe 'Query parity' do
     { desc: 'a hexadecimal String is not a number',
       conditions: { 'price.gt' => '0x1' }, expected: [] },
 
-    # The decimal overflows Float and remains a non-numeric operand.
+    # The decimal overflows Float and therefore matches nothing.
     { desc: 'a String that overflows to infinity is not a number either',
       conditions: { 'price.lt' => '1e9999' }, expected: [] },
 

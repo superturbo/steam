@@ -38,6 +38,10 @@ module Locomotive
         query { where(k(:type, :in) => %i(integer float)) }.all
       end
 
+      def booleans
+        query { where(type: :boolean) }.all
+      end
+
       def belongs_to
         query { where(type: :belongs_to) }.all
       end

@@ -4,7 +4,7 @@ require_relative '../../../lib/locomotive/steam/adapters/filesystem.rb'
 
 describe Locomotive::Steam::ContentEntryRepository do
 
-  let(:_fields) { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: []) }
+  let(:_fields) { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
   let(:type)    { build_content_type('Articles', label_field_name: :title, localized_names: [:title], fields: _fields, fields_by_name: { title: instance_double('Field', name: :title, type: :string) }, fields_with_default: []) }
   let(:entries) { [{ content_type_id: 1, _position: 0, _label: 'Update #1', title: { fr: 'Mise a jour #1' }, text: { en: 'added some free stuff', fr: 'phrase FR' }, date: '2009/05/12', category: 'General' }] }
   let(:locale)  { :en }
@@ -331,7 +331,7 @@ describe Locomotive::Steam::ContentEntryRepository do
     let(:other_type)    { build_content_type('Authors', _id: 2, label_field_name: :name, fields: _fields, fields_by_name: { name: instance_double('Field', name: :name, type: :string) }, fields_with_default: []) }
     let(:other_entries) { [{ content_type_id: 2, _id: 'john-doe', name: 'John Doe' }] }
 
-    let(:type_repository) { instance_double('ArticleBelongsToRepository', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: []) }
+    let(:type_repository) { instance_double('ArticleBelongsToRepository', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
 
     before do
       allow(type).to receive(:fields).and_return(type_repository)
@@ -358,7 +358,7 @@ describe Locomotive::Steam::ContentEntryRepository do
     # The target declares the belongs_to named by its inverse position.
     let(:title_field)   { instance_double('Field', name: :title, type: :string) }
     let(:author_field)  { instance_double('Field', name: :author, type: :belongs_to) }
-    let(:target_fields) { instance_double('Fields', selects: [], belongs_to: [author_field], many_to_many: [], dates_and_date_times: [], numbers: []) }
+    let(:target_fields) { instance_double('Fields', selects: [], belongs_to: [author_field], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
     let(:other_type) do
       build_content_type('Articles', _id: 2, label_field_name: :title, fields: target_fields,
                          fields_by_name: { title: title_field, author: author_field },
@@ -372,7 +372,7 @@ describe Locomotive::Steam::ContentEntryRepository do
         ]
       }
 
-    let(:type_repository) { instance_double('AuthorRepository', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: []) }
+    let(:type_repository) { instance_double('AuthorRepository', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
 
     before do
       allow(type).to receive(:fields).and_return(type_repository)
@@ -455,7 +455,7 @@ describe Locomotive::Steam::ContentEntryRepository do
         ]
       }
 
-    let(:type_repository) { instance_double('AuthorRepository', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: []) }
+    let(:type_repository) { instance_double('AuthorRepository', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
 
     before do
       allow(type).to receive(:fields).and_return(type_repository)
@@ -529,7 +529,7 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:option)      { instance_double('Option', _id: 42)}
       let(:options)     { instance_double('OptionRepository', by_name: option, :'locale=' => nil) }
       let(:field)       { instance_double('SelectField', name: 'category', persisted_name: 'category_id', select_options: options) }
-      let(:_fields)     { instance_double('Fields', selects: [field], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: []) }
+      let(:_fields)     { instance_double('Fields', selects: [field], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
       let(:conditions)  { { 'category' => value } }
 
       it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'category_id' => 42 }, nil]) }
@@ -548,7 +548,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       let(:value)       { '2009/09/10' }
       let(:field)       { instance_double('DateField', name: 'launched_at', persisted_name: 'launched_at', type: :date) }
-      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: []) }
+      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: [], booleans: []) }
       let(:conditions)  { { 'launched_at' => value } }
 
       it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'launched_at' => Date.parse('2009/09/10') }, nil]) }
@@ -559,12 +559,93 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       before { Time.zone = 'Paris' }
 
-      let(:value)       { '2007/06/29 21:15:00' }
+      let(:value)       { '2007-06-29T21:15:00' }
       let(:field)       { instance_double('DateField', name: 'launched_at', persisted_name: 'launched_at', type: :date_time) }
-      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: []) }
+      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: [], booleans: []) }
       let(:conditions)  { { 'launched_at' => value } }
 
-      it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'launched_at' => Time.zone.parse('2007/06/29 21:15:00').to_datetime }, nil]) }
+      it 'reads an offset-less time in the current zone' do
+        expect(subject).to eq([{ '_visible' => true, 'content_type_id' => 1,
+                                 'launched_at' => Time.zone.parse('2007-06-29 21:15:00').to_datetime }, nil])
+      end
+
+      context 'surrounded by whitespace' do
+        let(:value) { "\t2019-09-10T10:30:00Z\n" }
+
+        it { expect(subject.first['launched_at']).to eq Time.utc(2019, 9, 10, 10, 30).to_datetime }
+      end
+
+      # The slash form belongs to a date, and a date and time joins them with T.
+      ['2007/06/29', '2007/06/29 21:15:00', '2007-06-29 21:15:00'].each do |rejected|
+        context rejected.inspect do
+          let(:value) { rejected }
+          it { expect(subject.first['launched_at']).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable }
+        end
+      end
+
+    end
+
+    context 'date fields' do
+
+      before { Time.zone = 'Paris' }
+
+      let(:field)       { instance_double('DateField', name: 'held_on', persisted_name: 'held_on', type: :date) }
+      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: [], booleans: []) }
+      let(:conditions)  { { 'held_on' => value } }
+
+      # The documented with_scope example spells a date with slashes.
+      ['2012-01-02', '2012/01/02', ' 2012/01/02 '].each do |written|
+        context written.inspect do
+          let(:value) { written }
+          it { expect(subject.first['held_on']).to eq Date.new(2012, 1, 2) }
+        end
+      end
+
+      ['2012-01-02T10:00:00', 'tomorrow', '2012-99-99', ''].each do |bad|
+        context bad.inspect do
+          let(:value) { bad }
+          it { expect(subject.first['held_on']).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable }
+        end
+      end
+
+    end
+
+    context 'boolean fields' do
+
+      let(:field)       { instance_double('BooleanField', name: 'flag', persisted_name: 'flag', type: :boolean) }
+      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: [field]) }
+      let(:conditions)  { { 'flag' => value } }
+
+      { true => true, false => false, 'true' => true, ' TRUE ' => true,
+        'false' => false, 'False' => false, '1' => true, '0' => false }.each do |written, expected|
+        context written.inspect do
+          let(:value) { written }
+          it { expect(subject.first['flag']).to eq expected }
+        end
+      end
+
+      # Ruby truthiness is not the grammar: only the listed forms read.
+      ['yes', 'on', '', 1, 0, 1.0].each do |bad|
+        context bad.inspect do
+          let(:value) { bad }
+
+          it do
+            if bad.is_a?(String)
+              expect(subject.first['flag']).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable
+            else
+              expect { subject }.to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+            end
+          end
+        end
+      end
+
+      context 'a list operand' do
+        let(:conditions) { { 'flag.in' => ['1', 'nope'] } }
+
+        it 'reads every element' do
+          expect(subject.first['flag.in']).to eq [true, Locomotive::Steam::Adapters::Query::Values.unmatchable]
+        end
+      end
 
     end
 
@@ -587,7 +668,7 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:option)  { instance_double('Option', _id: 42) }
       let(:options) { instance_double('OptionRepository', :'locale=' => nil) }
       let(:field)   { instance_double('SelectField', name: 'category', persisted_name: 'category_id', select_options: options) }
-      let(:_fields) { instance_double('Fields', selects: [field], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: []) }
+      let(:_fields) { instance_double('Fields', selects: [field], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
 
       before do
         allow(options).to receive(:by_name) { |name| name == 'CMS' ? option : nil }
@@ -626,7 +707,7 @@ describe Locomotive::Steam::ContentEntryRepository do
     context 'date fields carrying a plain-field expression or a list' do
 
       let(:field)   { instance_double('DateField', name: 'launched_at', persisted_name: 'launched_at', type: :date) }
-      let(:_fields) { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: []) }
+      let(:_fields) { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: [], booleans: []) }
 
       it 'leaves a Range untouched' do
         range = Date.new(2012, 1, 1)..Date.new(2012, 12, 31)
@@ -671,7 +752,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       let(:value)       { '2019-09-10' }
       let(:field)       { instance_double('DateField', name: 'launched_at', persisted_name: 'launched_at', type: :date) }
-      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: []) }
+      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: [], booleans: []) }
       let(:conditions)  { { 'launched_at' => value } }
 
       it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'launched_at' => Date.new(2019, 9, 10) }, nil]) }
@@ -682,7 +763,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       let(:value)       { '2007-06-29T21:15:00+00:00' }
       let(:field)       { instance_double('DateField', name: 'launched_at', persisted_name: 'launched_at', type: :date_time) }
-      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: []) }
+      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: [], booleans: []) }
       let(:conditions)  { { 'launched_at' => value } }
 
       it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'launched_at' => DateTime.new(2007, 6, 29, 21, 15, 0) }, nil]) }
@@ -695,31 +776,24 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       let(:value)       { '2019-09-10' }
       let(:field)       { instance_double('DateField', name: 'launched_at', persisted_name: 'launched_at', type: :date_time) }
-      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: []) }
+      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: [], booleans: []) }
       let(:conditions)  { { 'launched_at' => value } }
 
       it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'launched_at' => DateTime.new(2019, 9, 10, 0, 0, 0) }, nil]) }
 
     end
 
-    context 'invalid date values are rejected' do
+    context 'invalid date strings match nothing' do
 
       let(:field)       { instance_double('DateField', name: 'launched_at', persisted_name: 'launched_at', type: :date_time) }
-      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: []) }
+      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: [], booleans: []) }
       let(:conditions)  { { 'launched_at' => value } }
 
-      context 'a natural-language date value' do
-        let(:value) { 'tomorrow' }
-
-        it 'names the value it could not read' do
-          expect { subject }.to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue,
-                                            'invalid date: "tomorrow"')
+      ['tomorrow', '2025-99-99', ''].each do |bad|
+        context bad.inspect do
+          let(:value) { bad }
+          it { expect(subject.first['launched_at']).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable }
         end
-      end
-
-      context 'a non-existent calendar date' do
-        let(:value) { '2025-99-99' }
-        it { expect { subject }.to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue) }
       end
 
     end
@@ -728,7 +802,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       let(:field_type)  { :float }
       let(:field)       { instance_double('NumberField', name: 'price', persisted_name: 'price', type: field_type) }
-      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [field]) }
+      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [field], booleans: []) }
       let(:conditions)  { { 'price.lt' => value } }
 
       def prepared
@@ -797,23 +871,23 @@ describe Locomotive::Steam::ContentEntryRepository do
         %w(abc 4.2.1).each do |bad|
           context bad.inspect do
             let(:value) { bad }
-            it('is left as it is, never turned into nil') { expect(prepared).to eq bad }
+            it('matches nothing, and is never turned into nil') { expect(prepared).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable }
           end
         end
 
         context 'a fractional string on an integer field' do
           let(:field_type) { :integer }
           let(:value)      { '4.2' }
-          it { expect(prepared).to eq '4.2' }
+          it { expect(prepared).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable }
         end
 
-        it 'keeps it inside a list, converting only what is numeric' do
-          expect(subject_for('price.in' => ['1', 'abc'])).to include('price.in' => [1.0, 'abc'])
+        it 'reads only what is numeric inside a list' do
+          expect(subject_for('price.in' => ['1', 'abc'])).to include('price.in' => [1.0, Locomotive::Steam::Adapters::Query::Values.unmatchable])
         end
 
         it 'does not confuse it with a real nil, which means missing or null' do
           expect(subject_for('price.in' => [nil, '1'])).to include('price.in' => [nil, 1.0])
-          expect(subject_for('price' => 'abc')).to include('price' => 'abc')
+          expect(subject_for('price' => 'abc')).to include('price' => Locomotive::Steam::Adapters::Query::Values.unmatchable)
         end
       end
 
@@ -832,8 +906,8 @@ describe Locomotive::Steam::ContentEntryRepository do
         # Ruby 3.3 rejects a trailing dot where 3.4 reads 5.0, so the grammar
         # cannot accept it without meaning different things on each.
         ['1_5', '0x1', '1 0', '1e9999', '5.', '  ', ''].each do |bad|
-          it "leaves #{bad.inspect} as it is" do
-            expect(subject_for('price.lt' => bad)).to include('price.lt' => bad)
+          it "matches nothing for #{bad.inspect}" do
+            expect(subject_for('price.lt' => bad)).to include('price.lt' => Locomotive::Steam::Adapters::Query::Values.unmatchable)
           end
         end
 
@@ -845,14 +919,14 @@ describe Locomotive::Steam::ContentEntryRepository do
           end
 
           ['1_5', '4.2', '0x1'].each do |bad|
-            it "leaves #{bad.inspect} as it is" do
-              expect(subject_for('price.lt' => bad)).to include('price.lt' => bad)
+            it "matches nothing for #{bad.inspect}" do
+              expect(subject_for('price.lt' => bad)).to include('price.lt' => Locomotive::Steam::Adapters::Query::Values.unmatchable)
             end
           end
 
-          it 'leaves an out of range integer as it is' do
+          it 'matches nothing for an out of range integer' do
             [2**63, -2**63 - 1].map(&:to_s).each do |beyond|
-              expect(subject_for('price.lt' => beyond)).to include('price.lt' => beyond)
+              expect(subject_for('price.lt' => beyond)).to include('price.lt' => Locomotive::Steam::Adapters::Query::Values.unmatchable)
             end
           end
         end
@@ -911,7 +985,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       let(:value)       { 42 }
       let(:field)       { instance_double('BelongsToField', name: 'person', persisted_name: 'person_id', target_id: '42') }
-      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [field], many_to_many: [], dates_and_date_times: [], numbers: []) }
+      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [field], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
       let(:conditions)  { { 'person' => value } }
 
       it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'person_id' => 42 }, nil]) }
@@ -961,7 +1035,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       let(:value)       { 42 }
       let(:field)       { instance_double('ManyToManyField', name: 'tags', persisted_name: 'tag_ids', target_id: '42') }
-      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [field], dates_and_date_times: [], numbers: []) }
+      let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [field], dates_and_date_times: [], numbers: [], booleans: []) }
       let(:conditions)  { { 'tags.in' => value } }
 
       it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'tag_ids.in' => [42] }, nil]) }

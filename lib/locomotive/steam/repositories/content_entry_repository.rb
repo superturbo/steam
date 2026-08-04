@@ -388,9 +388,12 @@ module Locomotive
           # integer / float
           _prepare(@fields.numbers) { |field, value| value_to_number(value, field.type) }
 
+          # boolean
+          _prepare(@fields.booleans) { |_, value| value_to_boolean(value) }
+
           # belongs_to
           _prepare(@fields.belongs_to, id_backed: true) { |field, value| value_to_id(value, field.target_id) }
-          
+
           # many_to_many
           _prepare(@fields.many_to_many, id_backed: true) { |field, value| values_to_ids(value, field.target_id) }
 
@@ -517,18 +520,32 @@ module Locomotive
           case value
           # a Range or Regexp is its own plain-field expression, not an operand
           when nil, Range, Regexp then value
-          when Array then value.map { |element| value_to_date(element, type) }
-          when Set   then value.map { |element| value_to_date(element, type) }
+          when Array  then value.map { |element| value_to_date(element, type) }
+          when Set    then value.map { |element| value_to_date(element, type) }
+          when String then parse_date(value, type)
           else
-            parsed    = value.is_a?(String) ? parse_date(value) : value
             converter = type == :date ? :to_date : :to_datetime
 
-            unless parsed.respond_to?(converter)
+            unless value.respond_to?(converter)
               raise Locomotive::Steam::Adapters::Query::InvalidValue,
                     "expected a date-compatible value, got #{value.inspect}"
             end
 
-            parsed.public_send(converter)
+            value.public_send(converter)
+          end
+        end
+
+        def value_to_boolean(value)
+          case value
+          # a Range or Regexp is its own plain-field expression, not an operand
+          when nil, Range, Regexp then value
+          when Array       then value.map { |element| value_to_boolean(element) }
+          when Set         then value.map { |element| value_to_boolean(element) }
+          when true, false then value
+          when String      then parse_boolean(value)
+          else
+            raise Locomotive::Steam::Adapters::Query::InvalidValue,
+                  "expected a boolean, got #{value.inspect}"
           end
         end
 
@@ -547,12 +564,17 @@ module Locomotive
           end
         end
 
-        # Invalid numeric strings remain strings, avoiding errors and nil
-        # semantics.
+        # Invalid strings cannot equal a valid field value.
         def parse_number(value, type)
           Locomotive::Steam::ContentFieldValues.number(value, type)
         rescue Locomotive::Steam::ContentFieldValues::ParseError
-          value
+          Locomotive::Steam::Adapters::Query::Values.unmatchable
+        end
+
+        def parse_boolean(value)
+          Locomotive::Steam::ContentFieldValues.boolean(value)
+        rescue Locomotive::Steam::ContentFieldValues::ParseError
+          Locomotive::Steam::Adapters::Query::Values.unmatchable
         end
 
         # Typed numeric operands must stay within the supported query domain.
@@ -572,10 +594,12 @@ module Locomotive
           end
         end
 
-        def parse_date(value)
-          Locomotive::Steam::ContentFieldValues.time(value)
-        rescue Locomotive::Steam::ContentFieldValues::ParseError => e
-          raise Locomotive::Steam::Adapters::Query::InvalidValue, e.message
+        def parse_date(value, type)
+          parsed = Locomotive::Steam::ContentFieldValues.public_send(type, value)
+
+          type == :date ? parsed : parsed.to_datetime
+        rescue Locomotive::Steam::ContentFieldValues::ParseError
+          Locomotive::Steam::Adapters::Query::Values.unmatchable
         end
 
       end
