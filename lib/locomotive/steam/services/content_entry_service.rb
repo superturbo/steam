@@ -61,10 +61,13 @@ module Locomotive
           entry       = _repository.by_slug(id_or_slug) || _repository.find(id_or_slug)
           _attributes = prepare_attributes(_repository.content_type, attributes)
 
-          decorated_entry = i18n_decorate { entry.change(_attributes) }
+          # A rejected update must not mutate the memoized or filesystem-backed entry.
+          candidate       = entry.dup
+          decorated_entry = i18n_decorate { candidate.change(_attributes) }
 
           if validate(_repository, decorated_entry)
-            _repository.update(entry)
+            _repository.update(candidate)
+            entry.attributes = candidate.attributes
           end
 
           logEntryOperation(type_slug, decorated_entry)

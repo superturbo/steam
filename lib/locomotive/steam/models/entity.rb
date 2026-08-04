@@ -11,6 +11,15 @@ module Locomotive::Steam
         @attributes = attributes.with_indifferent_access
       end
 
+      # Attribute replacement, localized changes and validation errors stay on the copy.
+      def initialize_copy(source)
+        super
+        @errors     = nil
+        @attributes = source.attributes.transform_values do |value|
+          value.is_a?(I18nField) ? value.dup : value
+        end
+      end
+
       def method_missing(name, *args, &block)
         _name = name.to_s
         if attributes.include?(_name)

@@ -590,10 +590,7 @@ describe 'Adapter parity' do
         # of mutating the object the previous read handed back.
         it 'makes an update visible to a later read' do
           entry    = create_specimen
-          detached = entry.dup.tap do |copy|
-            copy.attributes = copy.attributes.dup
-            copy[:score]    = 99
-          end
+          detached = entry.dup.tap { |copy| copy[:score] = 99 }
 
           specimens.update(detached)
 
@@ -674,10 +671,12 @@ describe 'Adapter parity' do
 
     describe 'the content entry service' do
 
-      let(:service) do
-        entries = Locomotive::Steam::ContentEntryRepository.new(
+      let(:entries) do
+        Locomotive::Steam::ContentEntryRepository.new(
           adapter, site, AdapterParityFixture::LOCALE, type_repository)
+      end
 
+      let(:service) do
         Locomotive::Steam::ContentEntryService.new(
           type_repository, entries, AdapterParityFixture::LOCALE)
       end
@@ -763,6 +762,32 @@ describe 'Adapter parity' do
           expect(updated).to be_a(Hash)
           expect(updated['name']).to eq 'Grace'
           expect(service.find('submissions', created._id).name).to eq 'Grace'
+        end
+
+        it 'leaves the store alone when an update does not validate' do
+          updated = service.update('specimens', 'scalars', name: 'Arrays')
+
+          expect(updated.errors.to_hash).to eq('name' => ['must be unique'])
+          expect(service.find('specimens', 'scalars').name).to eq 'Scalars'
+        end
+
+        it 'returns validation errors without attaching them to the stored entry' do
+          created = service.create('submissions', valid)
+          updated = service.update('submissions', created._id, name: nil)
+
+          expect(updated.errors.to_hash).to eq('name' => ["can't be blank"])
+          expect(service.find('submissions', created._id).name).to eq 'Ada'
+          expect(service.find('submissions', created._id).errors).to be_empty
+        end
+
+        it 'leaves the entry alone when the store refuses the write' do
+          created = service.create('submissions', valid)
+
+          allow(entries).to receive(:update).and_raise('the store refused')
+
+          expect { service.update('submissions', created._id, name: 'Grace') }
+            .to raise_error('the store refused')
+          expect(service.find('submissions', created._id).name).to eq 'Ada'
         end
 
         it 'creates an entry linked to another through a belongs_to' do
