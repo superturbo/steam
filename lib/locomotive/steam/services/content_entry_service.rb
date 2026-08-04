@@ -34,8 +34,7 @@ module Locomotive
         end
       end
 
-      # Warning: does not work with file fields, and a localized field must be
-      # given a value per locale — a lone value is written as no value at all.
+      # Warning: does not work with file fields
       def create(type_slug, attributes, as_json = false)
         with_repository(type_slug) do |_repository|
           _attributes = prepare_attributes(_repository.content_type, attributes)

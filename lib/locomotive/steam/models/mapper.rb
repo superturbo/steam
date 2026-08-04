@@ -64,7 +64,7 @@ module Locomotive::Steam
       # The identity map belongs to the store: a caller-built entity never
       # enters it, and never comes back out of it either.
       def build_entity(attributes)
-        new_entity(attributes)
+        new_entity(attributes).tap { |entity| localize_input(entity) }
       end
 
       def deserialize(attributes)
@@ -158,6 +158,21 @@ module Locomotive::Steam
 
           entity.base_url = @repository.base_url(entity)
         end
+      end
+
+      # Stored scalars keep their all-locale fallback; caller input belongs to one locale.
+      def localize_input(entity)
+        @localized_attributes.each do |name|
+          default = entity[name.to_sym].default
+          next if default.nil?
+
+          entity[name.to_sym] = I18nField.new(name.to_sym, input_locale => default)
+        end
+      end
+
+      def input_locale
+        @repository.scope.locale || @repository.scope.default_locale ||
+          raise(MissingLocale, 'a locale is required to write a localized value')
       end
 
       def cache_entity(entity_klass, attributes, &block)

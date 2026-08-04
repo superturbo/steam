@@ -2,13 +2,15 @@ require 'spec_helper'
 
 describe Locomotive::Steam::Models::Mapper do
 
-  let(:adapter)     { instance_double('Adapter') }
-  let(:scope)       { instance_double('SimpleScope', apply: true) }
-  let(:repository)  { instance_double('Repository', scope: scope, base_url: '') }
-  let(:name)        { 'pages' }
-  let(:options)     { { entity: MyPage } }
-  let(:block)       { nil }
-  let(:mapper)      { described_class.new(name, options, repository, &block) }
+  let(:adapter)        { instance_double('Adapter') }
+  let(:locale)         { :en }
+  let(:default_locale) { :en }
+  let(:scope)          { instance_double('SimpleScope', apply: true, locale: locale, default_locale: default_locale) }
+  let(:repository)     { instance_double('Repository', scope: scope, base_url: '') }
+  let(:name)           { 'pages' }
+  let(:options)        { { entity: MyPage } }
+  let(:block)          { nil }
+  let(:mapper)         { described_class.new(name, options, repository, &block) }
 
   describe '#localized attributes' do
 
@@ -177,6 +179,58 @@ describe Locomotive::Steam::Models::Mapper do
 
         it { expect(subject.attributes[:title][:en]).to eq('Hello world') }
         it { expect(subject.attributes[:title][:fr]).to eq('Hello world') }
+
+      end
+
+    end
+
+  end
+
+  describe '#build_entity' do
+
+    let(:block)      { ->(_) { localized_attributes(:title) } }
+    let(:attributes) { { title: 'Hello world' } }
+
+    subject { mapper.build_entity(attributes) }
+
+    describe 'localized attributes' do
+
+      it 'writes a lone value into the locale it was built in' do
+        expect(subject.attributes[:title].translations).to eq('en' => 'Hello world')
+      end
+
+      context 'with no locale of its own' do
+
+        let(:locale)         { nil }
+        let(:default_locale) { :fr }
+
+        it 'writes it into the one the site reads by default' do
+          expect(subject.attributes[:title].translations).to eq('fr' => 'Hello world')
+        end
+
+        context 'and no site to name one' do
+
+          let(:default_locale) { nil }
+
+          it { expect { subject }.to raise_error(Locomotive::Steam::MissingLocale) }
+
+        end
+
+      end
+
+      context 'given a value per locale' do
+
+        let(:attributes) { { title: { 'en' => 'Hello world', 'fr' => 'Bonjour monde' } } }
+
+        it { expect(subject.attributes[:title].translations).to eq('en' => 'Hello world', 'fr' => 'Bonjour monde') }
+
+      end
+
+      context 'given no value' do
+
+        let(:attributes) { { title: nil } }
+
+        it { expect(subject.attributes[:title].translations).to eq({}) }
 
       end
 

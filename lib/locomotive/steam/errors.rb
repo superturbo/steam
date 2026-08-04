@@ -21,6 +21,9 @@ module Locomotive::Steam
   class InvalidIncrement < ::ArgumentError
   end
 
+  class MissingLocale < ::ArgumentError
+  end
+
   class TemplateError < ::Liquid::Error
 
     LINES_RANGE = 10

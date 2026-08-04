@@ -963,6 +963,22 @@ describe 'Adapter parity' do
                                       topic_ids: [], title: { 'en' => 'Hello', 'fr' => 'Bonjour' })
         end
 
+        it 'writes a lone value into the locale the entry is created in' do
+          created = service.create('specimens', name: 'Lone', topic_ids: [],
+                                                category_id: option_id(:category, 'alpha'),
+                                                title: 'Hello')
+
+          expect(entries_of('specimens').find(created._id).title.translations).to eq('en' => 'Hello')
+        end
+
+        it 'writes it into the locale that created it, not the site default' do
+          created = service_in(:fr).create('specimens', name: 'Lone fr', topic_ids: [],
+                                                        category_id: option_id(:category, 'alpha'),
+                                                        title: 'Bonjour')
+
+          expect(entries_of('specimens').find(created._id).title.translations).to eq('fr' => 'Bonjour')
+        end
+
         it 'keeps a localized field localized through an update' do
           created = localized_specimen
 
