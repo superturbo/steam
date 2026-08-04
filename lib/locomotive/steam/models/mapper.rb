@@ -20,6 +20,7 @@ module Locomotive::Steam
         @associations         = []
 
         @entity_map           = {}
+        @after_load           = nil
 
         instance_eval(&block) if block_given?
       end
@@ -48,19 +49,22 @@ module Locomotive::Steam
         @associations << [type, name.to_sym, repository_klass, options || {}, block]
       end
 
+      # Runs on an entity read out of a store, never on one the caller builds:
+      # only the store knows what a value's representation means.
+      def after_load(&block)
+        @after_load = block
+      end
+
       def to_entity(attributes)
         cache_entity(entity_klass, attributes) do
-          entity_klass.new(deserialize(attributes)).tap do |entity|
-            set_default_attributes(entity)
-
-            entity.localized_attributes = @localized_attributes_hash || {}
-            entity.associations = {}
-
-            attach_entity_to_associations(entity)
-
-            entity.base_url = @repository.base_url(entity)
-          end
+          new_entity(attributes).tap { |entity| @after_load&.call(entity, @repository) }
         end
+      end
+
+      # The identity map belongs to the store: a caller-built entity never
+      # enters it, and never comes back out of it either.
+      def build_entity(attributes)
+        new_entity(attributes)
       end
 
       def deserialize(attributes)
@@ -140,6 +144,19 @@ module Locomotive::Steam
         @default_attributes.each do |(name, value)|
           _value = value.respond_to?(:call) ? value.call(@repository) : value
           entity.send(:"#{name}=", _value)
+        end
+      end
+
+      def new_entity(attributes)
+        entity_klass.new(deserialize(attributes)).tap do |entity|
+          set_default_attributes(entity)
+
+          entity.localized_attributes = @localized_attributes_hash || {}
+          entity.associations = {}
+
+          attach_entity_to_associations(entity)
+
+          entity.base_url = @repository.base_url(entity)
         end
       end
 

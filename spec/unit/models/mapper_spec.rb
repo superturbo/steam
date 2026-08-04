@@ -86,6 +86,58 @@ describe Locomotive::Steam::Models::Mapper do
     end
   end
 
+  describe 'after_load' do
+
+    let(:attributes) { { title: 'Hello world' } }
+    let(:repository) { instance_double('Repository', my_site: 42, base_url: '') }
+    let(:seen)       { [] }
+    let(:block) do
+      recorder = seen
+      ->(_) {
+        default_attribute(:site, -> (repository) { repository.my_site })
+        after_load { |entity, repository| recorder << [entity.site, repository] }
+      }
+    end
+
+    it 'runs on an entity read out of a store' do
+      entity = mapper.to_entity(attributes)
+
+      expect(seen).to eq [[42, repository]]
+      expect(entity.site).to eq 42
+    end
+
+    it 'does not run on an entity the caller builds' do
+      mapper.build_entity(attributes)
+
+      expect(seen).to be_empty
+    end
+
+    describe 'sharing an id with the identity map' do
+
+      let(:attributes) { { _id: 7, title: 'Hello world' } }
+
+      it 'still runs after a caller built an entity with that id' do
+        mapper.build_entity(attributes)
+        mapper.to_entity(attributes)
+
+        expect(seen.size).to eq 1
+      end
+
+      it 'leaves the build path its own entity' do
+        stored = mapper.to_entity(attributes)
+
+        expect(mapper.build_entity(attributes)).not_to be(stored)
+      end
+
+      it 'runs once for an entity the store hands back twice' do
+        expect(mapper.to_entity(attributes)).to be(mapper.to_entity(attributes))
+        expect(seen.size).to eq 1
+      end
+
+    end
+
+  end
+
   describe '#to_entity' do
 
     subject { mapper.to_entity(attributes) }
