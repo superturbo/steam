@@ -84,14 +84,8 @@ module Locomotive
 
           entry.change(_attributes)
 
-          # remove the proxy select fields because we don't need them at this point
-          # and MongoDB is going to complain when persisting it.
+          # An unset non-localized select still holds a value MongoDB refuses.
           _repository.content_type.select_fields.each do |field|
-            entry.attributes.delete(field.name)
-          end
-
-          # remove any association field
-          _repository.content_type.association_fields.each do |field|
             entry.attributes.delete(field.name)
           end
 

@@ -11,10 +11,13 @@ module Locomotive::Steam
         @entity[__name__] = target
       end
 
+      # Keep the existing id until the association is materialized or reassigned.
       def __serialize__(attributes)
-        attributes[__target_key__] = attributes[__name__].try(:_id)
+        return unless attributes.key?(__name__)
 
-        attributes.delete(__name__)
+        target = attributes.delete(__name__)
+
+        attributes[__target_key__] = target.try(:_id) unless target.is_a?(ReferencedAssociation)
       end
 
       def __target_key__

@@ -790,21 +790,60 @@ describe 'Adapter parity' do
           expect(service.find('submissions', created._id).name).to eq 'Ada'
         end
 
-        it 'creates an entry linked to another through a belongs_to' do
-          makers = Locomotive::Steam::ContentEntryRepository.new(
+        def entries_of(type_slug)
+          Locomotive::Steam::ContentEntryRepository.new(
             adapter, site, AdapterParityFixture::LOCALE, type_repository)
-            .with(type_repository.by_slug('makers'))
-          entry  = nil
+            .with(type_repository.by_slug(type_slug))
+        end
 
-          expect {
-            entry = service.create('specimens',
-                                   name: 'Linked',
-                                   category_id: option_id(:category, 'alpha'),
-                                   topic_ids: [],
-                                   maker_id: makers.by_slug('maker-one')._id)
-          }.to change { service.all('specimens').size }.by(1)
+        def create_linked
+          service.create('specimens',
+                         name: 'Linked',
+                         category_id: option_id(:category, 'alpha'),
+                         maker_id: entries_of('makers').by_slug('maker-one')._id,
+                         topic_ids: [entries_of('topics').by_slug('topic-a')._id])
+        end
 
-          expect(entry.maker.name).to eq 'Maker one'
+        # Use a fresh mapper so cached entities cannot hide persisted state.
+        def stored_specimen(id)
+          entries_of('specimens').find(id)
+        end
+
+        def links_of(id)
+          stored = stored_specimen(id)
+
+          [stored.maker&.name, stored.topics.all.map(&:name)]
+        end
+
+        it 'writes the links a new entry declares' do
+          entry = nil
+
+          expect { entry = create_linked }.to change { service.all('specimens').size }.by(1)
+          expect(links_of(entry._id)).to eq ['Maker one', ['Topic a']]
+        end
+
+        it 'keeps them through an update of another field' do
+          entry = create_linked
+
+          service.update('specimens', entry._id, score: 77)
+
+          expect(links_of(entry._id)).to eq ['Maker one', ['Topic a']]
+        end
+
+        it 'keeps them through a decorated update' do
+          entry = create_linked
+
+          service.update_decorated_entry(service.find('specimens', entry._id), 'score' => 77)
+
+          expect(links_of(entry._id)).to eq ['Maker one', ['Topic a']]
+        end
+
+        it 'clears the links an update spells out' do
+          entry = create_linked
+
+          service.update('specimens', entry._id, maker_id: nil, topic_ids: [])
+
+          expect(links_of(entry._id)).to eq [nil, []]
         end
 
         it 'creates an entry that leaves a many_to_many unset' do
