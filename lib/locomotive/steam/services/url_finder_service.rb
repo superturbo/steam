@@ -1,3 +1,5 @@
+require 'json'
+
 module Locomotive
   module Steam
 

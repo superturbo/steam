@@ -79,6 +79,18 @@ describe Locomotive::Steam::Adapters::Filesystem::Sanitizers::Page do
       end
     end
 
+    context 'with notes between the values' do
+      let(:content) { '{"a":1 /* one */}' }
+
+      it { expect { subject }.to raise_error(Locomotive::Steam::JsonParsingError) }
+    end
+
+    context 'with text no encoding can read' do
+      let(:content) { %({"a":"\xFF"}) }
+
+      it { expect { subject }.to raise_error(Locomotive::Steam::JsonParsingError) }
+    end
+
   end
 
 end

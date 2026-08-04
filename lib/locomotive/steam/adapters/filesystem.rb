@@ -1,6 +1,7 @@
 require_relative 'memory'
 require_relative 'numeric_bounds'
 
+require_relative 'filesystem/json_file'
 require_relative 'filesystem/simple_cache_store'
 
 require_relative 'filesystem/yaml_loader'

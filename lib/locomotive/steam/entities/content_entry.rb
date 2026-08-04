@@ -1,4 +1,5 @@
 require 'bcrypt'
+require 'json'
 
 module Locomotive::Steam
 

@@ -1,3 +1,5 @@
+require_relative 'json_file'
+
 module Locomotive::Steam
   module Adapters
     module Filesystem
@@ -60,14 +62,10 @@ module Locomotive::Steam
         end
 
         def safe_json_load(json, template, path, &block)
-          return {} if  json.blank?
+          return {} if JsonFile.blank?(json, path)
 
-          begin
-            MultiJson.load(json).tap do |attributes|
-              block.call(attributes, template) if block_given?
-            end
-          rescue MultiJson::ParseError => e
-            raise Locomotive::Steam::JsonParsingError.new(e, path, json)
+          JsonFile.parse(json, path).tap do |attributes|
+            block.call(attributes, template) if block_given?
           end
         end
 

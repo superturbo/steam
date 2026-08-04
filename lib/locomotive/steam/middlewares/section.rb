@@ -1,3 +1,5 @@
+require 'json'
+
 module Locomotive::Steam
   module Middlewares
     class Section < ThreadSafe

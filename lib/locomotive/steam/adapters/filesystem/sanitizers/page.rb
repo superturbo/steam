@@ -1,3 +1,5 @@
+require_relative '../json_file'
+
 module Locomotive::Steam
   module Adapters
     module Filesystem
@@ -163,11 +165,7 @@ module Locomotive::Steam
               if content = page[name][locale]
                 next unless content.is_a?(String)
 
-                begin
-                  page[name][locale] = MultiJson.load(content)
-                rescue MultiJson::ParseError => e
-                  raise Locomotive::Steam::JsonParsingError.new(e, page.template_path[locale], content)
-                end
+                page[name][locale] = JsonFile.parse(content, page.template_path[locale])
               end
             end
           end

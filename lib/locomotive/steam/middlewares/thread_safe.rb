@@ -1,3 +1,5 @@
+require 'json'
+
 module Locomotive::Steam::Middlewares
 
   class ThreadSafe

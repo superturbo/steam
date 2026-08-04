@@ -81,7 +81,7 @@ describe Locomotive::Steam::Adapters::Filesystem::Sanitizers::Section do
     case format
     when :json
       match = content.match(Locomotive::Steam::JSON_FRONTMATTER_REGEXP)
-      MultiJson.load(match[:json])
+      JSON.parse(match[:json])
     when :yaml
       match = content.match(Locomotive::Steam::YAML_FRONTMATTER_REGEXP)
       YAML.load(match[:yaml])
