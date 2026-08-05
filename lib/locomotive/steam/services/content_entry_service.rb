@@ -143,10 +143,17 @@ module Locomotive
 
       def prepare_attributes(content_type, attributes)
         select_field_names = content_type.fields.selects.map(&:name)
+        json_field_names   = content_type.fields.json.map { |field| field.name.to_s }
 
+        # JSON is validated as data; HTML escaping belongs to rendering.
         attributes.each do |key, value|
           next unless value.is_a?(String)
-          attributes[key] = Sanitize.clean(value, Sanitize::Config::BASIC)
+          next if json_field_names.include?(key.to_s)
+
+          text = sanitizable_text(value)
+          next unless text
+
+          attributes[key] = Sanitize.clean(text, Sanitize::Config::BASIC)
         end
 
         # special case: select fields. <name> becomes <name>_id
@@ -154,6 +161,12 @@ module Locomotive
           _key = select_field_names.include?(key.to_s) ? "#{key}_id" : key
           [_key, value]
         end.to_h
+      end
+
+      def sanitizable_text(value)
+        ContentFieldValues.normalize_input(:string, value)
+      rescue ContentFieldValues::ParseError
+        nil
       end
 
       def validate(_repository, entry)

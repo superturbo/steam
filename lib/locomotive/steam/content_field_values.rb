@@ -1,3 +1,5 @@
+require 'json'
+
 require_relative 'adapters/numeric_bounds'
 
 module Locomotive::Steam
@@ -21,7 +23,11 @@ module Locomotive::Steam
     BOOLEANS = { true => true, false => false, 'true' => true, 'false' => false,
                  '1' => true, '0' => false }.freeze
 
-    private_constant :INTEGER_FORMAT, :FLOAT_FORMAT, :DASH_DATE, :SLASH_DATE, :ISO_TIME, :BOOLEANS
+    # MongoDB's limit includes the document and localized field container.
+    MAX_JSON_DEPTH = 98
+
+    private_constant :INTEGER_FORMAT, :FLOAT_FORMAT, :DASH_DATE, :SLASH_DATE, :ISO_TIME,
+                     :BOOLEANS, :MAX_JSON_DEPTH
 
     module_function
 
@@ -143,11 +149,14 @@ module Locomotive::Steam
     def normalize_input(type, value, site = nil)
       return value if value.nil?
 
+      value = readable_text(value) if value.is_a?(String)
+
       case type
       when :integer, :float               then input_number(value, type)
       when :boolean                       then blank_text?(value) ? nil : boolean(value)
       when :date                          then input_date(value, site)
       when :date_time                     then input_date_time(value, site)
+      when :json                          then input_json(value)
       when :string, :text, :email, :color then input_string(value)
       else value
       end
@@ -187,6 +196,78 @@ module Locomotive::Steam
       raise ParseError, "expected a date and time, got #{value.inspect}"
     end
 
+    def input_json(value)
+      return nil if blank_text?(value)
+
+      object = value.is_a?(String) ? parse_json(value) : value
+
+      raise ParseError, "expected a JSON object, got #{value.inspect}" unless object.is_a?(Hash)
+
+      json_value(object, 1)
+    end
+
+    def parse_json(value)
+      JSON.parse(value.strip, max_nesting: MAX_JSON_DEPTH,
+                              allow_comments: false, allow_duplicate_key: false)
+    rescue JSON::ParserError
+      raise ParseError, "invalid JSON: #{value.inspect}"
+    end
+
+    def json_value(value, depth)
+      case value
+      when Hash                     then json_hash(value, depth)
+      when Array                    then json_array(value, depth)
+      when String                   then readable_text(value)
+      when true, false, nil         then value
+      when Integer, Float           then json_number(value)
+      else raise ParseError, "a #{value.class} cannot be stored as JSON"
+      end
+    end
+
+    def json_hash(hash, depth)
+      guard_depth(depth)
+
+      hash.each_with_object({}) do |(key, value), object|
+        object[json_key(key)] = json_value(value, depth + 1)
+      end
+    end
+
+    def json_array(array, depth)
+      guard_depth(depth)
+
+      array.map { |item| json_value(item, depth + 1) }
+    end
+
+    def guard_depth(depth)
+      raise ParseError, "JSON nested deeper than #{MAX_JSON_DEPTH}" if depth > MAX_JSON_DEPTH
+    end
+
+    def json_key(key)
+      raise ParseError, "a #{key.class} cannot name a JSON value" unless key.is_a?(String) || key.is_a?(Symbol)
+
+      name = readable_text(key.to_s)
+
+      # BSON field names cannot contain a null character.
+      raise ParseError, "a JSON name cannot hold a null character: #{name.inspect}" if name.include?("\u0000")
+
+      name
+    end
+
+    def json_number(value)
+      return value if Adapters::NumericBounds.within?(value)
+
+      raise ParseError, "number outside supported bounds: #{value.inspect}"
+    end
+
+    # Both adapters store text as UTF-8.
+    def readable_text(value)
+      raise ParseError, "text in no readable encoding: #{value.inspect}" unless value.valid_encoding?
+
+      value.encode(Encoding::UTF_8)
+    rescue EncodingError
+      raise ParseError, "text no store can keep: #{value.inspect}"
+    end
+
     def input_string(value)
       return value if value.is_a?(String)
 
@@ -196,6 +277,9 @@ module Locomotive::Steam
     def blank_text?(value)
       value.is_a?(String) && value.strip.empty?
     end
+
+    private_class_method :input_json, :parse_json, :json_value, :json_hash, :json_array,
+                         :guard_depth, :json_key, :json_number, :readable_text
 
     def zone_of(site)
       raise ConfigurationError, 'a site timezone is required to read this value' if site.nil?

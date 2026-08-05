@@ -28,6 +28,11 @@
     tier:
       en: Gold
       fr: Or
+    notes:
+      en:
+        note: first
+      fr:
+        note: premiere
     at: '2012-06-06T12:00:00Z'
     held_on: '2013-02-11'
     maker: maker-one

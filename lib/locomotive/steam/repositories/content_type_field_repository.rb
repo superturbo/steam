@@ -26,6 +26,10 @@ module Locomotive
         query { where(type: :file) }.all
       end
 
+      def json
+        query { where(type: :json) }.all
+      end
+
       def passwords
         query { where(type: :password) }.all
       end

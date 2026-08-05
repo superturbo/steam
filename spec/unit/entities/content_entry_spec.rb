@@ -208,6 +208,83 @@ describe Locomotive::Steam::ContentEntry do
 
     end
 
+    context 'a json field' do
+
+      let(:field)           { instance_double('Field', name: :payload, type: :json, persisted_name: :payload) }
+      let(:required_fields) { [] }
+      let(:attributes)      { { payload: ' {"a":1} ' } }
+
+      it 'keeps the object the field reads out of what it was given' do
+        subject
+        expect(content_entry.attributes[:payload]).to eq('a' => 1)
+      end
+
+      context 'given what no field can read as an object' do
+
+        let(:attributes) { { payload: '[1, 2, 3]' } }
+
+        it { is_expected.to eq false }
+        it { subject; expect(content_entry.errors[:payload]).to eq(['is invalid']) }
+
+        it 'leaves the value the caller sent' do
+          subject
+          expect(content_entry.attributes[:payload]).to eq('[1, 2, 3]')
+        end
+
+      end
+
+      context 'holding text in no readable encoding' do
+
+        let(:attributes) { { payload: { 'a' => %(x\xFF) } } }
+
+        it { subject; expect(content_entry.errors[:payload]).to eq(['is invalid']) }
+
+      end
+
+      context 'localized' do
+
+        let(:attributes) { { payload: build_i18n_field(en: { 'a' => 1 }, fr: '{"a":2}') } }
+
+        before do
+          content_entry.localized_attributes = { payload: true }
+          content_entry.site = instance_double('Site', timezone: ActiveSupport::TimeZone['UTC'],
+                                                       default_locale: :en)
+        end
+
+        it 'reads each locale as an object of its own' do
+          subject
+          expect(content_entry.attributes[:payload].translations)
+            .to eq('en' => { 'a' => 1 }, 'fr' => { 'a' => 2 })
+        end
+
+        context 'given a locale a bare value' do
+
+          let(:attributes) { { payload: build_i18n_field(en: 1) } }
+
+          it { subject; expect(content_entry.errors[:payload]).to eq(['is invalid']) }
+
+        end
+
+      end
+
+      context 'required' do
+
+        let(:required_fields) { fields }
+
+        context 'holding an empty object' do
+          let(:attributes) { { payload: {} } }
+          it { subject; expect(content_entry.errors[:payload]).to eq(["can't be blank"]) }
+        end
+
+        context 'holding one name' do
+          let(:attributes) { { payload: { 'a' => 1 } } }
+          it { is_expected.to eq true }
+        end
+
+      end
+
+    end
+
     context 'a required boolean field' do
 
       let(:field)      { instance_double('Field', name: :flag, type: :boolean, persisted_name: :flag) }
@@ -687,8 +764,13 @@ describe Locomotive::Steam::ContentEntry do
       let(:value)       { '{"foo":42}' }
       it { is_expected.to eq({ 'foo' => 42 }) }
       context 'localized' do
-        let(:value) { build_i18n_field(en: { 'foo' => 42 }, fr: '[1, 2, 3]') }
-        it { expect(subject.translations).to eq('en' => { 'foo' => 42 }, 'fr' => [1, 2, 3]) }
+        let(:value) { build_i18n_field(en: { 'foo' => 42 }, fr: '{"foo":43}') }
+        it { expect(subject.translations).to eq('en' => { 'foo' => 42 }, 'fr' => { 'foo' => 43 }) }
+
+        context 'holding a list in one locale' do
+          let(:value) { build_i18n_field(en: { 'foo' => 42 }, fr: '[1, 2, 3]') }
+          it { is_expected.to be_nil }
+        end
       end
     end
 

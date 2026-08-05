@@ -21,6 +21,9 @@ fields:
     type: tags
 - payload:
     type: json
+- notes:
+    type: json
+    localized: true
 - status:
     type: string
     default: draft

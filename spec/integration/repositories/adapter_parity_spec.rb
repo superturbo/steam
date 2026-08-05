@@ -1025,6 +1025,95 @@ describe 'Adapter parity' do
           expect(ids_matching(at: Time.utc(2012, 6, 6, 12))).to include created._id
         end
 
+        it 'stores one JSON object, whatever the caller spelled it as' do
+          created = readable_specimen(payload: '{"a":[1,{"b":null}]}')
+
+          expect(stored_specimen(created._id).attributes['payload']).to eq('a' => [1, { 'b' => nil }])
+        end
+
+        it 'writes a localized JSON object into the locale it was created in' do
+          created = readable_specimen(notes: '{"note":"first"}')
+
+          expect(stored_specimen(created._id).attributes['notes'].translations)
+            .to eq('en' => { 'note' => 'first' })
+        end
+
+        it 'stores JSON nested as deep as a field reads it' do
+          deep    = (1..97).inject('n' => 1) { |inner, _| { 'n' => inner } }
+          created = readable_specimen(payload: deep, notes: { 'en' => deep })
+          stored  = stored_specimen(created._id).attributes
+
+          expect(stored['payload']).to eq deep
+          expect(stored['notes'].translations).to eq('en' => deep)
+        end
+
+        it 'keeps the text inside JSON exactly as it was written' do
+          created = readable_specimen(payload: '{"html":"<script>a < b & c</script>"}')
+
+          expect(stored_specimen(created._id).attributes['payload'])
+            .to eq('html' => '<script>a < b & c</script>')
+        end
+
+        it 'updates JSON a later read can see' do
+          created = readable_specimen(payload: { 'a' => 1 })
+
+          service.update('specimens', created._id, payload: '{"a":2}')
+
+          expect(stored_specimen(created._id).attributes['payload']).to eq('a' => 2)
+        end
+
+        it 'leaves the stored JSON alone when an update does not validate' do
+          created = readable_specimen(payload: { 'a' => 1 })
+          updated = service.update('specimens', created._id, payload: '[1, 2, 3]')
+
+          expect(updated.errors.to_hash).to eq('payload' => ['is invalid'])
+          expect(stored_specimen(created._id).attributes['payload']).to eq('a' => 1)
+        end
+
+        it 'stores text written in another encoding as the UTF-8 both stores read' do
+          latin   = "caf\xE9".dup.force_encoding('ISO-8859-1')
+          created = readable_specimen(status: latin, payload: { 'v' => latin })
+          stored  = stored_specimen(created._id).attributes
+
+          expect(stored['status'].encoding).to eq Encoding::UTF_8
+          expect(stored['status'].bytes).to eq [99, 97, 102, 195, 169]
+          expect(stored['payload']['v'].encoding).to eq Encoding::UTF_8
+          expect(stored['payload']['v'].bytes).to eq [99, 97, 102, 195, 169]
+        end
+
+        it 'refuses a plain text field the sanitizer could not read' do
+          entry = nil
+
+          expect { entry = readable_specimen(status: "caf\xFF".dup.force_encoding('UTF-8')) }
+            .not_to change { service.all('specimens').size }
+
+          expect(entry.errors.to_hash).to eq('status' => ['is invalid'])
+        end
+
+        it 'refuses text the sanitizer would have rewritten' do
+          entry = readable_specimen(status: "caf\xE9".dup.force_encoding('ASCII-8BIT'))
+
+          expect(entry.errors.to_hash).to eq('status' => ['is invalid'])
+        end
+
+        it 'refuses JSON holding text no encoding can read' do
+          entry = nil
+
+          expect { entry = readable_specimen(payload: { 'a' => %(x\xFF) }) }
+            .not_to change { service.all('specimens').size }
+
+          expect(entry.errors.to_hash).to eq('payload' => ['is invalid'])
+        end
+
+        it 'refuses JSON that is not an object' do
+          entry = nil
+
+          expect { entry = readable_specimen(payload: '[1, 2, 3]') }
+            .not_to change { service.all('specimens').size }
+
+          expect(entry.errors.to_hash).to eq('payload' => ['is invalid'])
+        end
+
         it 'leaves a field the entry never filled out of the store' do
           created = readable_specimen(score: 12)
 
@@ -1110,6 +1199,11 @@ describe 'Adapter parity' do
         repository.with(type_repository.by_slug('specimens')).all.detect do |candidate|
           candidate._slug[AdapterParityFixture::LOCALE] == slug
         end
+      end
+
+      it 'reads a localized JSON object identically' do
+        expect(entry('scalars').notes.translations)
+          .to eq('en' => { 'note' => 'first' }, 'fr' => { 'note' => 'premiere' })
       end
 
       it 'reads a scalar, a boolean, a date and a date-time identically' do

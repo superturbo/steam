@@ -1,5 +1,4 @@
 require 'bcrypt'
-require 'json'
 
 module Locomotive::Steam
 
@@ -221,13 +220,7 @@ module Locomotive::Steam
     end
 
     def _cast_json(field)
-      _cast_convertor(field.name) do |value|
-        if value.respond_to?(:to_h)
-          value
-        else
-          value.blank? ? nil : JSON.parse(value)
-        end
-      end
+      _cast_convertor(field.name) { |value| ContentFieldValues.normalize_input(:json, value, site) }
     end
 
     def _cast_password(field)
