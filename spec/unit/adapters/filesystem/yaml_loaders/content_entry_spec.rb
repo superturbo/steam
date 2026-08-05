@@ -6,8 +6,8 @@ require_relative '../../../../../lib/locomotive/steam/adapters/filesystem/yaml_l
 describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
 
   let(:site_path)     { default_fixture_site_path }
-  let(:content_type)  { instance_double('Bands', _id: 42, slug: 'bands', association_fields: [], select_fields: [], file_fields: [], password_fields: []) }
-  let(:scope)         { instance_double('Scope', locale: :en, context: { content_type: content_type }) }
+  let(:content_type)  { instance_double('Bands', _id: 42, slug: 'bands', association_fields: [], select_fields: [], file_fields: [], password_fields: [], fields_by_name: {}) }
+  let(:scope)         { instance_double('Scope', locale: :en, site: nil, context: { content_type: content_type }) }
   let(:loader)        { described_class.new(site_path) }
 
   describe '#load' do
@@ -23,7 +23,7 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
     context 'a content type with a belongs_to field' do
 
       let(:field)         { instance_double('Field', name: 'band', type: :belongs_to) }
-      let(:content_type)  { instance_double('Songs', slug: 'songs', association_fields: [field], select_fields: [], file_fields: [], password_fields: []) }
+      let(:content_type)  { instance_double('Songs', slug: 'songs', association_fields: [field], select_fields: [], file_fields: [], password_fields: [], fields_by_name: {}) }
 
       it 'adds a new attribute for the foreign key' do
         expect(subject.first[:band_id]).to eq 'pearl-jam'
@@ -64,7 +64,7 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
 
       let(:options)       { instance_double('Options') }
       let(:field)         { instance_double('Field', name: 'kind', type: :select, select_options: options) }
-      let(:content_type)  { instance_double('Bands', slug: 'bands', select_fields: [field], association_fields: [], file_fields: [], password_fields: []) }
+      let(:content_type)  { instance_double('Bands', slug: 'bands', select_fields: [field], association_fields: [], file_fields: [], password_fields: [], fields_by_name: {}) }
 
       it 'adds a new attribute for the foreign key' do
         expect(options).to receive(:by_name).twice.with('grunge').and_return(instance_double('GrungeOption', _id: 0))
@@ -78,7 +78,7 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
     context 'a content type with a password field' do
 
       let(:field)         { instance_double('Field', name: 'password', type: :password) }
-      let(:content_type)  { instance_double('Accounts', slug: 'accounts', select_fields: [], association_fields: [], file_fields: [], password_fields: [field]) }
+      let(:content_type)  { instance_double('Accounts', slug: 'accounts', select_fields: [], association_fields: [], file_fields: [], password_fields: [field], fields_by_name: {}) }
 
       it 'adds a new attribute for the hashed password' do
         expect(subject.first[:password_hash]).not_to eq 'easyone'
@@ -92,7 +92,7 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
       let(:options_scope) { instance_double('Scope', :locale= => true) }
       let(:options)       { instance_double('SelectOptionsRepository', scope: options_scope) }
       let(:field)         { instance_double('Field', name: 'category', type: :select, localized: true, select_options: options) }
-      let(:content_type)  { instance_double('Updates', slug: 'updates', select_fields: [field], association_fields: [], file_fields: [], password_fields: []) }
+      let(:content_type)  { instance_double('Updates', slug: 'updates', select_fields: [field], association_fields: [], file_fields: [], password_fields: [], fields_by_name: {}) }
 
       it 'adds a new localized attribute for the foreign key' do
         option = instance_double('Option', _id: 0)
@@ -105,10 +105,59 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
 
     end
 
+    context 'a content type with a value the field keeps differently' do
+
+      let(:field)         { instance_double('Field', name: 'featured', type: :boolean,
+                                                     localized?: false, persisted_name: 'featured') }
+      let(:content_type)  { instance_double('Bands', slug: 'bands', select_fields: [], association_fields: [],
+                                                     file_fields: [], password_fields: [],
+                                                     fields_by_name: { featured: field }) }
+
+      it 'reads it as the value the field keeps' do
+        expect(subject.map { |entry| entry[:featured] }).to eq [false, false, true]
+      end
+
+      context 'the field cannot read' do
+
+        before do
+          allow(Locomotive::Steam::ContentFieldValues).to receive(:normalize_input)
+            .and_raise(Locomotive::Steam::ContentFieldValues::ParseError, 'expected a boolean')
+        end
+
+        it 'says which file, which entry and which field' do
+          expect { subject }.to raise_error(/bands\.yml, entry Pearl Jam, field featured: expected a boolean/)
+        end
+
+        context 'in one locale of many' do
+
+          let(:field)         { instance_double('Field', name: 'text', type: :string,
+                                                         localized?: true, persisted_name: 'text') }
+          let(:content_type)  { instance_double('Updates', slug: 'updates', select_fields: [], association_fields: [],
+                                                           file_fields: [], password_fields: [],
+                                                           fields_by_name: { text: field }) }
+
+          before do
+            allow(Locomotive::Steam::ContentFieldValues).to receive(:normalize_input) do |_type, value, _site|
+              raise Locomotive::Steam::ContentFieldValues::ParseError, 'expected text' if value == 'phrase FR'
+
+              value
+            end
+          end
+
+          it 'says which locale as well' do
+            expect { subject }.to raise_error(/field text: locale fr, expected text/)
+          end
+
+        end
+
+      end
+
+    end
+
     context 'a content type with a file field' do
 
       let(:field)         { instance_double('Field', name: 'cover', type: :file) }
-      let(:content_type)  { instance_double('Songs', slug: 'songs', select_fields: [], association_fields: [], file_fields: [field], password_fields: []) }
+      let(:content_type)  { instance_double('Songs', slug: 'songs', select_fields: [], association_fields: [], file_fields: [field], password_fields: [], fields_by_name: {}) }
 
       it 'stores the size of the file' do
         expect(subject.first[:cover_size]).to eq('default' => 14768)

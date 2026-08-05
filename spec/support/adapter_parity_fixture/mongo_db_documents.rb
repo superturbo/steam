@@ -180,12 +180,26 @@ module AdapterParityFixture
       value.to_h { |locale, option| [locale.to_s, WagonSite.option_id_in(slug, name, locale, option)] }
     end
 
+    # A date and time is read where the site stands, not where the suite runs.
+    def site_zone
+      @site_zone ||= ActiveSupport::TimeZone[WagonSite.site.fetch('timezone')]
+    end
+
+    def typed_value(value, localized:)
+      return nil if value.nil?
+      return value.to_h { |locale, item| [locale.to_s, yield(item)] } if localized && value.is_a?(Hash)
+
+      yield(value)
+    end
+
     ENTRY_METADATA = %w(seo_title meta_description meta_keywords).freeze
 
     def write_attribute(document, slug, name, value)
       return document[name] = value if ENTRY_METADATA.include?(name)
 
       field = WagonSite.field(slug, name)
+
+      localized = field.fetch('localized', false)
 
       case field.fetch('type')
       when :select
@@ -197,9 +211,17 @@ module AdapterParityFixture
 
         document["#{name.singularize}_ids"] = Array(value).map { |entry| WagonSite.entry_id(target, entry) }
       when :date_time
-        document[name] = value && Time.parse(value).utc
+        document[name] = typed_value(value, localized: localized) { |text| site_zone.parse(text).getutc }
       when :date
-        document[name] = value && Date.parse(value)
+        document[name] = typed_value(value, localized: localized) { |text| Date.parse(text) }
+      when :integer
+        document[name] = typed_value(value, localized: localized) { |text| Integer(text) }
+      when :float
+        document[name] = typed_value(value, localized: localized) { |text| Float(text) }
+      when :boolean
+        document[name] = typed_value(value, localized: localized) { |text| text.is_a?(String) ? text == 'true' : text }
+      when :json
+        document[name] = typed_value(value, localized: localized) { |item| item.is_a?(String) ? JSON.parse(item) : item }
       else
         document[name] = value
       end

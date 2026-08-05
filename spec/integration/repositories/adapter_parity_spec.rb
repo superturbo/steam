@@ -138,7 +138,7 @@ describe 'Adapter parity' do
 
       it 'holds the same types under the same slugs' do
         expect(type_repository.all.map(&:slug))
-          .to match_array %w(chapters makers reverse_chapters specimens submissions topics)
+          .to match_array %w(chapters makers quoted reverse_chapters specimens submissions topics)
       end
 
       it 'reads what the fixture says about a type and its fields' do
@@ -1172,6 +1172,43 @@ describe 'Adapter parity' do
           expect(entry['name']).to eq 'Unlinked'
         end
 
+      end
+
+    end
+
+    # A Wagon file spells every value as text; an Engine document holds it typed.
+    describe 'a value spelled as text' do
+
+      def spelled
+        types = Locomotive::Steam::ContentTypeRepository.new(adapter, site, AdapterParityFixture::LOCALE)
+
+        Locomotive::Steam::ContentEntryRepository.new(adapter, site, AdapterParityFixture::LOCALE, types)
+          .with(types.by_slug('quoted')).all.first
+      end
+
+      it 'reaches both stores as the value its field keeps' do
+        attributes = spelled.attributes
+
+        expect(attributes.values_at(:score, :price, :flag)).to eq [7, 1.5, true]
+        expect(attributes[:held_on]).to eq Date.new(2014, 3, 9)
+        expect(attributes[:at]).to eq Time.utc(2019, 9, 10)
+        expect(attributes[:payload]).to eq('a' => [1, { 'b' => nil }])
+      end
+
+      # The store answers the query itself, before an entry is ever read.
+      it 'is found by the value its field keeps' do
+        types = Locomotive::Steam::ContentTypeRepository.new(adapter, site, AdapterParityFixture::LOCALE)
+        found = Locomotive::Steam::ContentEntryRepository.new(adapter, site, AdapterParityFixture::LOCALE, types)
+                  .with(types.by_slug('quoted')).all(score: 7, flag: true)
+
+        expect(found.map(&:name)).to eq %w(Spelled)
+      end
+
+      it 'reaches them the same way in every locale' do
+        attributes = spelled.attributes
+
+        expect(attributes[:title].translations).to eq('en' => ' Spelled en ', 'fr' => ' Spelled fr ')
+        expect(attributes[:published].translations).to eq('en' => true, 'fr' => false)
       end
 
     end

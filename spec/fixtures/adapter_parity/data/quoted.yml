@@ -1,0 +1,16 @@
+# Every value here is text in the file; both stores must end up holding the
+# value the field keeps.
+- Spelled:
+    _slug: spelled
+    score: '7'
+    price: '1.5'
+    flag: 'true'
+    held_on: 2014/03/09
+    at: '2019-09-10'
+    payload: '{"a":[1,{"b":null}]}'
+    title:
+      en: ' Spelled en '
+      fr: ' Spelled fr '
+    published:
+      en: 'true'
+      fr: 'false'

@@ -1,0 +1,25 @@
+name: Quoted
+slug: quoted
+label_field_name: name
+order_by: name
+fields:
+- name:
+    type: string
+- score:
+    type: integer
+- price:
+    type: float
+- flag:
+    type: boolean
+- held_on:
+    type: date
+- at:
+    type: date_time
+- payload:
+    type: json
+- title:
+    type: string
+    localized: true
+- published:
+    type: boolean
+    localized: true

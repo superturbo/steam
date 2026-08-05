@@ -24,10 +24,42 @@ module Locomotive
                   modify_for_associations(_attributes)
                   modify_for_files(_attributes)
                   modify_for_passwords(_attributes)
+                  modify_for_values(_attributes, label)
 
                   list << _attributes
                 end
               end
+            end
+
+            # Invalid values fail while their source entry and field are still known.
+            def modify_for_values(attributes, label)
+              content_type.fields_by_name.each_value do |field|
+                name = field.persisted_name&.to_sym
+                next unless name && attributes.key?(name)
+
+                begin
+                  attributes[name] = normalized_value(field, attributes[name])
+                rescue Locomotive::Steam::ContentFieldValues::ParseError => e
+                  raise "#{File.join(path, "#{content_type_slug}.yml")}, entry #{label}, " \
+                        "field #{field.name}: #{e.message}"
+                end
+              end
+            end
+
+            def normalized_value(field, value)
+              return normalize_value(field, value) unless field.localized? && value.is_a?(Hash)
+
+              value.to_h do |locale, translated|
+                begin
+                  [locale, normalize_value(field, translated)]
+                rescue Locomotive::Steam::ContentFieldValues::ParseError => e
+                  raise e.class, "locale #{locale}, #{e.message}"
+                end
+              end
+            end
+
+            def normalize_value(field, value)
+              Locomotive::Steam::ContentFieldValues.normalize_input(field.type, value, @scope.site)
             end
 
             def modify_for_selects(attributes)
