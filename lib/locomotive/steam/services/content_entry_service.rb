@@ -67,7 +67,7 @@ module Locomotive
 
           if validate(_repository, decorated_entry)
             _repository.update(candidate)
-            entry.attributes = candidate.attributes
+            entry.attributes = candidate.dup.attributes
           end
 
           logEntryOperation(type_slug, decorated_entry)
@@ -82,14 +82,17 @@ module Locomotive
           entry       = decorated_entry.__getobj__
           _attributes = prepare_attributes(_repository.content_type, attributes)
 
-          entry.change(_attributes, locale)
+          # A refused write must not reach the entry the caller is holding.
+          candidate = entry.dup
+          candidate.change(_attributes, locale)
 
           # An unset non-localized select still holds a value MongoDB refuses.
           _repository.content_type.select_fields.each do |field|
-            entry.attributes.delete(field.name)
+            candidate.attributes.delete(field.name)
           end
 
-          _repository.update(entry)
+          _repository.update(candidate)
+          entry.attributes = candidate.dup.attributes
 
           logEntryOperation(decorated_entry.content_type.slug, decorated_entry)
 

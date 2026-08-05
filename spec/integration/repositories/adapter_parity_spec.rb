@@ -651,9 +651,17 @@ describe 'Adapter parity' do
           expect(specimens.find(entry._id)[:price]).to eq Float::MAX
         end
 
+        # Seed a value that predates repository validation.
+        def store_specimen(attributes = {})
+          build_specimen(attributes).tap do |entity|
+            specimens.adapter.create(specimens.send(:mapper), specimens.scope, entity)
+            written << entity
+          end
+        end
+
         it 'refuses a stored value of the wrong numeric type' do
-          whole    = create_specimen(price: 1)
-          fraction = create_specimen(name: 'Fraction', score: 1.5)
+          whole    = store_specimen(price: 1)
+          fraction = store_specimen(name: 'Fraction', score: 1.5)
 
           expect { specimens.inc(whole, :price) }
             .to raise_error(Locomotive::Steam::InvalidIncrement)
@@ -1129,6 +1137,64 @@ describe 'Adapter parity' do
             .not_to change { service.all('specimens').size }
 
           expect(entry.errors.to_hash).to eq('score' => ['is invalid'])
+        end
+
+        it 'refuses to write an entry no field can hold' do
+          entry = entries_of('specimens').build(name: 'Refused', score: 'abc')
+
+          expect { entries_of('specimens').create(entry) }
+            .to raise_error(Locomotive::Steam::InvalidEntry) { |error| expect(error.entry).to be(entry) }
+          expect(ids_matching(name: 'Refused')).to be_empty
+        end
+
+        it 'refuses to update a stored entry into one no field can hold' do
+          created = readable_specimen(score: 12)
+          stored  = stored_specimen(created._id)
+          stored[:score] = 'abc'
+
+          expect { entries_of('specimens').update(stored) }.to raise_error(Locomotive::Steam::InvalidEntry)
+        end
+
+        it 'leaves the store alone when an entry is changed in place and refused' do
+          pending 'the filesystem dataset hands out the entry it stores' if filesystem?
+
+          created = readable_specimen(score: 12)
+          stored  = stored_specimen(created._id)
+          stored[:score] = 'abc'
+
+          expect { entries_of('specimens').update(stored) }.to raise_error(Locomotive::Steam::InvalidEntry)
+          expect(stored_specimen(created._id).score).to eq 12
+        end
+
+        it 'leaves the entry the caller holds alone when a decorated update is refused' do
+          created   = readable_specimen(score: 12)
+          decorated = service.find('specimens', created._id)
+
+          expect { service.update_decorated_entry(decorated, 'score' => 'abc') }
+            .to raise_error(Locomotive::Steam::InvalidEntry)
+
+          expect(decorated.score).to eq 12
+          expect(stored_specimen(created._id).score).to eq 12
+        end
+
+        it 'writes a decorated update the caller can go on reading' do
+          created   = readable_specimen(score: 12)
+          decorated = service.find('specimens', created._id)
+
+          service.update_decorated_entry(decorated, 'score' => 77)
+
+          expect(decorated.score).to eq 77
+          expect(stored_specimen(created._id).score).to eq 77
+        end
+
+        it 'keeps a later assignment on the entry out of the store' do
+          created   = readable_specimen(score: 12)
+          decorated = service.find('specimens', created._id)
+
+          service.update_decorated_entry(decorated, 'score' => 77)
+          decorated.__getobj__[:score] = 'abc'
+
+          expect(stored_specimen(created._id).score).to eq 77
         end
 
         it 'writes the links a new entry declares' do

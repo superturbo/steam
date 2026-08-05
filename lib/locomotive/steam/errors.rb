@@ -24,6 +24,17 @@ module Locomotive::Steam
   class MissingLocale < ::ArgumentError
   end
 
+  class InvalidEntry < ::StandardError
+
+    attr_reader :entry
+
+    def initialize(entry)
+      @entry = entry
+      super("#{entry.content_type_slug}: #{entry.errors.to_hash}")
+    end
+
+  end
+
   class TemplateError < ::Liquid::Error
 
     LINES_RANGE = 10

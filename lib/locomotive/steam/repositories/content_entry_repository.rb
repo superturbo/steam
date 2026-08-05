@@ -103,6 +103,18 @@ module Locomotive
         end
       end
 
+      def create(entity)
+        raise InvalidEntry.new(entity) unless entity.valid?
+
+        super
+      end
+
+      def update(entity)
+        raise InvalidEntry.new(entity) unless entity.valid?
+
+        super
+      end
+
       def inc(entity, attribute, amount = 1)
         super(entity, attribute, increment_amount(attribute, amount))
       end

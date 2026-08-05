@@ -152,22 +152,25 @@ EMAIL
       #
       module ContentEntryAuth
 
+        # Taking the password removes it from the entry, so asking a second time
+        # must not read what is no longer there as an empty password.
         def valid?
           super
 
-          name          = self[:_password_field]
-          password      = self[name]
-          confirmation  = self["#{name}_confirmation"]
+          if (name = self[:_password_field])
+            password      = self[name]
+            confirmation  = self["#{name}_confirmation"]
 
-          if password.to_s.size < Locomotive::Steam::AuthService::MIN_PASSWORD_LENGTH
-            self.errors.add(name, :too_short, count: Locomotive::Steam::AuthService::MIN_PASSWORD_LENGTH)
+            if password.to_s.size < Locomotive::Steam::AuthService::MIN_PASSWORD_LENGTH
+              self.errors.add(name, :too_short, count: Locomotive::Steam::AuthService::MIN_PASSWORD_LENGTH)
+            end
+
+            if !password.blank? && password != confirmation
+              self.errors.add("#{name}_confirmation", :confirmation, attribute: self._label_of(name))
+            end
+
+            set_password(password) if self.errors.empty?
           end
-
-          if !password.blank? && password != confirmation
-            self.errors.add("#{name}_confirmation", :confirmation, attribute: self._label_of(name))
-          end
-
-          set_password(password) if self.errors.empty?
 
           self.errors.empty?
         end
