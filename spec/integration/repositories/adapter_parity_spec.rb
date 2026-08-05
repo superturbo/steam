@@ -198,13 +198,8 @@ describe 'Adapter parity' do
         expect(drop('gallery').settings['columns']).to eq 4
       end
 
-      # The filesystem sanitizer copies each setting's declared default into the
-      # section's own content; nothing does that on the MongoDB side, so an
-      # omitted setting renders on one store and stays empty on the other.
-      it 'adds nothing to the content a section omits' do
-        pending 'the filesystem sanitizer materializes section setting defaults' if filesystem?
-
-        expect(drop('gallery').settings['rows']).to be_nil
+      it 'reads an omitted setting from its declared default' do
+        expect(drop('gallery').settings['rows']).to eq 2
       end
 
       it 'gives a section without stated content nothing to read' do

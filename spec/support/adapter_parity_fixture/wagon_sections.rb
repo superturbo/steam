@@ -33,8 +33,8 @@ module AdapterParityFixture
       slug.humanize
     end
 
-    # The definition is stored as written; only what the assertions rely on
-    # is checked here.
+    # The definition is read as written; only what the assertions rely on is
+    # checked here.
     def validate!(slug, definition)
       settings = definition.fetch('settings') { raise Error, "#{slug}.liquid has no settings" }
       ids      = settings.map { |setting| setting.fetch('id') { raise Error, "#{slug}.liquid: a setting has no id" } }

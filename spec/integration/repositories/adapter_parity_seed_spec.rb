@@ -46,13 +46,18 @@ describe 'Adapter parity seed' do
     expect(about['fullpath']).to eq('en' => 'about', 'fr' => 'a-propos')
   end
 
-  it 'writes the section definition the author wrote, unsanitized' do
+  it 'keeps the Wagon definition unchanged while compiling MongoDB documents' do
+    expect(AdapterParityFixture::WagonSections.section('gallery')[:definition]['default'])
+      .to eq('settings' => { 'columns' => 4 })
+  end
+
+  it 'writes the section definition a push leaves behind' do
     gallery = AdapterParityFixture.mongodb_client['locomotive_sections']
                                   .find('site_id' => AdapterParityFixture::SITE_ID, 'slug' => 'gallery').first
 
     expect(gallery['name']).to eq 'Gallery'
     expect(gallery['template'].strip).to eq '<ul class="gallery"></ul>'
-    expect(gallery['definition']['default']).to eq('settings' => { 'columns' => 4 })
+    expect(gallery['definition']['default']).to eq('settings' => { 'columns' => 4, 'rows' => 2 })
   end
 
   it 'writes a snippet template per locale, with no key where there is no file' do

@@ -31,8 +31,6 @@ module AdapterParityFixture
       }
     end
 
-    # Engine persists the definition the author wrote; only Wagon's loader
-    # rewrites it on the way in.
     def section(slug)
       declared = WagonSections.section(slug)
 
@@ -42,8 +40,23 @@ module AdapterParityFixture
         'name'       => WagonSections.name(slug),
         'slug'       => slug,
         'template'   => declared[:template],
-        'definition' => declared[:definition]
+        'definition' => pushed_definition(declared[:definition])
       }
+    end
+
+    # Steam fills missing setting defaults before Wagon pushes the definition.
+    def pushed_definition(definition)
+      definition.deep_dup.tap do |pushed|
+        next if (content = pushed['default']).nil?
+
+        settings = (content['settings'] ||= {})
+
+        pushed['settings'].each do |setting|
+          next if settings.key?(setting['id'])
+
+          settings[setting['id']] = setting['default']
+        end
+      end
     end
 
     # A locale without a file becomes a locale without a key, so both stores
