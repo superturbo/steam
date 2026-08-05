@@ -29,6 +29,42 @@ describe Locomotive::Steam::Adapters::Filesystem::Sanitizers::Section do
 
     end
 
+    describe 'a setting the content turns off' do
+
+      let(:definition) do
+        {
+          'settings' => [{ 'id' => 'framed', 'default' => true }],
+          'blocks'   => [{ 'type' => 'link', 'settings' => [{ 'id' => 'new_tab', 'default' => true }] }],
+          'default'  => {
+            'settings' => { 'framed' => false },
+            'blocks'   => [{ 'type' => 'link', 'settings' => { 'new_tab' => false } }]
+          }
+        }
+      end
+
+      it 'is left as the author answered it' do
+        expect(subject.definition['default']['settings']['framed']).to eq false
+        expect(subject.definition['default']['blocks'].first['settings']['new_tab']).to eq false
+      end
+
+    end
+
+    describe 'a preset that turns a setting off' do
+
+      let(:definition) do
+        {
+          'settings' => [{ 'id' => 'framed', 'default' => true }],
+          'default'  => { 'settings' => { 'framed' => true }, 'blocks' => [] },
+          'presets'  => [{ 'name' => 'Plain', 'use_default' => true, 'settings' => { 'framed' => false } }]
+        }
+      end
+
+      it 'keeps its own answer rather than the global one' do
+        expect(subject.definition['presets'].first['settings']['framed']).to eq false
+      end
+
+    end
+
     describe 'fill_presets / set_default_values' do
 
       context 'global content (global section)' do

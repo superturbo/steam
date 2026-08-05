@@ -182,7 +182,7 @@ describe 'Adapter parity' do
         expect(gallery.slug).to eq 'gallery'
         expect(gallery.type).to eq 'gallery'
         expect(gallery.name).to eq 'Gallery'
-        expect(gallery.definition['settings'].map { |setting| setting['id'] }).to eq %w(columns rows)
+        expect(gallery.definition['settings'].map { |setting| setting['id'] }).to eq %w(columns rows framed)
       end
 
       # Filesystem reads the template file, MongoDB the stored template.
@@ -196,6 +196,10 @@ describe 'Adapter parity' do
 
       it 'reads the content a section states for itself' do
         expect(drop('gallery').settings['columns']).to eq 4
+      end
+
+      it 'reads a setting the section turned off as off' do
+        expect(drop('gallery').settings['framed']).to eq false
       end
 
       it 'reads an omitted setting from its declared default' do

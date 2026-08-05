@@ -37,14 +37,15 @@ module Locomotive::Steam
 
           def fill_presets(definition)
             if definition.key?('default') && definition.key?('presets')
-              definition['presets'].each_with_index do |preset_definition, preset_index|
+              definition['presets'].each do |preset_definition|
                 next unless preset_definition.delete('use_default') == true
 
                 settings = preset_definition['settings'] ||= {}
 
-                # Fallback to use setting `default` key for Standalone/Global section settings and block settings
                 definition['default']['settings'].each do |name, value|
-                  settings[name] ||= value
+                  next if settings.key?(name)
+
+                  settings[name] = value
                 end
 
                 preset_definition['blocks'] = (preset_definition['blocks'] || []) + definition['default']['blocks']
@@ -60,7 +61,9 @@ module Locomotive::Steam
             settings = content['settings'] ||= {}
 
             definition['settings'].each do |setting|
-              settings[setting['id']] ||= setting['default']
+              next if settings.key?(setting['id'])
+
+              settings[setting['id']] = setting['default']
             end
 
             # no definition of blocks, no need to continue
@@ -76,7 +79,10 @@ module Locomotive::Steam
 
               _definition['settings'].each do |setting|
                 block['settings'] ||= {}
-                block['settings'][setting['id']] ||= setting['default']
+
+                next if block['settings'].key?(setting['id'])
+
+                block['settings'][setting['id']] = setting['default']
               end
             end
           end

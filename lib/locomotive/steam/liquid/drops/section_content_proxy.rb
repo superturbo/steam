@@ -15,6 +15,8 @@ module Locomotive
           def liquid_method_missing(name)
             value = @content[name.to_s]
 
+            # ActiveSupport considers false blank, but it is an explicit value.
+            return false if value == false
             return nil if value.blank?
 
             case type_of(name)

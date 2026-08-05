@@ -48,7 +48,7 @@ describe 'Adapter parity seed' do
 
   it 'keeps the Wagon definition unchanged while compiling MongoDB documents' do
     expect(AdapterParityFixture::WagonSections.section('gallery')[:definition]['default'])
-      .to eq('settings' => { 'columns' => 4 })
+      .to eq('settings' => { 'columns' => 4, 'framed' => false })
   end
 
   it 'writes the section definition a push leaves behind' do
@@ -57,7 +57,8 @@ describe 'Adapter parity seed' do
 
     expect(gallery['name']).to eq 'Gallery'
     expect(gallery['template'].strip).to eq '<ul class="gallery"></ul>'
-    expect(gallery['definition']['default']).to eq('settings' => { 'columns' => 4, 'rows' => 2 })
+    expect(gallery['definition']['default'])
+      .to eq('settings' => { 'columns' => 4, 'framed' => false, 'rows' => 2 })
   end
 
   it 'writes a snippet template per locale, with no key where there is no file' do

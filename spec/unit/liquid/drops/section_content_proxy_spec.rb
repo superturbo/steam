@@ -50,6 +50,26 @@ describe Locomotive::Steam::Liquid::Drops::SectionContentProxy do
 
   end
 
+  describe 'checkbox type setting' do
+
+    let(:settings)  { [{ 'id' => 'framed', 'type' => 'checkbox' }] }
+    let(:content)   { { 'framed' => false } }
+
+    subject { drop.liquid_method_missing(:framed) }
+
+    it 'reads the answer it was given' do
+      is_expected.to eq false
+    end
+
+    context 'nothing was answered' do
+
+      let(:content) { {} }
+      it { is_expected.to eq nil }
+
+    end
+
+  end
+
   describe 'url type setting' do
 
     let(:settings)  { [{ 'id' => 'link', 'type' => 'url' }] }
