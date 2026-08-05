@@ -512,6 +512,16 @@ describe Locomotive::Steam::ContentEntry do
 
     it { expect(Set.new(subject.keys)).to eq(Set.new(['_id', '_position', '_visible', '_label', '_slug', 'content_type_slug', 'title', 'picture', 'created_at', 'updated_at'])) }
 
+    context 'a field the entry never carried' do
+
+      before { allow(type).to receive(:persisted_field_names).and_return([:title, :topic_ids]) }
+
+      it 'reads as nothing rather than as a missing method' do
+        expect(subject).to include('topic_ids' => nil)
+      end
+
+    end
+
     context 'when decorated' do
 
       let(:decorated) { Locomotive::Steam::Decorators::I18nDecorator.new(content_entry, :fr, :en) }

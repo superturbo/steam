@@ -105,8 +105,9 @@ module Locomotive::Steam
       # dynamic attributes
       _attributes += content_type.persisted_field_names
 
+      # Missing fields are nil in output but remain absent from the entry.
       _attributes.each do |name|
-        hash[name.to_s] = send(name)
+        hash[name.to_s] = respond_to?(name) ? send(name) : nil
       end
 
       # errors?

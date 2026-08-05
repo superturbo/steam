@@ -1247,13 +1247,16 @@ describe 'Adapter parity' do
         end
 
         it 'creates an entry that leaves a many_to_many unset' do
-          pending 'ContentEntry#to_hash reads a many_to_many the built entry never set'
-
           entry = service.create('specimens',
                                  name: 'Unlinked',
                                  category_id: option_id(:category, 'alpha'))
 
+          stored = stored_specimen(entry._id)
+
           expect(entry['name']).to eq 'Unlinked'
+          expect(entry['topic_ids']).to be_nil
+          expect(stored.name).to eq 'Unlinked'
+          expect(stored.attributes).not_to have_key('topic_ids')
         end
 
       end
