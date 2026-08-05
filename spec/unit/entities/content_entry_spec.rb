@@ -409,6 +409,27 @@ describe Locomotive::Steam::ContentEntry do
 
     end
 
+    context 'reading a select field' do
+
+      let(:options)         { instance_double('SelectOptionRepository') }
+      let(:field)           { instance_double('Field', name: :category, type: :select,
+                                                       persisted_name: 'category_id', select_options: options) }
+      let(:required_fields) { [] }
+      let(:attributes)      { { category_id: 42 } }
+
+      before do
+        allow(options).to receive(:by_id_or_name).with(42)
+          .and_return(instance_double('SelectOption', name: build_i18n_field(en: 'alpha')))
+      end
+
+      it 'resolves the option without keeping it' do
+        expect(content_entry.category[:en]).to eq 'alpha'
+        expect(content_entry.attributes['category_id']).to eq 42
+        expect(content_entry.attributes).not_to have_key('category')
+      end
+
+    end
+
     context 'a required select field' do
 
       let(:options)    { instance_double('SelectOptionRepository') }

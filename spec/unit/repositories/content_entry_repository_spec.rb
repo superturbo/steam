@@ -1236,6 +1236,7 @@ describe Locomotive::Steam::ContentEntryRepository do
       slug:                   name.to_s.downcase,
       order_by:               nil,
       localized_names:        [],
+      select_fields:          [],
       association_fields:     [],
       fields_by_name:         {}
     }

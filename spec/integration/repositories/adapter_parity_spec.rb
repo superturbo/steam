@@ -799,14 +799,24 @@ describe 'Adapter parity' do
         end
 
         it 'creates an entry that leaves a non-localized select unset' do
-          pending 'MongoDB cannot serialize an unset non-localized select' unless filesystem?
-
           entry = specimens.build(name: 'Created without a category')
 
           written << entry
           specimens.create(entry)
 
-          expect(specimens.find(entry._id).name).to eq 'Created without a category'
+          stored = specimens.find(entry._id)
+
+          expect(stored.name).to eq 'Created without a category'
+          expect(stored.category).to be_nil
+          expect(stored.attributes).not_to have_key('category_id')
+        end
+
+        it 'keeps only the option an entry chose, not the label it reads as' do
+          entry  = create_specimen(category_id: option_id(:category, 'alpha'))
+          stored = specimens.find(entry._id)
+
+          expect(stored.attributes['category_id']).to eq option_id(:category, 'alpha')
+          expect(stored.category[:en]).to eq 'alpha'
         end
 
       end
@@ -1203,6 +1213,15 @@ describe 'Adapter parity' do
 
           expect(stored['payload']).to eq('a' => 'one')
           expect(stored['labels']).to eq ['x']
+        end
+
+        it 'writes a decorated update of an entry that chose no option' do
+          created   = service.create('specimens', name: 'No option', topic_ids: [])
+          decorated = service.find('specimens', created._id)
+
+          service.update_decorated_entry(decorated, 'score' => 77)
+
+          expect(stored_specimen(created._id).score).to eq 77
         end
 
         it 'keeps a later assignment on the entry out of the store' do

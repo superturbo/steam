@@ -295,6 +295,8 @@ module Locomotive
         unless self.content_type.localized_names.blank?
           mapper.localized_attributes(*self.content_type.localized_names)
         end
+
+        mapper.virtual_attributes(*self.content_type.select_fields.map(&:name))
       end
 
       def add_associations_to_mapper(mapper)

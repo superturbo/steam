@@ -16,6 +16,7 @@ module Locomotive::Steam
         @name, @options, @repository = name, options, repository
 
         @localized_attributes = []
+        @virtual_attributes   = []
         @default_attributes   = []
         @associations         = []
 
@@ -23,6 +24,11 @@ module Locomotive::Steam
         @after_load           = nil
 
         instance_eval(&block) if block_given?
+      end
+
+      # Virtual attributes are omitted from the stored representation.
+      def virtual_attributes(*args)
+        @virtual_attributes += [*args]
       end
 
       def localized_attributes(*args)
@@ -85,6 +91,8 @@ module Locomotive::Steam
             value = entity.send(name)
             value.serialize(attributes, name) if value.respond_to?(:serialize)
           end
+
+          @virtual_attributes.each { |name| attributes.delete(name.to_s) }
 
           # association name -> id (belongs_to) or ids (many_to_many)
           (entity.associations || {}).each do |name, association|

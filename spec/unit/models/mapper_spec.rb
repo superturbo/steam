@@ -31,6 +31,17 @@ describe Locomotive::Steam::Models::Mapper do
 
     it { expect(subject).to eq('title' => 'Hello world', 'body' => 'Lorem ipsum', 'published_at' => DateTime.parse('2007/06/29 00:00:00')) }
 
+    describe 'a value read in every locale but kept in none' do
+
+      let(:block)      { ->(_) { localized_attributes(:title, :category); virtual_attributes(:category) } }
+      let(:attributes) { { title: { 'en' => 'Hello world' }, category_id: 42 } }
+
+      it 'hands over what the entity holds, without it' do
+        expect(subject).to eq('title' => { 'en' => 'Hello world' }, 'category_id' => 42)
+      end
+
+    end
+
     describe 'association' do
 
       let(:repository)  { instance_double('AuthorRepository', scope: scope, adapter: adapter, base_url: '') }

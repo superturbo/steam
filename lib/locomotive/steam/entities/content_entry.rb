@@ -259,6 +259,8 @@ module Locomotive::Steam
       end
     end
 
+    # Reading an option resolves its label; the entry goes on holding the id it
+    # was given, which is the only part a store takes.
     def _cast_select(field)
       options = field.select_options
 
@@ -267,23 +269,17 @@ module Locomotive::Steam
         # (2 different locales might point to different options)
         if _value.default
           # unique value for all the locales, so grab the option
-          name = options.by_id_or_name(_value.default)&.name
-          name&.duplicate(field.name)
+          options.by_id_or_name(_value.default)&.name&.duplicate(field.name)
         else
-          @attributes[field.name] = _value.duplicate(field.name)
-
-          _cast_convertor(field.name, true) do |value, locale|
-            name = options.by_id_or_name(value)&.name
-            name.try(:[], locale)
+          _value.duplicate(field.name).apply do |value, locale|
+            options.by_id_or_name(value)&.name.try(:[], locale)
           end
         end
       else
         # the field is not localized, we only have the id of the option (or its name if a
         # contact form submission in Wagon for instance),
         # so just copy the labels (in all the locales) of the matching select option
-        if name = options.by_id_or_name(_value)&.name # this should either return an i18nField or nil
-          attributes[field.name] = name.dup
-        end
+        options.by_id_or_name(_value)&.name&.dup
       end
     end
 

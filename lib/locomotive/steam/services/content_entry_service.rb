@@ -86,11 +86,6 @@ module Locomotive
           candidate = entry.dup
           candidate.change(_attributes, locale)
 
-          # An unset non-localized select still holds a value MongoDB refuses.
-          _repository.content_type.select_fields.each do |field|
-            candidate.attributes.delete(field.name)
-          end
-
           _repository.update(candidate)
           entry.attributes = candidate.dup.attributes
 
