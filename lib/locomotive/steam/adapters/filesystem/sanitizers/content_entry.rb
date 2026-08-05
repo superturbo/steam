@@ -13,7 +13,7 @@ module Locomotive::Steam
           end
 
           def apply_to_dataset(dataset)
-            dataset.all.each do |entity|
+            dataset.records.values.each do |entity|
               _apply_to_dataset(entity, dataset)
             end
           end

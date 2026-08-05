@@ -127,7 +127,7 @@ module Locomotive::Steam
           entity = mapper.to_entity(attributes.dup)
 
           dataset.insert(entity)
-          sanitizer.apply_to(entity)
+          sanitizer.apply_to(dataset.find(entity._id))
         end
 
         sanitizer.apply_to(dataset)

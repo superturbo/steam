@@ -11,12 +11,20 @@ module Locomotive::Steam
         @attributes = attributes.with_indifferent_access
       end
 
-      # Attribute replacement, localized changes and validation errors stay on the copy.
+      # Association proxies must answer for the copied entity.
       def initialize_copy(source)
         super
         @errors     = nil
         @attributes = source.attributes.transform_values do |value|
-          value.is_a?(I18nField) ? value.dup : value
+          value.is_a?(I18nField) ? value.dup : Copy.of(value)
+        end
+
+        @associations = (source.associations || {}).each_with_object({}) do |(name, association), copies|
+          copies[name] = association.dup.tap do |copy|
+            copy.__attach__(self)
+
+            @attributes[name] = copy if @attributes[name].equal?(association)
+          end
         end
       end
 

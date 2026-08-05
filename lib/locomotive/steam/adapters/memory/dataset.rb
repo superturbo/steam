@@ -24,20 +24,22 @@ module Locomotive::Steam
           clear!
         end
 
+        # Stored records are isolated from their callers.
         def insert(record)
           @primary_key.increment! do |id|
             _id = record[identity] || id
             raise InvalidIdentity, "#{name} already has #{identity} #{_id.inspect}" if records.key?(_id)
 
             record[identity] = _id
-            records[_id] = record
+            records[_id] = copy_of(record)
           end
         end
 
         def update(record)
           id = record[identity]
           find(id)
-          records[id] = record
+          records[id] = copy_of(record)
+          record
         end
 
         def delete(id)
@@ -85,6 +87,10 @@ module Locomotive::Steam
 
         def identity
           @identity ||= :_id
+        end
+
+        def copy_of(record)
+          record.is_a?(::Hash) ? Locomotive::Steam::Models::Copy.of(record) : record.dup
         end
       end
     end

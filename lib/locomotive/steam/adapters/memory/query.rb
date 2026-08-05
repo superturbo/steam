@@ -9,7 +9,8 @@ module Locomotive::Steam
         include Enumerable
         extend  Forwardable
 
-        def_delegators :all, :each, :last, :to_s, :to_a, :empty?, :size
+        def_delegators :all, :each, :last, :to_s, :to_a
+        def_delegators :selected, :empty?, :size
 
         alias :length :size
         alias :count :size
@@ -65,7 +66,14 @@ module Locomotive::Steam
           end
         end
 
+        # Copy only rows returned by the query.
         def all
+          selected.map(&:dup)
+        end
+
+        private
+
+        def selected
           return [] if @limit == 0
 
           limited sorted(filtered)

@@ -1156,8 +1156,6 @@ describe 'Adapter parity' do
         end
 
         it 'leaves the store alone when an entry is changed in place and refused' do
-          pending 'the filesystem dataset hands out the entry it stores' if filesystem?
-
           created = readable_specimen(score: 12)
           stored  = stored_specimen(created._id)
           stored[:score] = 'abc'
@@ -1185,6 +1183,26 @@ describe 'Adapter parity' do
 
           expect(decorated.score).to eq 77
           expect(stored_specimen(created._id).score).to eq 77
+        end
+
+        it 'reads an entry no one else is holding' do
+          created = readable_specimen(score: 12)
+
+          stored_specimen(created._id)[:score] = 99
+
+          expect(stored_specimen(created._id).score).to eq 12
+        end
+
+        it 'stores its own copy of written values' do
+          created = readable_specimen(score: 12, payload: { 'a' => 'one' }, labels: ['x'])
+
+          created[:payload]['a'] << ' more'
+          created[:labels] << 'y'
+
+          stored = stored_specimen(created._id).attributes
+
+          expect(stored['payload']).to eq('a' => 'one')
+          expect(stored['labels']).to eq ['x']
         end
 
         it 'keeps a later assignment on the entry out of the store' do

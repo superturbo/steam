@@ -26,6 +26,13 @@ module Locomotive::Steam
         @options = options
       end
 
+      # Copies keep separate repository state but share the parent scope.
+      def initialize_copy(source)
+        super
+        original    = source.instance_variable_get(:@repository)
+        @repository = original.dup.tap { |copy| copy.scope = original.scope }
+      end
+
       # In order to keep track of the entity which owns
       # the association.
       def __attach__(entity)

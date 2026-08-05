@@ -16,7 +16,7 @@ module Locomotive::Steam
 
       def initialize_copy(field)
         super
-        self.translations = field.translations.dup
+        self.translations = Copy.of(field.translations)
       end
 
       def [](locale)

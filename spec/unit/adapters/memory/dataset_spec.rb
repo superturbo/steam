@@ -85,6 +85,37 @@ describe Locomotive::Steam::Adapters::Memory::Dataset do
 
   end
 
+  describe 'what it keeps' do
+
+    let(:record) { { name: +'Bowie' } }
+
+    it 'is not the record it was handed' do
+      subject.insert(record)
+      record[:name] << ' Pop'
+
+      expect(subject.find(record[:_id])[:name]).to eq 'Bowie'
+    end
+
+    it 'is not the record an update hands it either' do
+      subject.insert(record)
+      written = { _id: record[:_id], name: +'Iggy' }
+      subject.update(written)
+      written[:name] << ' Pop'
+
+      expect(subject.find(record[:_id])[:name]).to eq 'Iggy'
+    end
+
+    it 'is not what a record holds either' do
+      record[:labels] = [+'one']
+      subject.insert(record)
+      record[:labels] << 'two'
+      record[:labels].first << ' more'
+
+      expect(subject.find(record[:_id])[:labels]).to eq ['one']
+    end
+
+  end
+
   describe '#reindex!' do
     let(:invalid) { Locomotive::Steam::Adapters::Memory::Dataset::InvalidIdentity }
     let(:record)  { { name: 'Bowie' } }
@@ -93,22 +124,23 @@ describe Locomotive::Steam::Adapters::Memory::Dataset do
 
     it 'moves the record to its new identity and drops the old key' do
       old_key = record[:_id]
-      record[:_id] = 'bowie'
+      subject.find(old_key)[:_id] = 'bowie'
       subject.reindex!
 
-      expect(subject.find('bowie')).to eq(record)
+      expect(subject.find('bowie')[:name]).to eq 'Bowie'
       expect(subject.exists?(old_key)).to eq false
     end
 
     it 'fails fast on a missing identity' do
-      record.delete(:_id)
+      subject.find(record[:_id]).delete(:_id)
       expect { subject.reindex! }.to raise_error(invalid, /without an _id/)
     end
 
     it 'fails fast on a duplicate identity' do
       other = { name: 'Iggy' }
       subject.insert(other)
-      record[:_id] = other[:_id] = 'clash'
+      subject.find(record[:_id])[:_id] = 'clash'
+      subject.find(other[:_id])[:_id] = 'clash'
 
       expect { subject.reindex! }.to raise_error(invalid, /duplicate/)
     end
