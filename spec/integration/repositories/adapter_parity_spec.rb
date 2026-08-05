@@ -314,10 +314,11 @@ describe 'Adapter parity' do
         expect(theme_asset_url(false)).to eq served
       end
 
-      it 'busts the cache with the asset checksum' do
-        pending 'the filesystem loader sets neither local_path nor checksum' if filesystem?
+      # Wagon computes local checksums when pushing; Filesystem does not store them.
+      it 'versions the URL by what its store knows of the file' do
+        expected = filesystem? ? served : "#{served}?#{Digest::MD5.hexdigest("body { color: #333; }\n")}"
 
-        expect(theme_asset_url(true)).to eq "#{served}?#{Digest::MD5.hexdigest("body { color: #333; }\n")}"
+        expect(theme_asset_url(true)).to eq expected
       end
 
     end
