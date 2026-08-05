@@ -346,12 +346,9 @@ describe 'Adapter parity' do
           .with(types.by_slug('makers'))
       end
 
-      # A Filesystem id is the slug itself, so a slug spelling a legal ObjectId
-      # is read as that id by MongoDB and as the slug it is by Filesystem.
+      # The stores use different IDs, even when a slug is a legal ObjectId.
       it 'finds an entry whose slug spells an object id' do
-        pending 'MongoDB reads a 24-hex string as an id it never issued' unless filesystem?
-
-        expect(makers.find('0123456789abcdef01234567').name).to eq 'Hex slug'
+        expect(makers.by_slug('0123456789abcdef01234567').name).to eq 'Hex slug'
       end
 
       it 'finds an entry by the id it gave it' do
@@ -852,6 +849,10 @@ describe 'Adapter parity' do
 
         expect(scalars.name).to eq 'Scalars'
         expect(service.find('specimens', scalars._id).name).to eq 'Scalars'
+      end
+
+      it 'finds an entry whose slug spells an object id' do
+        expect(service.find('makers', '0123456789abcdef01234567').name).to eq 'Hex slug'
       end
 
       describe 'writing' do
