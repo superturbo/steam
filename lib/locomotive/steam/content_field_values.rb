@@ -12,7 +12,8 @@ module Locomotive::Steam
 
       REASONS = %i(invalid_boolean invalid_date invalid_encoding invalid_json
                    invalid_json_name invalid_json_value invalid_number
-                   json_too_deep outside_numeric_bounds wrong_type).freeze
+                   json_too_deep outside_numeric_bounds wrong_stored_type
+                   wrong_type).freeze
 
       attr_reader :reason
 
@@ -180,6 +181,63 @@ module Locomotive::Steam
       end
     end
 
+    # Validates adapter-decoded values without parsing stored text.
+    def normalize_read(type, value)
+      return value if value.nil?
+
+      case type
+      when :integer                       then read_number(value, Integer, 'an integer')
+      when :float                         then read_number(value, Float, 'a float')
+      when :boolean                       then read_boolean(value)
+      when :date                          then read_date(value)
+      when :date_time                     then read_date_time(value)
+      when :json                          then read_json(value)
+      when :string, :text, :email, :color then read_text(value)
+      else value
+      end
+    end
+
+    def read_number(value, wanted, expected)
+      wrong_stored_type!(expected, value) unless value.instance_of?(wanted)
+      return value if Adapters::NumericBounds.within?(value)
+
+      raise ParseError.new(:outside_numeric_bounds, 'number outside supported bounds')
+    end
+
+    def read_boolean(value)
+      return value if value.equal?(true) || value.equal?(false)
+
+      wrong_stored_type!('a boolean', value)
+    end
+
+    def read_date(value)
+      return value if plain_date?(value)
+
+      wrong_stored_type!('a day', value)
+    end
+
+    def read_date_time(value)
+      return value.getutc if value.instance_of?(Time)
+
+      wrong_stored_type!('a moment', value)
+    end
+
+    def read_json(value)
+      wrong_stored_type!('a JSON object', value) unless value.is_a?(Hash)
+
+      json_value(value, 1)
+    end
+
+    def read_text(value)
+      wrong_stored_type!('text', value) unless value.is_a?(String)
+
+      readable_text(value)
+    end
+
+    def wrong_stored_type!(expected, value)
+      raise ParseError.new(:wrong_stored_type, "expected #{expected} in the store, got #{value.class}")
+    end
+
     def input_number(value, type)
       return nil if blank_text?(value)
       return number(value, type) if value.is_a?(String)
@@ -309,7 +367,9 @@ module Locomotive::Steam
     end
 
     private_class_method :input_json, :parse_json, :json_value, :json_hash, :json_array,
-                         :guard_depth, :json_key, :json_number, :readable_text
+                         :guard_depth, :json_key, :json_number, :readable_text,
+                         :read_number, :read_boolean, :read_date, :read_date_time,
+                         :read_json, :read_text, :wrong_stored_type!
 
     def zone_of(site)
       raise ConfigurationError, 'a site timezone is required to read this value' if site.nil?

@@ -55,6 +55,123 @@ describe Locomotive::Steam::ContentFieldValues do
 
   end
 
+  describe '#normalize_read' do
+
+    { 'an integer'    => [:integer, '7',          7],
+      'a boolean'     => [:boolean, 'true',       true],
+      'a date'        => [:date,    '2024-01-20', Date.new(2024, 1, 20)],
+      'a JSON object' => [:json,    '{"a":1}',    { 'a' => 1 }]
+    }.each do |label, (type, text, value)|
+      it "reads text into #{label} on the way in and refuses it on the way out" do
+        expect(described_class.normalize_input(type, text)).to eq value
+
+        expect { described_class.normalize_read(type, text) }
+          .to raise_error(described_class::ParseError) { |error| expect(error.reason).to eq :wrong_stored_type }
+
+        expect(described_class.normalize_read(type, value)).to eq value
+      end
+    end
+
+    describe 'what a store may hold' do
+
+      { 'an integer'    => [:integer, 7,                     7],
+        'a float'       => [:float,   1.5,                   1.5],
+        'true'          => [:boolean, true,                  true],
+        'false'         => [:boolean, false,                 false],
+        'text'          => [:string,  'hello',               'hello'],
+        'a day'         => [:date,    Date.new(2024, 1, 20), Date.new(2024, 1, 20)],
+        'an object'     => [:json,    { 'a' => 1 },          { 'a' => 1 }],
+        'nothing'       => [:integer, nil,                   nil],
+        'no day'        => [:date,    nil,                   nil]
+      }.each do |label, (type, value, expected)|
+        it("reads #{label}") { expect(described_class.normalize_read(type, value)).to eq expected }
+      end
+
+      it 'reads a moment in UTC, whichever offset it carries' do
+        value = Time.new(2024, 1, 20, 12, 0, 0, '+03:00')
+
+        expect(described_class.normalize_read(:date_time, value)).to eq value
+        expect(described_class.normalize_read(:date_time, value)).to be_utc
+      end
+
+      it 'leaves a type it does not read alone' do
+        expect(described_class.normalize_read(:select, 'option')).to eq 'option'
+      end
+
+    end
+
+    describe 'what a store holds wrongly' do
+
+      { 'an integer where a float goes'   => [:float,     3],
+        'a float where an integer goes'   => [:integer,   3.0],
+        'a number where a boolean goes'   => [:boolean,   1],
+        'a moment where a day goes'       => [:date,      Time.utc(2024, 1, 20)],
+        'a DateTime where a day goes'     => [:date,      DateTime.new(2024, 1, 20)],
+        'a day where a moment goes'       => [:date_time, Date.new(2024, 1, 20)],
+        'a zoned time where a moment goes' => [:date_time, ActiveSupport::TimeZone['UTC'].parse('2024-01-20')],
+        'a number where text goes'        => [:string,    7],
+        'a list where an object goes'     => [:json,      [1, 2]]
+      }.each do |label, (type, value)|
+        it "reports wrong_stored_type for #{label}" do
+          expect { described_class.normalize_read(type, value) }
+            .to raise_error(described_class::ParseError) { |error| expect(error.reason).to eq :wrong_stored_type }
+        end
+      end
+
+      { 'a number past the bounds'     => [[:integer, 2**63],           :outside_numeric_bounds],
+        'a non-finite float'           => [[:float,   Float::INFINITY], :outside_numeric_bounds],
+        'text in no readable encoding' => [[:string,  %(caf\xFF)],      :invalid_encoding],
+        'a value JSON cannot hold'     => [[:json,    { 'v' => :sym }], :invalid_json_value],
+        'a name JSON cannot use'       => [[:json,    { 1 => 'x' }],    :invalid_json_name]
+      }.each do |label, ((type, value), reason)|
+        it "reports #{reason} for #{label}" do
+          expect { described_class.normalize_read(type, value) }
+            .to raise_error(described_class::ParseError) { |error| expect(error.reason).to eq reason }
+        end
+      end
+
+      it 'refuses a value that only claims to be a boolean' do
+        impostor = Object.new
+        impostor.define_singleton_method(:==) { |_other| true }
+
+        expect { described_class.normalize_read(:boolean, impostor) }
+          .to raise_error(described_class::ParseError) { |error| expect(error.reason).to eq :wrong_stored_type }
+      end
+
+      it 'refuses an object that holds itself rather than running out of stack' do
+        loop_back = { 'a' => 1 }
+        loop_back['self'] = loop_back
+
+        expect { described_class.normalize_read(:json, loop_back) }
+          .to raise_error(described_class::ParseError) { |error| expect(error.reason).to eq :json_too_deep }
+      end
+
+    end
+
+    describe 'what the store goes on holding' do
+
+      it 'hands back its own copy of an object' do
+        stored = { 'a' => [1], 'b' => +'text' }
+        read   = described_class.normalize_read(:json, stored)
+
+        read['a'] << 2
+        read['b'] << '!'
+
+        expect(stored).to eq('a' => [1], 'b' => 'text')
+      end
+
+      it 'hands back its own copy of text' do
+        stored = +'hello'
+
+        described_class.normalize_read(:string, stored) << ' there'
+
+        expect(stored).to eq 'hello'
+      end
+
+    end
+
+  end
+
   describe '#normalize_input of a text field' do
 
     subject { described_class.normalize_input(:string, value) }
