@@ -30,7 +30,7 @@ module Locomotive
                 raise ::Liquid::SyntaxError, "Invalid attributes syntax: #{markup}"
               end
 
-              visit(body.first)
+              visit_hash(body.first, criteria: true)
             end
 
             private
@@ -42,20 +42,7 @@ module Locomotive
 
             def visit(node)
               case node
-              when ::Prism::HashNode
-                seen = {}
-
-                node.elements.each_with_object({}) do |element, hash|
-                  unsupported! unless element.is_a?(::Prism::AssocNode)
-
-                  key  = visit(element.key)
-                  name = key.to_s
-
-                  duplicate!(name) if seen.key?(name)
-                  seen[name] = true
-
-                  hash[key] = visit(element.value)
-                end
+              when ::Prism::HashNode               then visit_hash(node)
               when ::Prism::ArrayNode              then node.elements.map { |e| visit(e) }
               when ::Prism::SymbolNode             then node.unescaped.to_sym
               when ::Prism::StringNode             then node.unescaped
@@ -67,6 +54,26 @@ module Locomotive
               when ::Prism::CallNode               then visit_call(node)
               else
                 unsupported!
+              end
+            end
+
+            # Only the markup itself lists criteria; a hash nested under one is
+            # an ordinary value.
+            def visit_hash(node, criteria: false)
+              seen = {}
+
+              node.elements.each_with_object({}) do |element, hash|
+                unsupported! unless element.is_a?(::Prism::AssocNode)
+
+                key  = visit(element.key)
+                name = key.to_s
+
+                duplicate!(name) if seen.key?(name)
+                seen[name] = true
+
+                invalid_all_value!(name) if criteria && removed_all_form?(name, element.value)
+
+                hash[key] = visit(element.value)
               end
             end
 
@@ -124,6 +131,21 @@ module Locomotive
               rescue RegexpError
                 unsupported!
               end
+            end
+
+            REMOVED_ALL_FORM = /\A\s*\$and\s*:/
+
+            private_constant :REMOVED_ALL_FORM
+
+            # Left as an ordinary string, the removed `all: "$and: [...]"` form
+            # would match nothing at all.
+            def removed_all_form?(name, node)
+              name.end_with?('.all') && node.is_a?(::Prism::StringNode) &&
+                REMOVED_ALL_FORM.match?(node.unescaped)
+            end
+
+            def invalid_all_value!(name)
+              raise ::Liquid::SyntaxError, "Invalid value for #{name}"
             end
 
             def duplicate!(key)

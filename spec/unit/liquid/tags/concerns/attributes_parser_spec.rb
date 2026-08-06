@@ -73,14 +73,49 @@ describe Locomotive::Steam::Liquid::Tags::Concerns::AttributesParser do
 
   describe 'string operands' do
 
-    it 'does not interpret an all operand as YAML' do
-      expect(parse(%q{categories.all: "$and: ['A', 'B']"})).to eq(:'categories.all' => "$and: ['A', 'B']")
+    it 'takes an all operand as the single value it reads as' do
       expect(parse(%q{tags.all: 'featured'})).to eq(:'tags.all' => 'featured')
     end
 
     it 'leaves strings unchanged for other operators' do
       expect(parse(%q{tags.in: "$and: ['A']"})).to eq(:'tags.in' => "$and: ['A']")
       expect(parse(%q{name: "$and: ['A']"})).to eq(name: "$and: ['A']")
+    end
+
+  end
+
+  describe 'the removed all operand form' do
+
+    it 'refuses it rather than reading it as a value nothing matches' do
+      expect { parse(%q{categories.all: "$and: ['A', 'B']"}) }
+        .to raise_error(::Liquid::SyntaxError, /Invalid value for categories\.all/)
+    end
+
+    it 'refuses it however it is spaced' do
+      expect { parse(%q{categories.all: "  $and : ['A']"}) }.to raise_error(::Liquid::SyntaxError)
+    end
+
+    it 'refuses it under a string key too' do
+      expect { parse(%q{"categories.all" => "$and: ['A']"}) }.to raise_error(::Liquid::SyntaxError)
+    end
+
+    it 'reads a string that only mentions the operator as text' do
+      expect(parse(%q{categories.all: "text $and: value"})).to eq(:'categories.all' => 'text $and: value')
+    end
+
+    it 'reads it as an ordinary pair inside a nested object' do
+      expect(parse(%q{payload: { "categories.all": "$and: ['A']" }}))
+        .to eq(payload: { :'categories.all' => "$and: ['A']" })
+    end
+
+    it 'still parses the array operand it was replaced by' do
+      expect(parse(%q{categories.all: ['A', 'B']})).to eq(:'categories.all' => %w(A B))
+    end
+
+    it 'leaves a value handed over at render time to the runtime' do
+      value = parse('categories.all: some.var')[:'categories.all']
+      expect(value).to be_a(::Liquid::VariableLookup)
+      expect(value.name).to eq 'some'
     end
 
   end

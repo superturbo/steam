@@ -25,6 +25,26 @@ describe Locomotive::Steam::Liquid::Tags::WithScope do
 
   end
 
+  describe 'the removed all operand form' do
+
+    let(:source) { %q({% with_scope categories.all: "$and: ['A', 'B']" %}42{% endwith_scope %}) }
+
+    it { expect { output }.to raise_error(::Liquid::SyntaxError, /Invalid value for categories\.all/) }
+
+    context 'the same text handed over at render time' do
+
+      let(:assigns) { { 'my_filters' => { 'categories.all' => "$and: ['A']" } } }
+      let(:source)  { '{% with_scope my_filters %}{% assign conditions = with_scope %}{% endwith_scope %}' }
+
+      it 'stays an ordinary value the tag does not read' do
+        output
+        expect(conditions['categories.all']).to eq "$and: ['A']"
+      end
+
+    end
+
+  end
+
   describe 'a criterion handed over at render time' do
 
     let(:source) { '{% with_scope my_filters %}42{% endwith_scope %}' }
