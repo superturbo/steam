@@ -10,8 +10,9 @@ module Locomotive::Steam
 
     NIL_IS_THE_ONLY_BLANK    = %i(boolean integer float date date_time).freeze
     REQUIRED_FROM_ATTRIBUTES = %i(belongs_to many_to_many file).freeze
+    READ_THROUGH_GRAMMAR     = %i(integer float boolean string text email color).freeze
 
-    private_constant :NIL_IS_THE_ONLY_BLANK, :REQUIRED_FROM_ATTRIBUTES
+    private_constant :NIL_IS_THE_ONLY_BLANK, :REQUIRED_FROM_ATTRIBUTES, :READ_THROUGH_GRAMMAR
 
     def initialize(attributes = {})
       super({
@@ -230,19 +231,13 @@ module Locomotive::Steam
     end
 
     def _cast_value(field)
+      return read_field(field) if READ_THROUGH_GRAMMAR.include?(field.type)
+
       if private_methods.include?(:"_cast_#{field.type}")
         send(:"_cast_#{field.type}", field)
       else
         attributes[field.name]
       end
-    end
-
-    def _cast_integer(field)
-      read_field(field)
-    end
-
-    def _cast_float(field)
-      read_field(field)
     end
 
     def _cast_json(field)

@@ -617,6 +617,87 @@ describe Locomotive::Steam::ContentEntry do
         let(:value) { build_i18n_field(en: 'Hello world', fr: 'Bonjour monde') }
         it { expect(subject.translations).to eq('en' => 'Hello world', 'fr' => 'Bonjour monde') }
       end
+
+      it 'hands out its own copy' do
+        subject << ' again'
+
+        expect(content_entry.attributes[:my_field]).to eq 'Hello world'
+      end
+    end
+
+    %i(text email color).each do |type|
+      context "a #{type}" do
+        let(:field_type) { type }
+        let(:value)      { 'Hello world' }
+        it { is_expected.to eq 'Hello world' }
+      end
+    end
+
+    context 'a boolean' do
+      let(:field_type) { :boolean }
+
+      context 'true' do
+        let(:value) { true }
+        it { is_expected.to eq true }
+      end
+
+      context 'false' do
+        let(:value) { false }
+        it { is_expected.to eq false }
+      end
+
+      context 'localized' do
+        let(:value) { build_i18n_field(en: true, fr: false) }
+        it { expect(subject.translations).to eq('en' => true, 'fr' => false) }
+      end
+    end
+
+    describe 'a value the store keeps as another type' do
+
+      { 'text where a boolean goes' => [:boolean, 'true', :wrong_stored_type],
+        'a number where text goes'  => [:string,  42,     :wrong_stored_type],
+        'text no encoding reads'    => [:string,  %(caf\xFF), :invalid_encoding]
+      }.each do |label, (type, held, reason)|
+        context label do
+
+          let(:field_type) { type }
+          let(:value)      { held }
+
+          it { is_expected.to be_nil }
+
+          it "reports #{reason}" do
+            events = capture_unread_values { subject }
+
+            expect(events.map { |event| event.values_at(:field, :expected_type, :reason) })
+              .to eq [['my_field', type.to_s, reason.to_s]]
+          end
+
+          it 'leaves the stored value alone' do
+            subject
+
+            expect(content_entry.attributes[:my_field]).to eq held
+          end
+
+        end
+      end
+
+      context 'in one locale of many' do
+
+        let(:field_type) { :boolean }
+        let(:value)      { build_i18n_field(en: true, fr: 'false') }
+
+        it 'reads the locales it can and leaves the one it cannot empty' do
+          expect(subject.translations).to eq('en' => true, 'fr' => nil)
+        end
+
+        it 'leaves the stored translations alone' do
+          subject
+
+          expect(content_entry.attributes[:my_field].translations).to eq('en' => true, 'fr' => 'false')
+        end
+
+      end
+
     end
 
     context 'an integer' do

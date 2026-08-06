@@ -1307,6 +1307,10 @@ describe 'Adapter parity' do
 
         expect(entry.score).to eql 7
         expect(entry.price).to eql 1.5
+        expect(entry.flag).to eq true
+        expect(entry.name).to eq 'Spelled'
+        expect(entry.title.translations).to eq('en' => ' Spelled en ', 'fr' => ' Spelled fr ')
+        expect(entry.published.translations).to eq('en' => true, 'fr' => false)
       end
 
       # The store answers the query itself, before an entry is ever read.
