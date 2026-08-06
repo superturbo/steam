@@ -235,7 +235,7 @@ module Locomotive::Steam
     end
 
     def wrong_stored_type!(expected, value)
-      raise ParseError.new(:wrong_stored_type, "expected #{expected} in the store, got #{value.class}")
+      raise ParseError.new(:wrong_stored_type, "expected #{expected}, got #{value.class}")
     end
 
     def input_number(value, type)

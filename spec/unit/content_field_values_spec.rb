@@ -130,6 +130,11 @@ describe Locomotive::Steam::ContentFieldValues do
         end
       end
 
+      it 'reports only the expected and actual types' do
+        expect { described_class.normalize_read(:integer, '7') }
+          .to raise_error(described_class::ParseError, 'expected an integer, got String')
+      end
+
       it 'refuses a value that only claims to be a boolean' do
         impostor = Object.new
         impostor.define_singleton_method(:==) { |_other| true }
