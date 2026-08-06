@@ -40,8 +40,9 @@ module Locomotive
                 begin
                   attributes[name] = normalized_value(field, attributes[name])
                 rescue Locomotive::Steam::ContentFieldValues::ParseError => e
-                  raise "#{File.join(path, "#{content_type_slug}.yml")}, entry #{label}, " \
-                        "field #{field.name}: #{e.message}"
+                  raise e.class.new(e.reason,
+                                    "#{File.join(path, "#{content_type_slug}.yml")}, entry #{label}, " \
+                                    "field #{field.name}: #{e.message}")
                 end
               end
             end
@@ -53,7 +54,7 @@ module Locomotive
                 begin
                   [locale, normalize_value(field, translated)]
                 rescue Locomotive::Steam::ContentFieldValues::ParseError => e
-                  raise e.class, "locale #{locale}, #{e.message}"
+                  raise e.class.new(e.reason, "locale #{locale}, #{e.message}")
                 end
               end
             end

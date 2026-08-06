@@ -121,11 +121,17 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
 
         before do
           allow(Locomotive::Steam::ContentFieldValues).to receive(:normalize_input)
-            .and_raise(Locomotive::Steam::ContentFieldValues::ParseError, 'expected a boolean')
+            .and_raise(Locomotive::Steam::ContentFieldValues::ParseError.new(:wrong_type, 'expected a boolean'))
         end
 
         it 'says which file, which entry and which field' do
           expect { subject }.to raise_error(/bands\.yml, entry Pearl Jam, field featured: expected a boolean/)
+        end
+
+        it 'keeps the reason the grammar gave' do
+          expect { subject }.to raise_error(Locomotive::Steam::ContentFieldValues::ParseError) do |error|
+            expect(error.reason).to eq :wrong_type
+          end
         end
 
         context 'in one locale of many' do
@@ -138,7 +144,9 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
 
           before do
             allow(Locomotive::Steam::ContentFieldValues).to receive(:normalize_input) do |_type, value, _site|
-              raise Locomotive::Steam::ContentFieldValues::ParseError, 'expected text' if value == 'phrase FR'
+              if value == 'phrase FR'
+                raise Locomotive::Steam::ContentFieldValues::ParseError.new(:invalid_encoding, 'expected text')
+              end
 
               value
             end
@@ -146,6 +154,12 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
 
           it 'says which locale as well' do
             expect { subject }.to raise_error(/field text: locale fr, expected text/)
+          end
+
+          it 'keeps the reason the grammar gave' do
+            expect { subject }.to raise_error(Locomotive::Steam::ContentFieldValues::ParseError) do |error|
+              expect(error.reason).to eq :invalid_encoding
+            end
           end
 
         end

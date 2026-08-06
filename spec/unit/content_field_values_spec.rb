@@ -2,6 +2,59 @@ require 'spec_helper'
 
 describe Locomotive::Steam::ContentFieldValues do
 
+  describe 'what a refused value reports' do
+
+    { 'text that reads as no number'  => [[:integer, '12x'],           :invalid_number],
+      'a number past the bounds'      => [[:integer, 2**63],           :outside_numeric_bounds],
+      'text past the bounds'          => [[:integer, '9' * 20],        :outside_numeric_bounds],
+      'a value of another type'       => [[:integer, [1]],             :wrong_type],
+      'text that reads as no boolean' => [[:boolean, 'yes'],           :invalid_boolean],
+      'a number where a boolean goes' => [[:boolean, 2],               :wrong_type],
+      'text that reads as no date'    => [[:date, 'someday'],          :invalid_date],
+      'text that reads as no JSON'    => [[:json, '{oops'],            :invalid_json],
+      'a value JSON cannot hold'      => [[:json, { 'v' => :sym }],    :invalid_json_value],
+      'a name JSON cannot use'        => [[:json, { 1 => 'x' }],       :invalid_json_name],
+      'text in no readable encoding'  => [[:string, %(caf\xFF)],       :invalid_encoding]
+    }.each do |label, ((type, value), reason)|
+      it "reports #{reason} for #{label}" do
+        expect { described_class.normalize_input(type, value) }
+          .to raise_error(described_class::ParseError) { |error| expect(error.reason).to eq reason }
+      end
+    end
+
+    it 'reports json_too_deep for an object nested past the limit' do
+      value = (1..98).inject('n' => 1) { |inner, _| { 'n' => inner } }
+
+      expect { described_class.normalize_input(:json, value) }
+        .to raise_error(described_class::ParseError) { |error| expect(error.reason).to eq :json_too_deep }
+    end
+
+    it 'refuses a reason no rule declares' do
+      expect { described_class::ParseError.new(:invalid_number, 'x') }.not_to raise_error
+      expect { described_class::ParseError.new(:made_up, 'x') }.to raise_error(ArgumentError)
+    end
+
+    { 'a number field' => [:integer, '12x-marker'],
+      'a date field'   => [:date, 'someday-marker'],
+      'a JSON field'   => [:json, '{oops-marker'] }.each do |label, (type, value)|
+      it "says nothing of the value #{label} refused" do
+        expect { described_class.normalize_input(type, value) }
+          .to raise_error(described_class::ParseError) { |error| expect(error.message).not_to include 'marker' }
+      end
+    end
+
+    it 'says nothing of text it could not read' do
+      expect { described_class.normalize_input(:string, "caf\xFF".dup.force_encoding('UTF-8')) }
+        .to raise_error(described_class::ParseError) { |error| expect(error.message).not_to include 'caf' }
+    end
+
+    it 'names what JSON text turned out to be, not the text it came from' do
+      expect { described_class.normalize_input(:json, '[1, 2]') }
+        .to raise_error(described_class::ParseError, 'expected a JSON object, got Array')
+    end
+
+  end
+
   describe '#normalize_input of a text field' do
 
     subject { described_class.normalize_input(:string, value) }

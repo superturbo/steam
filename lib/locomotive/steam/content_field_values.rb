@@ -7,7 +7,25 @@ module Locomotive::Steam
   # Normalizes content field values independently of their storage adapter.
   module ContentFieldValues
 
-    class ParseError < StandardError; end
+    # Reasons are stable identifiers; messages never include rejected values.
+    class ParseError < StandardError
+
+      REASONS = %i(invalid_boolean invalid_date invalid_encoding invalid_json
+                   invalid_json_name invalid_json_value invalid_number
+                   json_too_deep outside_numeric_bounds wrong_type).freeze
+
+      attr_reader :reason
+
+      def initialize(reason, message)
+        raise ArgumentError, "no such parse error reason: #{reason.inspect}" unless REASONS.include?(reason)
+
+        @reason = reason
+
+        super(message)
+      end
+
+    end
+
     class ConfigurationError < StandardError; end
 
     # Numeric strings accept decimal notation only.
@@ -35,12 +53,12 @@ module Locomotive::Steam
       candidate = value.strip
       format    = type == :integer ? INTEGER_FORMAT : FLOAT_FORMAT
 
-      raise ParseError, "expected a number, got #{value.inspect}" unless format.match?(candidate)
+      raise ParseError.new(:invalid_number, "invalid #{type} value") unless format.match?(candidate)
 
       parsed = type == :integer ? Integer(candidate, 10) : Float(candidate)
 
       unless Adapters::NumericBounds.within?(parsed)
-        raise ParseError, "number outside supported bounds: #{value.inspect}"
+        raise ParseError.new(:outside_numeric_bounds, 'number outside supported bounds')
       end
 
       parsed
@@ -50,13 +68,13 @@ module Locomotive::Steam
       candidate = value.strip
 
       unless DASH_DATE.match?(candidate) || SLASH_DATE.match?(candidate)
-        raise ParseError, "invalid date: #{value.inspect}"
+        raise ParseError.new(:invalid_date, 'invalid date value')
       end
 
       begin
         Date.strptime(candidate, candidate.include?('/') ? '%Y/%m/%d' : '%Y-%m-%d')
       rescue ArgumentError
-        raise ParseError, "invalid date: #{value.inspect}"
+        raise ParseError.new(:invalid_date, 'invalid date value')
       end
     end
 
@@ -66,7 +84,7 @@ module Locomotive::Steam
       candidate = value.strip
 
       unless DASH_DATE.match?(candidate) || ISO_TIME.match?(candidate)
-        raise ParseError, "invalid date: #{value.inspect}"
+        raise ParseError.new(:invalid_date, 'invalid date and time value')
       end
 
       parsed = begin
@@ -75,7 +93,7 @@ module Locomotive::Steam
         nil
       end
 
-      parsed || raise(ParseError, "invalid date: #{value.inspect}")
+      parsed || raise(ParseError.new(:invalid_date, 'invalid date and time value'))
     end
 
     # A value the grammar cannot read is left exactly as it is.
@@ -169,8 +187,12 @@ module Locomotive::Steam
       wanted = type == :integer ? Integer : Float
       parsed = wanted == Float && value.is_a?(Integer) ? value.to_f : value
 
-      unless parsed.instance_of?(wanted) && Adapters::NumericBounds.within?(parsed)
-        raise ParseError, "expected #{type}, got #{value.inspect}"
+      unless parsed.instance_of?(wanted)
+        raise ParseError.new(:wrong_type, "expected #{type}, got #{value.class}")
+      end
+
+      unless Adapters::NumericBounds.within?(parsed)
+        raise ParseError.new(:outside_numeric_bounds, 'number outside supported bounds')
       end
 
       parsed
@@ -184,7 +206,7 @@ module Locomotive::Steam
       return value if plain_date?(value)
       return value.to_time.in_time_zone(zone_of(site)).to_date if value.respond_to?(:to_time)
 
-      raise ParseError, "expected a date, got #{value.inspect}"
+      raise ParseError.new(:wrong_type, "expected a date, got #{value.class}")
     end
 
     def input_date_time(value, site)
@@ -193,7 +215,7 @@ module Locomotive::Steam
       return date_at_midnight(value, zone_of(site)) if plain_date?(value)
       return value.to_time.getutc if value.respond_to?(:to_time)
 
-      raise ParseError, "expected a date and time, got #{value.inspect}"
+      raise ParseError.new(:wrong_type, "expected a date and time, got #{value.class}")
     end
 
     def input_json(value)
@@ -201,7 +223,9 @@ module Locomotive::Steam
 
       object = value.is_a?(String) ? parse_json(value) : value
 
-      raise ParseError, "expected a JSON object, got #{value.inspect}" unless object.is_a?(Hash)
+      unless object.is_a?(Hash)
+        raise ParseError.new(:wrong_type, "expected a JSON object, got #{object.class}")
+      end
 
       json_value(object, 1)
     end
@@ -210,7 +234,7 @@ module Locomotive::Steam
       JSON.parse(value.strip, max_nesting: MAX_JSON_DEPTH,
                               allow_comments: false, allow_duplicate_key: false)
     rescue JSON::ParserError
-      raise ParseError, "invalid JSON: #{value.inspect}"
+      raise ParseError.new(:invalid_json, 'invalid JSON')
     end
 
     def json_value(value, depth)
@@ -220,7 +244,7 @@ module Locomotive::Steam
       when String                   then readable_text(value)
       when true, false, nil         then value
       when Integer, Float           then json_number(value)
-      else raise ParseError, "a #{value.class} cannot be stored as JSON"
+      else raise ParseError.new(:invalid_json_value, "a #{value.class} cannot be stored as JSON")
       end
     end
 
@@ -239,16 +263,22 @@ module Locomotive::Steam
     end
 
     def guard_depth(depth)
-      raise ParseError, "JSON nested deeper than #{MAX_JSON_DEPTH}" if depth > MAX_JSON_DEPTH
+      return if depth <= MAX_JSON_DEPTH
+
+      raise ParseError.new(:json_too_deep, "JSON nested deeper than #{MAX_JSON_DEPTH}")
     end
 
     def json_key(key)
-      raise ParseError, "a #{key.class} cannot name a JSON value" unless key.is_a?(String) || key.is_a?(Symbol)
+      unless key.is_a?(String) || key.is_a?(Symbol)
+        raise ParseError.new(:invalid_json_name, "a #{key.class} cannot name a JSON value")
+      end
 
       name = readable_text(key.to_s)
 
       # BSON field names cannot contain a null character.
-      raise ParseError, "a JSON name cannot hold a null character: #{name.inspect}" if name.include?("\u0000")
+      if name.include?("\u0000")
+        raise ParseError.new(:invalid_json_name, 'a JSON name cannot hold a null character')
+      end
 
       name
     end
@@ -256,22 +286,22 @@ module Locomotive::Steam
     def json_number(value)
       return value if Adapters::NumericBounds.within?(value)
 
-      raise ParseError, "number outside supported bounds: #{value.inspect}"
+      raise ParseError.new(:outside_numeric_bounds, 'number outside supported bounds')
     end
 
     # Both adapters store text as UTF-8.
     def readable_text(value)
-      raise ParseError, "text in no readable encoding: #{value.inspect}" unless value.valid_encoding?
+      raise ParseError.new(:invalid_encoding, 'text in no readable encoding') unless value.valid_encoding?
 
       value.encode(Encoding::UTF_8)
     rescue EncodingError
-      raise ParseError, "text no store can keep: #{value.inspect}"
+      raise ParseError.new(:invalid_encoding, 'text no store can keep')
     end
 
     def input_string(value)
       return value if value.is_a?(String)
 
-      raise ParseError, "expected text, got #{value.inspect}"
+      raise ParseError.new(:wrong_type, "expected text, got #{value.class}")
     end
 
     def blank_text?(value)
@@ -288,10 +318,15 @@ module Locomotive::Steam
         raise(ConfigurationError, "unknown timezone: #{site.timezone_name.inspect}")
     end
 
+    # Invalid boolean text breaks the grammar; other objects have the wrong type.
     def boolean(value)
       key = value.is_a?(String) ? value.strip.downcase : value
 
-      BOOLEANS.fetch(key) { raise ParseError, "expected a boolean, got #{value.inspect}" }
+      BOOLEANS.fetch(key) do
+        raise ParseError.new(:invalid_boolean, 'invalid boolean value') if value.is_a?(String)
+
+        raise ParseError.new(:wrong_type, "expected a boolean, got #{value.class}")
+      end
     end
 
   end
