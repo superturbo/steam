@@ -192,12 +192,41 @@ module Locomotive::Steam
 
       begin
         _cast_value(field)
-      rescue ContentFieldValues::ConfigurationError
-        raise
-      rescue Exception => e
-        Locomotive::Common::Logger.info "[#{content_type.slug}][#{_label}] Unable to cast the \"#{name}\" field, reason: #{e.message}".yellow
+      rescue ContentFieldValues::ParseError => e
+        report_unread_value(field, e.reason)
         nil
       end
+    end
+
+    # Read a copy so one invalid locale cannot mutate stored translations.
+    def read_field(field)
+      value = attributes[field.name]
+
+      return read_field_value(field, value) unless value.respond_to?(:translations)
+
+      value.dup.apply { |translated, locale| read_field_value(field, translated, locale) }
+    end
+
+    def read_field_value(field, value, locale = nil)
+      ContentFieldValues.normalize_read(field.type, value)
+    rescue ContentFieldValues::ParseError => e
+      report_unread_value(field, e.reason, locale: locale, actual_type: value.class.name)
+      nil
+    end
+
+    def report_unread_value(field, reason, locale: nil, actual_type: nil)
+      ActiveSupport::Notifications.instrument('steam.entries.unread_value',
+                                              site_id:       site&._id&.to_s,
+                                              content_type:  content_type.slug,
+                                              entry_id:      _id&.to_s,
+                                              field:         field.name.to_s,
+                                              locale:        locale&.to_s,
+                                              expected_type: field.type.to_s,
+                                              actual_type:   actual_type,
+                                              reason:        reason.to_s)
+
+      Locomotive::Common::Logger.warn "[#{content_type.slug}][#{_id}] Unable to read the " \
+                                      "\"#{field.name}\" field, reason: #{reason}".yellow
     end
 
     def _cast_value(field)
@@ -209,15 +238,11 @@ module Locomotive::Steam
     end
 
     def _cast_integer(field)
-      _cast_number(field, :integer)
+      read_field(field)
     end
 
     def _cast_float(field)
-      _cast_number(field, :float)
-    end
-
-    def _cast_number(field, type)
-      _cast_convertor(field.name) { |value| ContentFieldValues.normalize_input(type, value, site) }
+      read_field(field)
     end
 
     def _cast_json(field)
@@ -226,8 +251,12 @@ module Locomotive::Steam
 
     def _cast_password(field)
       _cast_convertor(:"#{field.name}_hash") do |value|
-        value.blank? ? nil : BCrypt::Password.new(value)
+        next if value.nil? || value == ''
+
+        BCrypt::Password.new(ContentFieldValues.normalize_read(:string, value))
       end
+    rescue BCrypt::Errors::InvalidHash
+      raise ContentFieldValues::ParseError.new(:invalid_password_hash, 'invalid password hash')
     end
 
     def _cast_file(field)

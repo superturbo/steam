@@ -10,7 +10,7 @@ describe Locomotive::Steam::ContentEntry do
 
   before do
     content_entry.content_type = type
-    content_entry.site         = instance_double('Site', timezone: ActiveSupport::TimeZone['UTC'])
+    content_entry.site         = instance_double('Site', _id: 'site-42', timezone: ActiveSupport::TimeZone['UTC'])
   end
 
   describe '#change' do
@@ -621,12 +621,79 @@ describe Locomotive::Steam::ContentEntry do
 
     context 'an integer' do
       let(:field_type)  { :integer }
-      let(:value)       { '42' }
+      let(:value)       { 42 }
       it { is_expected.to eq 42 }
       context 'localized' do
-        let(:value) { build_i18n_field(en: 42, fr: '42') }
-        it { expect(subject.translations).to eq('en' => 42, 'fr' => 42) }
+        let(:value) { build_i18n_field(en: 42, fr: 43) }
+        it { expect(subject.translations).to eq('en' => 42, 'fr' => 43) }
       end
+    end
+
+    describe 'a number the store keeps as text' do
+
+      let(:field_type)  { :integer }
+      let(:value)       { '42' }
+
+      it { is_expected.to be_nil }
+
+      it 'leaves the stored value alone' do
+        subject
+
+        expect(content_entry.attributes[:my_field]).to eq '42'
+      end
+
+      it 'says which field went unread, and never what it held' do
+        events = capture_unread_values { subject }
+
+        expect(events.size).to eq 1
+        expect(events.first).to eq(site_id: 'site-42', content_type: 'articles', entry_id: nil,
+                                   field: 'my_field', locale: nil, expected_type: 'integer',
+                                   actual_type: 'String', reason: 'wrong_stored_type')
+      end
+
+      context 'in one locale of many' do
+
+        let(:value) { build_i18n_field(en: 42, fr: '43') }
+
+        it 'reads the locales it can and leaves the one it cannot empty' do
+          expect(subject.translations).to eq('en' => 42, 'fr' => nil)
+        end
+
+        it 'leaves the stored translations alone' do
+          subject
+
+          expect(content_entry.attributes[:my_field].translations).to eq('en' => 42, 'fr' => '43')
+        end
+
+        it 'says which locale went unread' do
+          events = capture_unread_values { subject }
+
+          expect(events.size).to eq 1
+          expect(events.first).to include(field: 'my_field', locale: 'fr', reason: 'wrong_stored_type')
+        end
+
+      end
+
+      context 'in every locale at once' do
+
+        let(:value) { build_i18n_field('43') }
+
+        it { expect(subject.translations).to eq({}) }
+
+        it 'names no locale it cannot point at' do
+          events = capture_unread_values { subject }
+
+          expect(events.first).to include(locale: nil)
+        end
+
+      end
+
+      it 'lets an error that is not about the value through' do
+        allow(Locomotive::Steam::ContentFieldValues).to receive(:normalize_read).and_raise(NoMethodError)
+
+        expect { subject }.to raise_error(NoMethodError)
+      end
+
     end
 
     context 'a value no number can be read from' do
@@ -661,15 +728,15 @@ describe Locomotive::Steam::ContentEntry do
 
     context 'a float' do
       let(:field_type)  { :float }
-      let(:value)       { '42.0' }
-      it { is_expected.to eq 42.0 }
+      let(:value)       { 42.0 }
+      it { is_expected.to eql 42.0 }
       context 'given a whole number' do
         let(:value) { 42 }
-        it { is_expected.to eql 42.0 }
+        it { is_expected.to be_nil }
       end
       context 'localized' do
-        let(:value) { build_i18n_field(en: 42.0, fr: '42.0') }
-        it { expect(subject.translations).to eq('en' => 42.0, 'fr' => 42.0) }
+        let(:value) { build_i18n_field(en: 42.0, fr: 1.5) }
+        it { expect(subject.translations).to eq('en' => 42.0, 'fr' => 1.5) }
       end
     end
 
@@ -717,8 +784,12 @@ describe Locomotive::Steam::ContentEntry do
       end
       context 'an unparseable date-time value' do
         let(:value) { 'tomorrow' }
-        it 'logs the cast failure and returns nil' do
-          expect(Locomotive::Common::Logger).to receive(:info).with(/Unable to cast/)
+        it 'says the field went unread, without repeating what it held' do
+          expect(Locomotive::Common::Logger).to receive(:warn) do |message|
+            expect(message).to match(/Unable to read/)
+            expect(message).not_to include 'tomorrow'
+          end
+
           expect(subject).to be_nil
         end
       end
@@ -790,6 +861,55 @@ describe Locomotive::Steam::ContentEntry do
       end
     end
 
+    context 'a password' do
+
+      let(:field_type) { :password }
+      let(:attributes) { { my_field_hash: BCrypt::Password.create('easyone') } }
+
+      it { is_expected.to eq 'easyone' }
+
+      context 'the store holds nothing' do
+
+        { 'nothing at all' => nil, 'an empty text' => '' }.each do |label, held|
+          context label do
+
+            let(:attributes) { { my_field_hash: held } }
+
+            it { is_expected.to be_nil }
+
+            it 'reports nothing' do
+              expect(capture_unread_values { subject }).to be_empty
+            end
+
+          end
+        end
+
+      end
+
+      { 'text that is no hash'  => ['not-a-hash', :invalid_password_hash],
+        'text of only spaces'   => ['   ',        :invalid_password_hash],
+        'a number'              => [123,          :wrong_stored_type],
+        'false'                 => [false,        :wrong_stored_type],
+        'a list'                => [[],           :wrong_stored_type]
+      }.each do |label, (held, reason)|
+        context "the store holds #{label}" do
+
+          let(:attributes) { { my_field_hash: held } }
+
+          it { is_expected.to be_nil }
+
+          it "reports #{reason}" do
+            events = capture_unread_values { subject }
+
+            expect(events.map { |event| event.values_at(:field, :reason) })
+              .to eq [['my_field', reason.to_s]]
+          end
+
+        end
+      end
+
+    end
+
     context 'a json' do
       let(:field_type)  { :json }
       let(:value)       { '{"foo":42}' }
@@ -809,6 +929,15 @@ describe Locomotive::Steam::ContentEntry do
 
   def build_i18n_field(translations = {})
     Locomotive::Steam::Models::I18nField.new(:my_field, translations)
+  end
+
+  def capture_unread_values
+    events   = []
+    callback = ->(*, payload) { events << payload }
+
+    ActiveSupport::Notifications.subscribed(callback, 'steam.entries.unread_value') { yield }
+
+    events
   end
 
 end

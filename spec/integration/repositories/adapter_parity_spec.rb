@@ -1302,6 +1302,13 @@ describe 'Adapter parity' do
         expect(attributes[:payload]).to eq('a' => [1, { 'b' => nil }])
       end
 
+      it 'reads out of both stores as the value its field keeps' do
+        entry = spelled
+
+        expect(entry.score).to eql 7
+        expect(entry.price).to eql 1.5
+      end
+
       # The store answers the query itself, before an entry is ever read.
       it 'is found by the value its field keeps' do
         types = Locomotive::Steam::ContentTypeRepository.new(adapter, site, AdapterParityFixture::LOCALE)
@@ -1443,6 +1450,43 @@ describe 'Adapter parity' do
       let(:adapter)  { AdapterParityFixture.mongodb_adapter }
 
       def filesystem?; false; end
+    end
+
+    # Filesystem rejects invalid types while loading, so this case is MongoDB-only.
+    describe 'a number the store holds as text' do
+
+      let(:adapter) { AdapterParityFixture.mongodb_adapter }
+      let(:site)    { Locomotive::Steam::SiteRepository.new(adapter).by_handle_or_domain('adapter-parity', nil) }
+      let(:types)   { Locomotive::Steam::ContentTypeRepository.new(adapter, site, AdapterParityFixture::LOCALE) }
+
+      def spelled
+        Locomotive::Steam::ContentEntryRepository.new(adapter, site, AdapterParityFixture::LOCALE, types)
+          .with(types.by_slug('quoted')).all.first
+      end
+
+      around do |example|
+        entries  = AdapterParityFixture.mongodb_client[
+          AdapterParityFixture::MongoDBDocuments::CONTENT_ENTRIES_COLLECTION]
+        selector = { '_id' => AdapterParityFixture::WagonSite.entry_id('quoted', 'spelled') }
+
+        entries.update_one(selector, '$set' => { 'score' => '7' })
+        example.run
+      ensure
+        entries.update_one(selector, '$set' => { 'score' => 7 })
+      end
+
+      it 'returns nil and reports the invalid stored type' do
+        events   = []
+        callback = ->(*, payload) { events << payload }
+
+        ActiveSupport::Notifications.subscribed(callback, 'steam.entries.unread_value') do
+          expect(spelled.score).to be_nil
+        end
+
+        expect(events.map { |e| e.values_at(:content_type, :field, :expected_type, :actual_type, :reason) })
+          .to eq [%w(quoted score integer String wrong_stored_type)]
+      end
+
     end
 
   end

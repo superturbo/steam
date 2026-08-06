@@ -12,8 +12,8 @@ module Locomotive::Steam
 
       REASONS = %i(invalid_boolean invalid_date invalid_encoding invalid_json
                    invalid_json_name invalid_json_value invalid_number
-                   json_too_deep outside_numeric_bounds wrong_stored_type
-                   wrong_type).freeze
+                   invalid_password_hash json_too_deep outside_numeric_bounds
+                   wrong_stored_type wrong_type).freeze
 
       attr_reader :reason
 
