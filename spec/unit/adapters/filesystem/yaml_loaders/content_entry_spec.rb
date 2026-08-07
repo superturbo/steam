@@ -20,6 +20,81 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
       expect(subject.first[:content_type]).to eq nil
     end
 
+    context 'two entries spelling out the same slug' do
+
+      let(:entries) do
+        [{ 'Pearl Jam' => { '_slug' => 'seattle' } }, { 'Soundgarden' => { '_slug' => 'seattle' } }]
+      end
+
+      before { allow(loader).to receive(:_load).and_return(HashConverter.to_sym(entries)) }
+
+      it 'says which file and which entries' do
+        expect { subject }
+          .to raise_error(%r{data/bands\.yml, entries Pearl Jam and Soundgarden: duplicate slug "seattle"})
+      end
+
+      context 'in one locale of many' do
+
+        let(:entries) do
+          [{ 'Pearl Jam'   => { '_slug' => { 'en' => 'seattle', 'fr' => 'seattle-fr' } } },
+           { 'Soundgarden' => { '_slug' => { 'en' => 'soundgarden', 'fr' => 'seattle-fr' } } }]
+        end
+
+        it 'says which locale as well' do
+          expect { subject }.to raise_error(/locale fr, duplicate slug "seattle-fr"/)
+        end
+
+      end
+
+      context 'one of them spelling it out for every locale' do
+
+        let(:entries) do
+          [{ 'Pearl Jam'   => { '_slug' => 'seattle' } },
+           { 'Soundgarden' => { '_slug' => { 'en' => 'seattle', 'fr' => 'soundgarden' } } }]
+        end
+
+        it { expect { subject }.to raise_error(/locale en, duplicate slug "seattle"/) }
+
+      end
+
+    end
+
+    context 'two entries each spelling out a slug of their own' do
+
+      before { allow(loader).to receive(:_load).and_return(HashConverter.to_sym(entries)) }
+
+      context 'the same one, in a locale of their own' do
+
+        let(:entries) do
+          [{ 'Pearl Jam'   => { '_slug' => { 'en' => 'seattle', 'fr' => 'pearl-jam' } } },
+           { 'Soundgarden' => { '_slug' => { 'en' => 'soundgarden', 'fr' => 'seattle' } } }]
+        end
+
+        it { expect { subject }.not_to raise_error }
+
+      end
+
+      context 'both leaving the same locale empty' do
+
+        let(:entries) do
+          [{ 'Pearl Jam'   => { '_slug' => { 'en' => '', 'fr' => 'pearl-jam' } } },
+           { 'Soundgarden' => { '_slug' => { 'en' => '', 'fr' => 'soundgarden' } } }]
+        end
+
+        it { expect { subject }.to raise_error(/locale en, duplicate slug ""/) }
+
+      end
+
+      context 'spelling out none at all' do
+
+        let(:entries) { [{ 'Pearl Jam' => { '_slug' => '' } }, { 'Soundgarden' => { '_slug' => '' } }] }
+
+        it { expect { subject }.not_to raise_error }
+
+      end
+
+    end
+
     context 'a content type with a belongs_to field' do
 
       let(:field)         { instance_double('Field', name: 'band', type: :belongs_to) }

@@ -28,7 +28,37 @@ module Locomotive
 
                   list << _attributes
                 end
+
+                reject_repeated_slugs(list)
               end
+            end
+
+            def reject_repeated_slugs(list)
+              claimed = Hash.new { |slugs, slug| slugs[slug] = [] }
+
+              list.each do |attributes|
+                spelled_slugs(attributes[:_slug]).each do |locale, slug|
+                  claimed[slug].each do |claimed_locale, label|
+                    next unless locale.nil? || claimed_locale.nil? || locale == claimed_locale
+
+                    repeated_slug!(label, attributes[:_label], slug, locale || claimed_locale)
+                  end
+
+                  claimed[slug] << [locale, attributes[:_label]]
+                end
+              end
+            end
+
+            def spelled_slugs(slug)
+              return {} if slug.blank?
+
+              # A scalar slug applies to every locale.
+              slug.is_a?(Hash) ? slug : { nil => slug }
+            end
+
+            def repeated_slug!(first, second, slug, locale)
+              raise "#{File.join(path, "#{content_type_slug}.yml")}, entries #{first} and #{second}: " \
+                    "#{"locale #{locale}, " if locale}duplicate slug #{slug.inspect}"
             end
 
             # Invalid values fail while their source entry and field are still known.
