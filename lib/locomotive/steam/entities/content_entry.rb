@@ -192,13 +192,17 @@ module Locomotive::Steam
       _cast_value(content_type.fields_by_name[name])
     end
 
-    # Read a copy so one invalid locale cannot mutate stored translations.
+    # Transform localized values without rewriting the entry.
+    def read_each_locale(value)
+      return yield(value, nil) unless value.respond_to?(:translations)
+
+      value.dup.apply { |translated, locale| yield(translated, locale) }
+    end
+
     def read_field(field)
-      value = attributes[field.name]
-
-      return read_field_value(field, value) unless value.respond_to?(:translations)
-
-      value.dup.apply { |translated, locale| read_field_value(field, translated, locale) }
+      read_each_locale(attributes[field.name]) do |value, locale|
+        read_field_value(field, value, locale)
+      end
     end
 
     def read_field_value(field, value, locale = nil)
@@ -249,14 +253,17 @@ module Locomotive::Steam
     end
 
     def _cast_file(field)
-      _cast_convertor(field.name) do |value, locale|
-        if value.respond_to?(:url)
-          value
-        else
-          size = (self[:"#{field.name}_size"] || {})[locale || 'default']
-          FileField.new(value, self.base_url, size, self.updated_at)
-        end
+      read_each_locale(attributes[field.name]) do |value, locale|
+        read_file(field, value, locale)
       end
+    end
+
+    def read_file(field, value, locale)
+      return value if value.respond_to?(:url)
+
+      size = (self[:"#{field.name}_size"] || {})[locale || 'default']
+
+      FileField.new(value, self.base_url, size, self.updated_at)
     end
 
     # Reading an option resolves its label; the entry goes on holding the id it
@@ -280,14 +287,6 @@ module Locomotive::Steam
         # contact form submission in Wagon for instance),
         # so just copy the labels (in all the locales) of the matching select option
         options.by_id_or_name(_value)&.name&.dup
-      end
-    end
-
-    def _cast_convertor(name, nil_locale = false, &block)
-      if (value = attributes[name]).respond_to?(:translations)
-        value.apply(&block)
-      else
-        nil_locale ? yield(value, nil) : yield(value)
       end
     end
 

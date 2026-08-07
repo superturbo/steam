@@ -916,6 +916,27 @@ describe Locomotive::Steam::ContentEntry do
         it { expect(subject.translations[:en].size).to eq(42) }
         it { expect(subject.translations[:fr].url).to eq('/foo-fr.png') }
         it { expect(subject.translations[:fr].size).to eq(7) }
+
+        it 'leaves every stored translation unchanged' do
+          subject
+
+          expect(content_entry.attributes[:my_field].translations)
+            .to eq('en' => '/foo-en.png', 'fr' => '/foo-fr.png')
+        end
+
+        it 'reads the size the entry carries now, not the one it carried before' do
+          expect(content_entry.my_field.translations[:en].size).to eq 42
+
+          content_entry.attributes[:my_field_size] = { 'en' => 99, 'fr' => 7 }
+
+          expect(content_entry.my_field.translations[:en].size).to eq 99
+        end
+      end
+
+      context 'a file the entry already carries' do
+        let(:value) { described_class::FileField.new('/set.png', nil, 1, nil) }
+
+        it { is_expected.to equal value }
       end
       context 'no file size provided' do
         let(:attributes)  { { my_field: value } }
