@@ -10,7 +10,7 @@ module Locomotive::Steam
 
     NIL_IS_THE_ONLY_BLANK    = %i(boolean integer float date date_time).freeze
     REQUIRED_FROM_ATTRIBUTES = %i(belongs_to many_to_many file).freeze
-    READ_THROUGH_GRAMMAR     = %i(integer float boolean string text email color date date_time).freeze
+    READ_THROUGH_GRAMMAR     = %i(integer float boolean string text email color date date_time json).freeze
 
     private_constant :NIL_IS_THE_ONLY_BLANK, :REQUIRED_FROM_ATTRIBUTES, :READ_THROUGH_GRAMMAR
 
@@ -238,10 +238,6 @@ module Locomotive::Steam
       else
         attributes[field.name]
       end
-    end
-
-    def _cast_json(field)
-      _cast_convertor(field.name) { |value| ContentFieldValues.normalize_input(:json, value, site) }
     end
 
     def _cast_password(field)

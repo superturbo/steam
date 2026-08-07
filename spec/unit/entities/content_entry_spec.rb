@@ -1020,17 +1020,62 @@ describe Locomotive::Steam::ContentEntry do
 
     context 'a json' do
       let(:field_type)  { :json }
-      let(:value)       { '{"foo":42}' }
+      let(:value)       { { 'foo' => 42 } }
       it { is_expected.to eq({ 'foo' => 42 }) }
-      context 'localized' do
-        let(:value) { build_i18n_field(en: { 'foo' => 42 }, fr: '{"foo":43}') }
-        it { expect(subject.translations).to eq('en' => { 'foo' => 42 }, 'fr' => { 'foo' => 43 }) }
 
-        context 'holding a list in one locale' do
-          let(:value) { build_i18n_field(en: { 'foo' => 42 }, fr: '[1, 2, 3]') }
+      it 'hands out its own copy' do
+        subject['foo'] = 43
+
+        expect(content_entry.attributes[:my_field]).to eq('foo' => 42)
+      end
+
+      context 'localized' do
+        let(:value) { build_i18n_field(en: { 'foo' => 42 }, fr: { 'foo' => 43 }) }
+        it { expect(subject.translations).to eq('en' => { 'foo' => 42 }, 'fr' => { 'foo' => 43 }) }
+      end
+    end
+
+    describe 'an object the store keeps as something else' do
+
+      let(:field_type) { :json }
+
+      { 'an object spelled out' => ['{"foo":42}', :wrong_stored_type],
+        'a list'                => [[1, 2, 3],    :wrong_stored_type],
+        'a value JSON cannot represent' => [{ 'v' => :sym }, :invalid_json_value]
+      }.each do |label, (held, reason)|
+        context label do
+
+          let(:value) { held }
+
           it { is_expected.to be_nil }
+
+          it "reports #{reason}" do
+            events = capture_unread_values { subject }
+
+            expect(events.map { |event| event.values_at(:field, :expected_type, :reason) })
+              .to eq [['my_field', 'json', reason.to_s]]
+          end
+
         end
       end
+
+      context 'in one locale of many' do
+
+        let(:value) { build_i18n_field(en: { 'foo' => 42 }, fr: '[1, 2, 3]') }
+
+        it 'reads the locales it can and leaves the one it cannot empty' do
+          expect(subject.translations).to eq('en' => { 'foo' => 42 }, 'fr' => nil)
+        end
+
+        it 'leaves the stored translations alone' do
+          subject
+
+          expect(content_entry.attributes[:my_field].translations)
+            .to eq('en' => { 'foo' => 42 }, 'fr' => '[1, 2, 3]')
+        end
+
+      end
+
     end
 
   end

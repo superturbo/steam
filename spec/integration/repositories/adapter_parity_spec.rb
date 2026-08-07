@@ -1311,6 +1311,7 @@ describe 'Adapter parity' do
         expect(entry.name).to eq 'Spelled'
         expect(entry.held_on).to eql Date.new(2014, 3, 9)
         expect(entry.at).to eql Time.utc(2019, 9, 10)
+        expect(entry.payload).to eq('a' => [1, { 'b' => nil }])
         expect(entry.title.translations).to eq('en' => ' Spelled en ', 'fr' => ' Spelled fr ')
         expect(entry.published.translations).to eq('en' => true, 'fr' => false)
       end
@@ -1470,8 +1471,9 @@ describe 'Adapter parity' do
           .with(types.by_slug('quoted')).all.first
       end
 
-      { 'score'   => ['7',          'integer',   7],
-        'held_on' => ['2014-03-09', 'date',      Date.new(2014, 3, 9)]
+      { 'score'   => ['7',                    'integer', 7],
+        'held_on' => ['2014-03-09',           'date',    Date.new(2014, 3, 9)],
+        'payload' => ['{"a":[1,{"b":null}]}', 'json',    { 'a' => [1, { 'b' => nil }] }]
       }.each do |name, (held, expected_type, seeded)|
 
         context "a #{expected_type} field" do
