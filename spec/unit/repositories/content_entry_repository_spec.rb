@@ -121,7 +121,8 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     let(:stored)  { Date.new(2013, 2, 11) }
     let(:entries) do
-      [{ content_type_id: 1, _position: 0, _label: 'Stored', held_on: stored, launched_at: '2012-06-06T12:00:00Z' }]
+      [{ content_type_id: 1, _position: 0, _label: 'Stored', held_on: stored,
+         launched_at: Time.new(2012, 6, 6, 14, 0, 0, '+02:00') }]
     end
 
     subject { repository.with(type).all.first }
@@ -131,21 +132,20 @@ describe Locomotive::Steam::ContentEntryRepository do
       it { expect(subject[:held_on]).to eql Date.new(2013, 2, 11) }
     end
 
-    context 'a date the store wrote as text' do
-      let(:stored) { '2013-02-11' }
-      it { expect(subject[:held_on]).to eql Date.new(2013, 2, 11) }
-    end
-
     context 'an already normalized date' do
       let(:stored) { Date.new(2013, 2, 11) }
       it('is left alone') { expect(subject[:held_on]).to eql Date.new(2013, 2, 11) }
     end
 
-    context 'a value the grammar cannot read' do
-      let(:stored) { 'not a date' }
+    # Text is not an adapter date representation, so deserialization leaves it unchanged.
+    { 'a date spelled out'     => '2013-02-11',
+      'text that names no day' => 'not a date' }.each do |label, held|
+      context label do
+        let(:stored) { held }
 
-      it 'stays exactly as the store holds it' do
-        expect(subject[:held_on]).to eq 'not a date'
+        it 'stays exactly as the store holds it' do
+          expect(subject[:held_on]).to eq held
+        end
       end
     end
 
@@ -157,6 +157,16 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     it 'reads a time as UTC' do
       expect(subject[:launched_at]).to eql Time.utc(2012, 6, 6, 12)
+      expect(subject[:launched_at]).to be_utc
+    end
+
+    context 'without a site' do
+      let(:site) { nil }
+
+      it 'reads what the store holds all the same' do
+        expect(subject[:launched_at]).to eql Time.utc(2012, 6, 6, 12)
+        expect(subject[:held_on]).to eql Date.new(2013, 2, 11)
+      end
     end
 
     it 'does not read a built entry the same way' do
@@ -169,18 +179,13 @@ describe Locomotive::Steam::ContentEntryRepository do
       expect(repository.with(type).send(:mapper).serialize(subject)).not_to have_key(:site)
     end
 
-    # A calendar date names a day; the site decides which instant that is.
-    context 'a date in a date time field, with the site behind UTC' do
-      let(:site) do
-        instance_double('Site', _id: 1, default_locale: :en, locales: %i(en fr),
-                        timezone: ActiveSupport::TimeZone['America/New_York'])
-      end
-
+    # A day names no instant, so nothing here picks one for it.
+    context 'a date in a date time field' do
       let(:entries) do
         [{ content_type_id: 1, _position: 0, _label: 'Stored', launched_at: Date.new(2013, 2, 11) }]
       end
 
-      it { expect(subject[:launched_at]).to eql Time.utc(2013, 2, 11, 5) }
+      it { expect(subject[:launched_at]).to eql Date.new(2013, 2, 11) }
     end
 
     context 'a localized date' do
@@ -193,7 +198,7 @@ describe Locomotive::Steam::ContentEntryRepository do
       end
 
       let(:entries) do
-        [{ content_type_id: 1, _position: 0, _label: 'Stored', held_on: { en: '2013-02-11', fr: nil } }]
+        [{ content_type_id: 1, _position: 0, _label: 'Stored', held_on: { en: Time.utc(2013, 2, 11), fr: nil } }]
       end
 
       it 'reads the locales the store wrote and invents none' do
@@ -202,51 +207,13 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       context 'one value standing for every locale' do
         let(:entries) do
-          [{ content_type_id: 1, _position: 0, _label: 'Stored', held_on: '2013-02-11' }]
+          [{ content_type_id: 1, _position: 0, _label: 'Stored', held_on: Time.utc(2013, 2, 11) }]
         end
 
         it 'reads it once and leaves the locales unmaterialized' do
           expect(subject[:held_on][:fr]).to eql Date.new(2013, 2, 11)
           expect(subject[:held_on].translations).to be_empty
         end
-      end
-    end
-
-    context 'without a site' do
-      let(:site) { nil }
-
-      it 'says what it is missing' do
-        expect { subject }
-          .to raise_error(Locomotive::Steam::ContentFieldValues::ConfigurationError, /site timezone is required/)
-      end
-    end
-
-    context 'with a timezone no zone table knows' do
-      let(:site) do
-        instance_double('Site', _id: 1, default_locale: :en, locales: %i(en fr),
-                        timezone: nil, timezone_name: 'Mars/Olympus')
-      end
-
-      let(:entries) do
-        [{ content_type_id: 1, _position: 0, _label: 'Stored', launched_at: '2013-02-11T10:00:00' }]
-      end
-
-      it { expect { subject }.to raise_error(Locomotive::Steam::ContentFieldValues::ConfigurationError, /Mars/) }
-
-      # A calendar date is read without one, so nothing asks for the zone.
-      context 'over an entry holding only a date' do
-        let(:type) do
-          build_content_type('Articles', label_field_name: :title, fields: _fields, fields_with_default: [],
-                             fields_by_name: { title:   instance_double('Field', name: :title, type: :string),
-                                               held_on: instance_double('Field', name: :held_on, type: :date,
-                                                                        persisted_name: 'held_on') })
-        end
-
-        let(:entries) do
-          [{ content_type_id: 1, _position: 0, _label: 'Stored', held_on: '2013-02-11' }]
-        end
-
-        it { expect(subject[:held_on]).to eql Date.new(2013, 2, 11) }
       end
     end
 
@@ -697,6 +664,13 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'launched_at' => Date.parse('2009/09/10') }, nil]) }
 
+      # A day names no instant, so nothing asks for the zone.
+      context 'without a site' do
+        let(:site) { nil }
+
+        it { expect(subject.first['launched_at']).to eql Date.new(2009, 9, 10) }
+      end
+
     end
 
     context 'date time fields' do
@@ -727,6 +701,24 @@ describe Locomotive::Steam::ContentEntryRepository do
 
           it { expect(subject.first['launched_at']).to eql Time.utc(2013, 2, 11, 5) }
         end
+      end
+
+      context 'without a site to read it in' do
+        let(:site) { nil }
+
+        it 'says what it is missing' do
+          expect { subject }
+            .to raise_error(Locomotive::Steam::ContentFieldValues::ConfigurationError, /site timezone is required/)
+        end
+      end
+
+      context 'with a timezone no zone table knows' do
+        let(:site) do
+          instance_double('Site', _id: 1, default_locale: :en, locales: %i(en fr),
+                          timezone: nil, timezone_name: 'Mars/Olympus')
+        end
+
+        it { expect { subject }.to raise_error(Locomotive::Steam::ContentFieldValues::ConfigurationError, /Mars/) }
       end
 
       it 'keeps the instant an operand spells its own offset for' do

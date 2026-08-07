@@ -823,49 +823,74 @@ describe Locomotive::Steam::ContentEntry do
 
     context 'a date' do
       let(:field_type)  { :date }
-      let(:value)       { '2007/06/29' }
-      let(:date)        { Date.parse('2007/06/29') }
+      let(:date)        { Date.new(2007, 6, 29) }
+      let(:value)       { date }
       it { is_expected.to eq date }
       context 'localized' do
-        let(:value) { build_i18n_field(en: '2007/06/29', fr: date) }
+        let(:value) { build_i18n_field(en: date, fr: date) }
         it { expect(subject.translations).to eq('en' => date, 'fr' => date) }
         context 'with a single value for all the translations' do
-          let(:value) { build_i18n_field('2007/06/29') }
+          let(:value) { build_i18n_field(date) }
           it { expect(subject[:fr]).to eq(date) }
           it { expect(subject[:en]).to eq(date) }
         end
       end
     end
 
-    context 'a date time without a site to read it in' do
-
-      before { content_entry.site = nil }
-
-      let(:field_type) { :date_time }
-      let(:value)      { '2007-06-29T10:00:00' }
-
-      it 'says so instead of reading it as no value' do
-        expect { subject }.to raise_error(Locomotive::Steam::ContentFieldValues::ConfigurationError)
-      end
-
-    end
-
     context 'a date time' do
       let(:field_type)  { :date_time }
-      let(:value)       { '2007-06-29T10:00:00' }
       let(:time)        { Time.utc(2007, 6, 29, 10) }
+      let(:value)       { time }
       it { is_expected.to eql time }
+
+      context 'carrying an offset of its own' do
+        let(:value) { Time.new(2007, 6, 29, 12, 0, 0, '+02:00') }
+        it { is_expected.to eql time }
+      end
+
       context 'localized' do
-        let(:value) { build_i18n_field(en: '2007-06-29T10:00:00', fr: time) }
+        let(:value) { build_i18n_field(en: time, fr: time) }
         it { expect(subject.translations).to eq('en' => time, 'fr' => time) }
       end
-      context 'a date-only value resolves to midnight' do
-        let(:value) { '2019-09-10' }
-        it { is_expected.to eql Time.utc(2019, 9, 10) }
+
+      context 'read without a site' do
+        before { content_entry.site = nil }
+
+        it { is_expected.to eql time }
       end
-      context 'an unparseable date-time value' do
-        let(:value) { 'tomorrow' }
-        it 'says the field went unread, without repeating what it held' do
+    end
+
+    describe 'a moment or a day the store keeps as something else' do
+
+      { 'a date spelled out'   => [:date,      '2007/06/29',           :wrong_stored_type],
+        'text naming no day'   => [:date,      'tomorrow',             :wrong_stored_type],
+        'a moment where a day goes' => [:date, Time.utc(2007, 6, 29),  :wrong_stored_type],
+        'a moment spelled out' => [:date_time, '2007-06-29T10:00:00',  :wrong_stored_type],
+        'a day where a moment goes' => [:date_time, Date.new(2007, 6, 29), :wrong_stored_type]
+      }.each do |label, (type, held, reason)|
+        context label do
+
+          let(:field_type) { type }
+          let(:value)      { held }
+
+          it { is_expected.to be_nil }
+
+          it "reports #{reason}" do
+            events = capture_unread_values { subject }
+
+            expect(events.map { |event| event.values_at(:field, :expected_type, :reason) })
+              .to eq [['my_field', type.to_s, reason.to_s]]
+          end
+
+        end
+      end
+
+      context 'what the log says about it' do
+
+        let(:field_type) { :date }
+        let(:value)      { 'tomorrow' }
+
+        it 'names the field, and never what it held' do
           expect(Locomotive::Common::Logger).to receive(:warn) do |message|
             expect(message).to match(/Unable to read/)
             expect(message).not_to include 'tomorrow'
@@ -873,7 +898,9 @@ describe Locomotive::Steam::ContentEntry do
 
           expect(subject).to be_nil
         end
+
       end
+
     end
 
     context 'a file' do

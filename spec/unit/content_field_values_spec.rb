@@ -72,6 +72,19 @@ describe Locomotive::Steam::ContentFieldValues do
       end
     end
 
+    { 'a moment where a day goes'    => [:date,      Time.utc(2013, 2, 11, 22), Date.new(2013, 2, 11)],
+      'a day already read'           => [:date,      Date.new(2013, 2, 11),     Date.new(2013, 2, 11)],
+      'a moment carrying an offset'  => [:date_time, Time.new(2012, 6, 6, 14, 0, 0, '+02:00'), Time.utc(2012, 6, 6, 12)],
+      'a day where a moment goes'    => [:date_time, Date.new(2013, 2, 11),     Date.new(2013, 2, 11)],
+      'a day spelled out'            => [:date,      '2013-02-11',              '2013-02-11'],
+      'a moment spelled out'         => [:date_time, '2012-06-06T12:00:00Z',    '2012-06-06T12:00:00Z'],
+      'a type no store writes'       => [:date,      :whenever,                 :whenever]
+    }.each do |label, (type, stored, expected)|
+      it "deserializes #{label}" do
+        expect(described_class.deserialize(type, stored)).to eql expected
+      end
+    end
+
     describe 'what a store may hold' do
 
       { 'an integer'    => [:integer, 7,                     7],

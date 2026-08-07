@@ -1309,6 +1309,8 @@ describe 'Adapter parity' do
         expect(entry.price).to eql 1.5
         expect(entry.flag).to eq true
         expect(entry.name).to eq 'Spelled'
+        expect(entry.held_on).to eql Date.new(2014, 3, 9)
+        expect(entry.at).to eql Time.utc(2019, 9, 10)
         expect(entry.title.translations).to eq('en' => ' Spelled en ', 'fr' => ' Spelled fr ')
         expect(entry.published.translations).to eq('en' => true, 'fr' => false)
       end
@@ -1457,7 +1459,7 @@ describe 'Adapter parity' do
     end
 
     # Filesystem rejects invalid types while loading, so this case is MongoDB-only.
-    describe 'a number the store holds as text' do
+    describe 'a value the store holds as text' do
 
       let(:adapter) { AdapterParityFixture.mongodb_adapter }
       let(:site)    { Locomotive::Steam::SiteRepository.new(adapter).by_handle_or_domain('adapter-parity', nil) }
@@ -1468,27 +1470,36 @@ describe 'Adapter parity' do
           .with(types.by_slug('quoted')).all.first
       end
 
-      around do |example|
-        entries  = AdapterParityFixture.mongodb_client[
-          AdapterParityFixture::MongoDBDocuments::CONTENT_ENTRIES_COLLECTION]
-        selector = { '_id' => AdapterParityFixture::WagonSite.entry_id('quoted', 'spelled') }
+      { 'score'   => ['7',          'integer',   7],
+        'held_on' => ['2014-03-09', 'date',      Date.new(2014, 3, 9)]
+      }.each do |name, (held, expected_type, seeded)|
 
-        entries.update_one(selector, '$set' => { 'score' => '7' })
-        example.run
-      ensure
-        entries.update_one(selector, '$set' => { 'score' => 7 })
-      end
+        context "a #{expected_type} field" do
 
-      it 'returns nil and reports the invalid stored type' do
-        events   = []
-        callback = ->(*, payload) { events << payload }
+          around do |example|
+            entries  = AdapterParityFixture.mongodb_client[
+              AdapterParityFixture::MongoDBDocuments::CONTENT_ENTRIES_COLLECTION]
+            selector = { '_id' => AdapterParityFixture::WagonSite.entry_id('quoted', 'spelled') }
 
-        ActiveSupport::Notifications.subscribed(callback, 'steam.entries.unread_value') do
-          expect(spelled.score).to be_nil
+            entries.update_one(selector, '$set' => { name => held })
+            example.run
+          ensure
+            entries.update_one(selector, '$set' => { name => seeded })
+          end
+
+          it 'returns nil and reports the invalid stored type' do
+            events   = []
+            callback = ->(*, payload) { events << payload }
+
+            ActiveSupport::Notifications.subscribed(callback, 'steam.entries.unread_value') do
+              expect(spelled.send(name)).to be_nil
+            end
+
+            expect(events.map { |e| e.values_at(:content_type, :field, :expected_type, :actual_type, :reason) })
+              .to eq [['quoted', name, expected_type, 'String', 'wrong_stored_type']]
+          end
+
         end
-
-        expect(events.map { |e| e.values_at(:content_type, :field, :expected_type, :actual_type, :reason) })
-          .to eq [%w(quoted score integer String wrong_stored_type)]
       end
 
     end

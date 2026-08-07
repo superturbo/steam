@@ -10,7 +10,7 @@ module Locomotive::Steam
 
     NIL_IS_THE_ONLY_BLANK    = %i(boolean integer float date date_time).freeze
     REQUIRED_FROM_ATTRIBUTES = %i(belongs_to many_to_many file).freeze
-    READ_THROUGH_GRAMMAR     = %i(integer float boolean string text email color).freeze
+    READ_THROUGH_GRAMMAR     = %i(integer float boolean string text email color date date_time).freeze
 
     private_constant :NIL_IS_THE_ONLY_BLANK, :REQUIRED_FROM_ATTRIBUTES, :READ_THROUGH_GRAMMAR
 
@@ -262,24 +262,6 @@ module Locomotive::Steam
           size = (self[:"#{field.name}_size"] || {})[locale || 'default']
           FileField.new(value, self.base_url, size, self.updated_at)
         end
-      end
-    end
-
-    def _cast_date(field)
-      _cast_time(field, :to_date)
-    end
-
-    def _cast_date_time(field)
-      _cast_time(field, :to_datetime)
-    end
-
-    def _cast_time(field, end_method)
-      _cast_convertor(field.name) do |value|
-        next value unless value.is_a?(String)
-
-        next ContentFieldValues.date(value) if end_method == :to_date
-
-        ContentFieldValues.date_time(value, ContentFieldValues.zone_of(site)).getutc
       end
     end
 

@@ -97,33 +97,21 @@ module Locomotive::Steam
       parsed || raise(ParseError.new(:invalid_date, 'invalid date and time value'))
     end
 
-    # A value the grammar cannot read is left exactly as it is.
-    def deserialize(type, value, zone)
+    # Convert adapter date/time representations; invalid shapes are rejected on read.
+    def deserialize(type, value)
       case type
       when :date      then stored_date(value)
-      when :date_time then stored_date_time(value, zone)
+      when :date_time then stored_date_time(value)
       else value
       end
     end
 
     def stored_date(value)
-      return date(value) if value.is_a?(String)
-      return value if plain_date?(value)
-      return value.to_time.getutc.to_date if value.respond_to?(:to_time)
-
-      value
-    rescue ParseError
-      value
+      value.instance_of?(Time) ? value.getutc.to_date : value
     end
 
-    def stored_date_time(value, zone)
-      return date_time(value, zone).getutc if value.is_a?(String)
-      return date_at_midnight(value, zone) if plain_date?(value)
-      return value.to_time.getutc if value.respond_to?(:to_time)
-
-      value
-    rescue ParseError
-      value
+    def stored_date_time(value)
+      value.instance_of?(Time) ? value.getutc : value
     end
 
     def plain_date?(value)
@@ -139,29 +127,24 @@ module Locomotive::Steam
 
     private_constant :STORED_DIFFERENTLY
 
-    # Preserve missing fields and resolve the timezone only when needed.
     def deserialize_entry(entity)
-      zone = nil
-
       entity.content_type.fields_by_name.each_value do |field|
         next unless STORED_DIFFERENTLY.include?(field.type)
 
         name = field.persisted_name
         next unless name && entity.attributes.key?(name)
 
-        zone ||= zone_of(entity.site) if field.type == :date_time
-
-        entity.attributes[name] = deserialize_attribute(field.type, entity.attributes[name], zone)
+        entity.attributes[name] = deserialize_attribute(field.type, entity.attributes[name])
       end
 
       entity
     end
 
     # Preserve scalar fallbacks and absent translations.
-    def deserialize_attribute(type, value, zone)
-      return deserialize(type, value, zone) unless value.respond_to?(:translations)
+    def deserialize_attribute(type, value)
+      return deserialize(type, value) unless value.respond_to?(:translations)
 
-      value.apply { |translated| deserialize(type, translated, zone) }
+      value.apply { |translated| deserialize(type, translated) }
     end
 
     # Normalizes caller input; stored values use #deserialize.
