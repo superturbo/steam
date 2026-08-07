@@ -1088,9 +1088,12 @@ describe Locomotive::Steam::ContentEntry do
           expect(subject.translations).to eq('en' => { 'foo' => 42 }, 'fr' => nil)
         end
 
-        it 'leaves the stored translations alone' do
+        it 'leaves every stored translation unchanged' do
+          stored = content_entry.attributes[:my_field][:en]
+
           subject
 
+          expect(content_entry.attributes[:my_field][:en]).to equal stored
           expect(content_entry.attributes[:my_field].translations)
             .to eq('en' => { 'foo' => 42 }, 'fr' => '[1, 2, 3]')
         end
