@@ -46,6 +46,27 @@ describe Locomotive::Steam::Liquid::Drops::Metafields do
 
       end
 
+      context 'a site holding no values at all' do
+
+        let(:metafields) { nil }
+
+        it { expect(namespace.liquid_method_missing(:analytics_id)).to eq nil }
+
+        it 'iterates over the fields the schema declares, holding no value' do
+          values = []
+          namespace.each { |field| values << field['value'] }
+
+          expect(values).to eq [nil, nil, nil, nil]
+        end
+
+        it 'renders a template that reads one' do
+          template = ::Liquid::Template.parse('[{{ metafields.my_namespace.analytics_id }}]')
+
+          expect(template.render({ 'metafields' => drop }, registers: { locale: 'en' })).to eq '[]'
+        end
+
+      end
+
       context 'the field is a boolean' do
 
         let(:boolean) { true }

@@ -30,7 +30,7 @@ module Locomotive
           end
 
           def values
-            @_source.metafields[@namespace['name']] || {}
+            @_source.metafields.to_h[@namespace['name']].to_h
           end
 
           def labels_and_values
