@@ -994,12 +994,12 @@ describe Locomotive::Steam::ContentEntry do
 
       end
 
-      { 'text that is no hash'  => ['not-a-hash', :invalid_password_hash],
-        'text of only spaces'   => ['   ',        :invalid_password_hash],
-        'a number'              => [123,          :wrong_stored_type],
-        'false'                 => [false,        :wrong_stored_type],
-        'a list'                => [[],           :wrong_stored_type]
-      }.each do |label, (held, reason)|
+      { 'text that is no hash'  => ['not-a-hash', :invalid_password_hash, 'String'],
+        'text of only spaces'   => ['   ',        :invalid_password_hash, 'String'],
+        'a number'              => [123,          :wrong_stored_type,     'Integer'],
+        'false'                 => [false,        :wrong_stored_type,     'FalseClass'],
+        'a list'                => [[],           :wrong_stored_type,     'Array']
+      }.each do |label, (held, reason, actual_type)|
         context "the store holds #{label}" do
 
           let(:attributes) { { my_field_hash: held } }
@@ -1009,8 +1009,8 @@ describe Locomotive::Steam::ContentEntry do
           it "reports #{reason}" do
             events = capture_unread_values { subject }
 
-            expect(events.map { |event| event.values_at(:field, :reason) })
-              .to eq [['my_field', reason.to_s]]
+            expect(events.map { |event| event.values_at(:field, :locale, :actual_type, :reason) })
+              .to eq [['my_field', nil, actual_type, reason.to_s]]
           end
 
         end

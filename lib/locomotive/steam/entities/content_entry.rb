@@ -189,14 +189,7 @@ module Locomotive::Steam
     end
 
     def cast_value(name)
-      field = content_type.fields_by_name[name]
-
-      begin
-        _cast_value(field)
-      rescue ContentFieldValues::ParseError => e
-        report_unread_value(field, e.reason)
-        nil
-      end
+      _cast_value(content_type.fields_by_name[name])
     end
 
     # Read a copy so one invalid locale cannot mutate stored translations.
@@ -240,14 +233,19 @@ module Locomotive::Steam
       end
     end
 
+    # Password hashes are not localized.
     def _cast_password(field)
-      _cast_convertor(:"#{field.name}_hash") do |value|
-        next if value.nil? || value == ''
+      value = attributes[:"#{field.name}_hash"]
 
-        BCrypt::Password.new(ContentFieldValues.normalize_read(:string, value))
-      end
+      return if value.nil? || value == ''
+
+      BCrypt::Password.new(ContentFieldValues.normalize_read(:string, value))
+    rescue ContentFieldValues::ParseError => e
+      report_unread_value(field, e.reason, actual_type: value.class.name)
+      nil
     rescue BCrypt::Errors::InvalidHash
-      raise ContentFieldValues::ParseError.new(:invalid_password_hash, 'invalid password hash')
+      report_unread_value(field, :invalid_password_hash, actual_type: value.class.name)
+      nil
     end
 
     def _cast_file(field)
