@@ -8,7 +8,32 @@ require_relative '../../support/adapter_parity_fixture'
 # shared rendering bug would pass if the two were only compared to each other.
 describe 'Liquid adapter parity' do
 
-  shared_examples_for 'the adapter parity dataset rendered' do
+  shared_examples_for 'a store that narrows a window' do
+
+    it 'builds only the rows the window selects' do
+      expect(entries_built { names('limit: 2') }).to eq 2
+    end
+
+    it 'builds only the rows an offset leaves' do
+      expect(entries_built { names('offset: 4') }).to eq 2
+    end
+
+  end
+
+  # Filesystem builds its full in-memory dataset before applying a window.
+  shared_examples_for 'a store that builds every entry when it loads' do
+
+    it 'builds every row for a window' do
+      expect(entries_built { names('limit: 2') }).to eq 6
+    end
+
+    it 'builds every row for an offset' do
+      expect(entries_built { names('offset: 4') }).to eq 6
+    end
+
+  end
+
+  shared_examples_for 'the adapter parity dataset rendered' do |store_behaviour|
 
     let(:site)     { Locomotive::Steam::SiteRepository.new(adapter).by_handle_or_domain('adapter-parity', nil) }
     let(:services) { Locomotive::Steam::Services.build_instance }
@@ -78,6 +103,98 @@ describe 'Liquid adapter parity' do
 
     end
 
+    # The six specimens order as: All missing, Arrays, Embedded, Explicit nils,
+    # Scalars, Zero.
+    describe 'slicing a loop' do
+
+      def names(markup, before = '')
+        render_liquid("#{before}{% for entry in contents.specimens #{markup} %}" \
+                      '[{{ entry.name }}]{% endfor %}')
+      end
+
+      it 'takes the first rows' do
+        expect(names('limit: 2')).to eq '[All missing][Arrays]'
+      end
+
+      it 'skips rows' do
+        expect(names('offset: 4')).to eq '[Scalars][Zero]'
+      end
+
+      it 'skips and then takes' do
+        expect(names('offset: 1 limit: 2')).to eq '[Arrays][Embedded]'
+      end
+
+      it 'stops at the end when asked for more than there is' do
+        expect(names('limit: 100')).to eq '[All missing][Arrays][Embedded][Explicit nils][Scalars][Zero]'
+      end
+
+      it 'renders nothing when the scope matches nothing' do
+        source = "{% with_scope name: 'nobody' %}" \
+                 '{% for entry in contents.specimens limit: 2 %}[{{ entry.name }}]{% endfor %}' \
+                 '{% endwith_scope %}'
+
+        expect(render_liquid(source)).to eq ''
+      end
+
+      it 'reverses the rows it took, not the ones it skipped' do
+        expect(names('reversed limit: 2')).to eq '[Arrays][All missing]'
+      end
+
+      it 'resumes where the previous loop over the same collection stopped' do
+        first = '{% for entry in contents.specimens limit: 2 %}{% endfor %}'
+
+        expect(names('offset: continue limit: 2', first)).to eq '[Embedded][Explicit nils]'
+      end
+
+      it 'slices a table row loop the same way' do
+        source = '{% tablerow entry in contents.specimens limit: 2 %}' \
+                 '[{{ entry.name }}]{% endtablerow %}'
+
+        expect(render_liquid(source).scan(/\[[^\]]+\]/).join).to eq '[All missing][Arrays]'
+      end
+
+      it 'starts at the beginning when asked to start before it' do
+        expect(names('offset: -1')).to eq '[All missing][Arrays][Embedded][Explicit nils][Scalars][Zero]'
+      end
+
+      it 'renders nothing for an empty window' do
+        expect(names('limit: 0')).to eq ''
+      end
+
+      it 'falls to the else branch when the window selects no rows' do
+        source = '{% for entry in contents.specimens limit: 0 %}[{{ entry.name }}]' \
+                 '{% else %}none{% endfor %}'
+
+        expect(render_liquid(source)).to eq 'none'
+      end
+
+      describe 'the rows it builds' do
+
+        def entries_built
+          built = 0
+
+          allow_any_instance_of(Locomotive::Steam::Models::Mapper)
+            .to receive(:to_entity).and_wrap_original do |original, *args|
+              original.call(*args).tap do |entity|
+                built += 1 if entity.is_a?(Locomotive::Steam::ContentEntry)
+              end
+            end
+
+          yield
+
+          built
+        end
+
+        it_behaves_like store_behaviour
+
+        it 'builds every row when the loop is unlimited' do
+          expect(entries_built { names('') }).to eq 6
+        end
+
+      end
+
+    end
+
     describe 'scoping' do
 
       it 'opens one scope per select option, including the option nothing uses' do
@@ -111,7 +228,8 @@ describe 'Liquid adapter parity' do
     before(:all) { AdapterParityFixture.seed_mongodb! }
     after(:all)  { AdapterParityFixture.cleanup! }
 
-    it_should_behave_like 'the adapter parity dataset rendered' do
+    it_should_behave_like 'the adapter parity dataset rendered',
+                          'a store that narrows a window' do
       let(:adapter) { AdapterParityFixture.mongodb_adapter }
     end
 
@@ -119,7 +237,8 @@ describe 'Liquid adapter parity' do
 
   context 'Filesystem' do
 
-    it_should_behave_like 'the adapter parity dataset rendered' do
+    it_should_behave_like 'the adapter parity dataset rendered',
+                          'a store that builds every entry when it loads' do
       let(:adapter) { AdapterParityFixture.filesystem_adapter }
     end
 

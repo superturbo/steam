@@ -48,6 +48,92 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntryCollection do
       it { expect(drop.map(&:to_s)).to eq(['a', 'b']) }
     end
 
+    # Liquid slices a collection through #load_slice, passing an end index rather
+    # than a length, and nil when the loop only skips.
+    describe '#load_slice' do
+
+      let(:window) do
+        Class.new do
+          attr_reader :window
+          def initialize; @window = {}; end
+          def offset(value); @window[:offset] = value; self; end
+          def limit(value);  @window[:limit]  = value; self; end
+        end.new
+      end
+
+      before do
+        allow(repo).to receive(:all) do |_conditions, &block|
+          window.instance_exec(&block)
+          ['a', 'b']
+        end
+      end
+
+      it 'turns the end index into a length the query can take' do
+        expect(drop.load_slice(0, 2)).to eq(['a', 'b'])
+        expect(window.window).to eq(offset: 0, limit: 2)
+      end
+
+      it 'offsets without limiting when there is no end index' do
+        drop.load_slice(5, nil)
+        expect(window.window).to eq(offset: 5, limit: nil)
+      end
+
+      it 'keeps the offset out of the length' do
+        drop.load_slice(10, 15)
+        expect(window.window).to eq(offset: 10, limit: 5)
+      end
+
+      it 'asks for nothing rather than a negative length' do
+        drop.load_slice(10, 4)
+        expect(window.window).to eq(offset: 10, limit: 0)
+      end
+
+      it 'starts at the beginning rather than before it' do
+        drop.load_slice(-1, nil)
+        expect(window.window).to eq(offset: 0, limit: nil)
+      end
+
+      it 'measures the length from the beginning it settled on' do
+        drop.load_slice(-1, 1)
+        expect(window.window).to eq(offset: 0, limit: 1)
+      end
+
+      it 'asks for nothing when the end index is the beginning' do
+        drop.load_slice(-1, 0)
+        expect(window.window).to eq(offset: 0, limit: 0)
+      end
+
+      it 'keeps a window the store cannot take inside the range it can' do
+        drop.load_slice(2**64, 2**65)
+        expect(window.window).to eq(offset: 2**63 - 1, limit: 2**63 - 1)
+      end
+
+      describe 'on a materialized collection' do
+
+        before do
+          allow(repo).to receive(:all).with(nil).and_return(%w(a b c d))
+          drop.map { |entry| entry }
+        end
+
+        it 'slices it instead of querying again' do
+          expect(repo).not_to receive(:all)
+          expect(drop.load_slice(1, 3)).to eq(%w(b c))
+          expect(drop.load_slice(2, nil)).to eq(%w(c d))
+          expect(drop.load_slice(9, 12)).to eq([])
+        end
+
+        # Ruby would read a negative index from the end, which is not what the
+        # loop asked for and not what the store would have answered.
+        it 'answers a window before the beginning the way the store would' do
+          expect(drop.load_slice(-1, nil)).to eq(%w(a b c d))
+          expect(drop.load_slice(-1, 1)).to eq(%w(a))
+          expect(drop.load_slice(-1, 0)).to eq([])
+        end
+
+      end
+
+    end
+
     describe '#empty?' do
       it 'pushes down to repository.exists?, not #all' do
         allow(repo).to receive(:exists?).with(nil).and_return(false)

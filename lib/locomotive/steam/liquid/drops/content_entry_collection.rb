@@ -1,3 +1,5 @@
+require_relative '../../adapters/query'
+
 module Locomotive
   module Steam
     module Liquid
@@ -49,6 +51,17 @@ module Locomotive
           alias :size   :count
           alias :length :count
 
+          # Liquid passes an exclusive end index; repositories accept a length.
+          def load_slice(from, to = nil)
+            window = Locomotive::Steam::Adapters::Query::Window
+            from   = window.clamp(from)
+            length = to && window.clamp(to - from)
+
+            return slice_loaded_collection(from, length) if defined?(@collection)
+
+            slice(from, length)
+          end
+
           def public_submission_url
             services.url_builder.public_submission_url_for(@content_type)
           end
@@ -73,6 +86,10 @@ module Locomotive
 
           def slice(index, length)
             repository.all(conditions) { offset(index).limit(length) }
+          end
+
+          def slice_loaded_collection(from, length)
+            (length ? @collection[from, length] : @collection[from..]) || []
           end
 
           def collection

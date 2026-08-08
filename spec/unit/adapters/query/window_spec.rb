@@ -4,6 +4,33 @@ require_relative '../../../../lib/locomotive/steam/adapters/query'
 
 describe Locomotive::Steam::Adapters::Query::Window do
 
+  describe '.clamp' do
+
+    subject { described_class.clamp(value) }
+
+    context 'already in range' do
+      let(:value) { 250 }
+      it { is_expected.to eq 250 }
+    end
+
+    context 'below the range' do
+      let(:value) { -1 }
+      it { is_expected.to eq 0 }
+    end
+
+    context 'above the range' do
+      let(:value) { 2**63 }
+      it { is_expected.to eq 2**63 - 1 }
+    end
+
+    it 'returns what normalize accepts' do
+      [-1, 0, 2**63, 2**64].each do |given|
+        expect { described_class.normalize(described_class.clamp(given), :limit) }.not_to raise_error
+      end
+    end
+
+  end
+
   describe '.normalize' do
 
     subject { described_class.normalize(value, :limit) }

@@ -10,6 +10,11 @@ module Locomotive::Steam
 
         module_function
 
+        # Clamp computed windows; direct query input remains strict.
+        def clamp(value)
+          value.clamp(0, MAX)
+        end
+
         def normalize(value, name)
           return nil if value.nil?
           return value if value.is_a?(Integer) && value.between?(0, MAX)
