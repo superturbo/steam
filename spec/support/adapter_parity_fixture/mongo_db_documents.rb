@@ -222,7 +222,9 @@ module AdapterParityFixture
       when :many_to_many
         target = field.fetch('class_name')
 
-        document["#{name.singularize}_ids"] = Array(value).map { |entry| WagonSite.entry_id(target, entry) }
+        # Preserve null association values from the fixture.
+        document["#{name.singularize}_ids"] =
+          value&.map { |entry| entry && WagonSite.entry_id(target, entry) }
       when :date_time
         document[name] = typed_value(value, localized: localized) { |text| site_zone.parse(text).getutc }
       when :date

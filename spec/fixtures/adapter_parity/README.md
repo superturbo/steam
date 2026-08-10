@@ -1,7 +1,8 @@
 # Adapter parity fixture
 
-A minimal Wagon site used to compare storage adapters.
+A minimal Wagon-shaped site used to compare storage adapters.
 
-Use documented Wagon files only. Do not add storage-specific identifiers,
-fields, generated metadata, or materialized runtime defaults. Every addition
-must support an explicit parity assertion.
+Use Wagon file layout and field names, including stored edge states exercised
+by parity examples. Do not add adapter-specific identifiers or fields,
+generated metadata, or materialized runtime defaults. Every addition must
+support an explicit assertion.

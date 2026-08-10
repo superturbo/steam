@@ -131,6 +131,15 @@ describe 'Adapter parity seed' do
     expect(document('scalars')['topic_ids']).to all(be_a(BSON::ObjectId))
   end
 
+  # MongoDB distinguishes a missing key from an empty stored list.
+  it 'keeps each declared many-to-many state' do
+    expect(document('all-missing')).not_to have_key('topic_ids')
+    expect(document('explicit-nils')['topic_ids']).to be_nil
+    expect(document('zero')['topic_ids']).to eq []
+    expect(document('embedded')['topic_ids']).to eq [nil]
+    expect(document('arrays')['topic_ids']).to match [be_a(BSON::ObjectId), nil]
+  end
+
   it 'writes a date time as a Time, not the string the fixture holds' do
     expect(document('scalars')['at']).to be_a(Time)
   end
