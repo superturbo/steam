@@ -1004,9 +1004,53 @@ describe Locomotive::Steam::ContentEntryRepository do
         end
       end
 
-      context 'a Range — its own plain-field expression, not an operand' do
+      context 'a numeric Range' do
         let(:conditions) { { 'price' => (5..6) } }
         it { expect(subject.first['price']).to eq(5..6) }
+      end
+
+      context 'a Range bound meets the same rules as a gt or lte operand' do
+
+        def range_for(range)
+          subject_for('price' => range)['price']
+        end
+
+        it 'reads text bounds as numbers' do
+          expect(range_for('10'..'20')).to eq(10.0..20.0)
+        end
+
+        it 'keeps an excluded end' do
+          expect(range_for('10'...'20')).to eq(10.0...20.0)
+        end
+
+        it 'keeps a beginless and an endless side' do
+          expect(range_for('10'..)).to eq(10.0..)
+          expect(range_for(..'20')).to eq(..20.0)
+        end
+
+        it 'matches nothing when a text bound reads as no number' do
+          expect(range_for('abc'..'20'))
+            .to eq Locomotive::Steam::Adapters::Query::Values.unmatchable
+        end
+
+        context 'on an integer field' do
+          let(:field_type) { :integer }
+
+          it 'reads integer text bounds' do
+            expect(range_for('1'..'5')).to eq(1..5)
+          end
+        end
+
+        it 'rejects bounds outside the numeric field domain' do
+          [Rational(1, 2)..Rational(3, 2),
+           BigDecimal('1')..BigDecimal('2'),
+           (2**63)..,
+           [1]..[2]].each do |bad|
+            expect { subject_for('price' => bad) }
+              .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+          end
+        end
+
       end
 
       context 'two conditions bounding the same field' do
@@ -1114,10 +1158,11 @@ describe Locomotive::Steam::ContentEntryRepository do
           end
         end
 
-        # BSON stores it as a Decimal128; the bounds above do not apply.
-        it 'passes a BigDecimal through untouched' do
-          expect(subject_for('price.lt' => BigDecimal('1.5')))
-            .to include('price.lt' => BigDecimal('1.5'))
+        it 'rejects numeric types outside the field domain' do
+          [Rational(3, 2), BigDecimal('1.5')].each do |bad|
+            expect { subject_for('price.lt' => bad) }
+              .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+          end
         end
 
       end

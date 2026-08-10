@@ -577,8 +577,9 @@ module Locomotive
         # Numeric strings are coerced where field metadata is available.
         def value_to_number(value, type)
           case value
-          # a Range or Regexp is its own plain-field expression, not an operand
-          when nil, Range, Regexp then value
+          # a Regexp is its own plain-field expression, not an operand
+          when nil, Regexp then value
+          when Range   then numeric_range(value, type)
           when Numeric then validate_numeric_bounds!(value)
           when Array  then value.map { |element| value_to_number(element, type) }
           when Set    then value.map { |element| value_to_number(element, type) }
@@ -586,6 +587,29 @@ module Locomotive
           else
             raise Locomotive::Steam::Adapters::Query::InvalidValue,
                   "expected a number, got #{value.inspect}"
+          end
+        end
+
+        # Bounds meet the same rules as gt/lte operands: text is read as a
+        # number or matches nothing, a wrong type raises.
+        def numeric_range(range, type)
+          low  = numeric_range_bound(range.begin, type)
+          high = numeric_range_bound(range.end, type)
+
+          if [low, high].any? { |bound| Locomotive::Steam::Adapters::Query::Values.unmatchable?(bound) }
+            return Locomotive::Steam::Adapters::Query::Values.unmatchable
+          end
+
+          Range.new(low, high, range.exclude_end?)
+        end
+
+        def numeric_range_bound(value, type)
+          case value
+          when nil then nil
+          when Array, Set, Hash, Range, Regexp
+            raise Locomotive::Steam::Adapters::Query::InvalidValue,
+                  "#{value.class} cannot bound a numeric range"
+          else value_to_number(value, type)
           end
         end
 
@@ -613,21 +637,11 @@ module Locomotive
           Locomotive::Steam::Adapters::Query::Values.unmatchable
         end
 
-        # Typed numeric operands must stay within the supported query domain.
         def validate_numeric_bounds!(value)
-          return value if within_numeric_bounds?(value)
+          return value if Adapters::NumericBounds.within?(value)
 
           raise Locomotive::Steam::Adapters::Query::InvalidValue,
-                "numeric value is outside supported bounds: #{value.inspect}"
-        end
-
-        # Typed integers outside BSON int64 and non-finite floats are invalid
-        # operands. Other Numerics, BigDecimal among them, are left alone.
-        def within_numeric_bounds?(number)
-          case number
-          when Integer, Float then Adapters::NumericBounds.within?(number)
-          else true
-          end
+                "#{value.class} is not a supported numeric operand or is outside its bounds"
         end
 
         def parse_date(value, type)

@@ -307,6 +307,22 @@ describe 'Query parity' do
       conditions: { 'price.gt' => Float::INFINITY },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
 
+    { desc: 'an array size past int32',
+      conditions: { 'labels.size' => 2**31 },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a Rational operand',
+      conditions: { 'score.gt' => Rational(3, 2) },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a BigDecimal operand',
+      conditions: { 'price.gt' => BigDecimal('1.5') },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a Rational bound inside a Range',
+      conditions: { score: (Rational(1, 2)..Rational(3, 2)) },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
     { desc: 'an ordering on the primary key',
       conditions: { '_id.gt' => 'a' },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },

@@ -12,7 +12,11 @@ module Locomotive::Steam
       module_function
 
       def within?(number)
-        number.is_a?(Integer) ? INT64.cover?(number) : number.finite?
+        case number
+        when Integer then INT64.cover?(number)
+        when Float   then number.finite?
+        else false
+        end
       end
 
       # Stored-value bounds that keep the increment inside the numeric domain.

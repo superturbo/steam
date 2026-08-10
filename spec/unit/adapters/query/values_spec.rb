@@ -33,12 +33,18 @@ describe Locomotive::Steam::Adapters::Query::Values do
     it { expect(described_class.size(0)).to eq 0 }
     it { expect(described_class.size('2')).to eq 2 }
     it { expect(described_class.size('07')).to eq 7 }
+    it { expect(described_class.size(2**31 - 1)).to eq 2**31 - 1 }
 
     it { expect { described_class.size(-1) }.to raise_error(invalid) }
     it { expect { described_class.size(2.5) }.to raise_error(invalid) }
     it { expect { described_class.size('2.5') }.to raise_error(invalid) }
     it { expect { described_class.size('two') }.to raise_error(invalid) }
     it { expect { described_class.size(nil) }.to raise_error(invalid) }
+
+    it { expect { described_class.size(2**31) }.to raise_error(invalid) }
+    it { expect { described_class.size((2**31).to_s) }.to raise_error(invalid) }
+    it { expect { described_class.size('0' * 11) }.to raise_error(invalid) }
+    it { expect { described_class.size('9' * 1_000_000) }.to raise_error(invalid) }
 
   end
 

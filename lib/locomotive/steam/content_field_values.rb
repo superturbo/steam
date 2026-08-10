@@ -56,6 +56,11 @@ module Locomotive::Steam
 
       raise ParseError.new(:invalid_number, "invalid #{type} value") unless format.match?(candidate)
 
+      # Integer input is capped at 19 digits before parsing.
+      if type == :integer && candidate.sub(/\A[+-]/, '').length > 19
+        raise ParseError.new(:outside_numeric_bounds, 'number outside supported bounds')
+      end
+
       parsed = type == :integer ? Integer(candidate, 10) : Float(candidate)
 
       unless Adapters::NumericBounds.within?(parsed)

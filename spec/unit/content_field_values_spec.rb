@@ -7,6 +7,8 @@ describe Locomotive::Steam::ContentFieldValues do
     { 'text that reads as no number'  => [[:integer, '12x'],           :invalid_number],
       'a number past the bounds'      => [[:integer, 2**63],           :outside_numeric_bounds],
       'text past the bounds'          => [[:integer, '9' * 20],        :outside_numeric_bounds],
+      'text past the 19-digit cap'    => [[:integer, '0' * 20],        :outside_numeric_bounds],
+      'text no int64 could ever hold' => [[:integer, '9' * 1_000_000], :outside_numeric_bounds],
       'a value of another type'       => [[:integer, [1]],             :wrong_type],
       'text that reads as no boolean' => [[:boolean, 'yes'],           :invalid_boolean],
       'a number where a boolean goes' => [[:boolean, 2],               :wrong_type],

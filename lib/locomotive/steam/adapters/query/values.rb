@@ -72,16 +72,20 @@ module Locomotive::Steam
           raise InvalidValue, "expected a boolean, got #{value.inspect}"
         end
 
-        # size takes a non-negative integer; a plain decimal string is accepted.
+        INT32_MAX = 2**31 - 1
+
+        private_constant :INT32_MAX
+
+        # size accepts a non-negative int32 as an Integer or decimal string.
         def size(value)
           integer =
             case value
             when Integer then value
-            when String  then Integer(value, 10) if value.match?(/\A\d+\z/)
+            when String  then Integer(value, 10) if value.match?(/\A\d{1,10}\z/)
             end
 
-          unless integer.is_a?(Integer) && integer >= 0
-            raise InvalidValue, "expected a non-negative integer, got #{value.inspect}"
+          unless integer.is_a?(Integer) && integer.between?(0, INT32_MAX)
+            raise InvalidValue, "expected an array size between 0 and #{INT32_MAX}"
           end
 
           integer
