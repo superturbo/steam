@@ -16,8 +16,23 @@ module Locomotive::Steam
             end
           end
 
+          # Page normalization reads and writes these fields per locale.
+          NORMALIZED_LOCALIZED_FIELDS = %i(
+            title slug fullpath template_path redirect_url
+            sections_content sections_dropzone_content
+            seo_title meta_description meta_keywords
+          ).freeze
+
+          private_constant :NORMALIZED_LOCALIZED_FIELDS
+
           def apply_to_entity(entity)
             super
+
+            NORMALIZED_LOCALIZED_FIELDS.each do |name|
+              next if entity[name].respond_to?(:translations)
+
+              entity[name] = Locomotive::Steam::Models::I18nField.new(name, nil)
+            end
 
             record_id(entity) # required to get the parent_id
 
@@ -99,11 +114,7 @@ module Locomotive::Steam
             return if locale == default_locale
 
             if page[:template_path][locale].blank?
-              %i(
-                title slug fullpath template_path redirect_url
-                sections_content sections_dropzone_content
-                seo_title meta_description meta_keywords
-              ).each do |name|
+              NORMALIZED_LOCALIZED_FIELDS.each do |name|
                 page[name][locale] ||= page[name][default_locale]
               end
             end

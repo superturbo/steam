@@ -4,6 +4,9 @@ module Locomotive::Steam
     class BelongsToAssociation < ReferencedAssociation
 
       def __load__
+        # Resolving a key the store never held must not materialize either side.
+        return unless @entity.attributes.key?(__target_key__)
+
         target_id = @entity[__target_key__]
         target    = @repository.find(target_id)
 
@@ -22,12 +25,6 @@ module Locomotive::Steam
 
       def __target_key__
         :"#{__name__}_id"
-      end
-
-      def __attach__(entity)
-        # setting a default nil value for the target key
-        entity[__target_key__] ||= nil
-        super
       end
 
     end

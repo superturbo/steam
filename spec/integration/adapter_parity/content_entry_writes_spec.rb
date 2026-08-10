@@ -26,6 +26,32 @@ describe 'Adapter parity' do
           expect(specimens.find(entry._id).name).to eq 'Created'
         end
 
+        # Loading must not materialize fields the store never held: an update
+        # of one field would write them back as stored data.
+        it 'keeps a missing association missing through an unrelated update' do
+          created = create_specimen
+          entry   = another_specimens_repository.find(created._id)
+
+          # Resolving the association must not materialize the key either.
+          expect(entry.maker.name).to be_nil
+
+          entry[:score] = 99
+          specimens.update(entry)
+
+          expect(specimens.exists?(_id: entry._id, 'maker.exists' => false)).to be(true)
+        end
+
+        it 'links an association an entry never had' do
+          created = create_specimen
+          entry   = another_specimens_repository.find(created._id)
+
+          entry[:maker_id] = makers.by_slug('maker-one')._id
+          specimens.update(entry)
+
+          expect(specimens.exists?(_id: entry._id, 'maker.exists' => true)).to be(true)
+          expect(another_specimens_repository.find(created._id).maker.name).to eq 'Maker one'
+        end
+
         # Updating a detached copy proves the write reaches the store instead
         # of mutating the object the previous read handed back.
         it 'makes an update visible to a later read' do

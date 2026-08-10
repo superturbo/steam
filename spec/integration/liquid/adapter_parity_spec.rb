@@ -211,6 +211,13 @@ describe 'Liquid adapter parity' do
         expect(render_liquid(source)).to eq '[alpha:1:Scalars ][beta:1:Arrays ][gamma:0:]'
       end
 
+      it 'renders a field the store never held as empty text' do
+        source = '{% for entry in contents.specimens %}[{{ entry.title }}]{% endfor %}'
+
+        expect(render_liquid(source))
+          .to eq '[][Arrays en][Embedded en][][Scalars en][]'
+      end
+
       it 'reaches hidden entries when the template asks for them' do
         source = '{% with_scope _visible: false %}' \
                  '{% for entry in contents.specimens %}[{{ entry.name }}]{% endfor %}' \

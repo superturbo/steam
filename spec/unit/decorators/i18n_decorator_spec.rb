@@ -26,6 +26,73 @@ describe Locomotive::Steam::Decorators::I18nDecorator do
     expect(decorated.title).to eq 'Bonjour le monde'
   end
 
+  describe 'a field the store never held' do
+
+    let(:page) { instance_double('Page', localized_attributes: { title: true }) }
+
+    it 'reads as nil' do
+      expect(decorated.title).to be_nil
+    end
+
+    it 'is created by a write' do
+      entity = Class.new { include Locomotive::Steam::Models::Entity }.new({})
+      entity.localized_attributes = { title: true }
+      decorated = described_class.new(entity, locale, default_locale)
+
+      decorated.title = 'Bonjour'
+
+      expect(entity[:title][:fr]).to eq 'Bonjour'
+    end
+
+    it 'is not created by a read' do
+      entity = Class.new { include Locomotive::Steam::Models::Entity }.new({})
+      entity.localized_attributes = { title: true }
+      decorated = described_class.new(entity, locale, default_locale)
+
+      decorated.title
+
+      expect(entity.attributes).to eq({})
+    end
+
+  end
+
+  # A constructor may fill a localized attribute with a plain default.
+  describe 'a field held as a plain value' do
+
+    let(:entity) do
+      Class.new { include Locomotive::Steam::Models::Entity }.new(attributes).tap do |_entity|
+        _entity.localized_attributes = { title: true }
+      end
+    end
+    let(:decorated) { described_class.new(entity, locale, default_locale) }
+
+    context 'a nil value' do
+
+      let(:attributes) { { title: nil } }
+
+      it 'is written into the active locale' do
+        decorated.title = 'Bonjour'
+
+        expect(entity[:title][:fr]).to eq 'Bonjour'
+      end
+
+    end
+
+    context 'a scalar value' do
+
+      let(:attributes) { { title: 'Old' } }
+
+      it 'becomes the fallback the other locales keep' do
+        decorated.title = 'Bonjour'
+
+        expect(entity[:title][:fr]).to eq 'Bonjour'
+        expect(entity[:title][:en]).to eq 'Old'
+      end
+
+    end
+
+  end
+
   describe 'the field is nil' do
 
     let(:field) { nil }

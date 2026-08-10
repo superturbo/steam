@@ -32,12 +32,14 @@ module Locomotive::Steam
             set_id(entity)
           end
 
+          # YAML stores the label as the entry key, not as a field.
           def add_label(entity)
             value = entity.attributes.delete(:_label)
             name  = entity.content_type.label_field_name
 
-            if entity.attributes[name].respond_to?(:translations) # localized?
-              entity.attributes[name][default_locale] = value
+            if entity.localized_attributes.key?(name)
+              field = (entity.attributes[name] ||= Locomotive::Steam::Models::I18nField.new(name, nil))
+              field[default_locale] = value
             else
               entity.attributes[name] ||= value
             end
@@ -56,6 +58,8 @@ module Locomotive::Steam
 
           def set_slug(entity, dataset)
             return unless entity._slug.blank?
+
+            entity[:_slug] ||= Locomotive::Steam::Models::I18nField.new(:_slug, nil)
 
             unless entity._label.respond_to?(:translations)
               # same value for any locale

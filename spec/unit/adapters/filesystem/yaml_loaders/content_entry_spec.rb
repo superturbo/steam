@@ -133,6 +133,83 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
 
       end
 
+      context 'the entry never names the association' do
+
+        before { allow(loader).to receive(:_load).and_return([{ 'One' => {} }]) }
+
+        it 'leaves the foreign key and the position missing' do
+          expect(subject.first.key?(:band_id)).to be false
+          expect(subject.first.key?(:position_in_band)).to be false
+        end
+
+      end
+
+      context 'the entry names the association with an explicit null' do
+
+        before { allow(loader).to receive(:_load).and_return([{ 'One' => { band: nil } }]) }
+
+        it 'keeps the null foreign key without inventing a position' do
+          expect(subject.first.key?(:band_id)).to be true
+          expect(subject.first[:band_id]).to be_nil
+          expect(subject.first.key?(:position_in_band)).to be false
+        end
+
+      end
+
+      context 'the entry names the association with a blank slug' do
+
+        before { allow(loader).to receive(:_load).and_return([{ 'One' => { band: '' } }]) }
+
+        it 'links nothing and invents no position' do
+          expect(subject.first[:band_id]).to eq ''
+          expect(subject.first.key?(:position_in_band)).to be false
+        end
+
+      end
+
+    end
+
+    context 'a content type with a many_to_many field' do
+
+      let(:field)         { instance_double('Field', name: 'tags', type: :many_to_many) }
+      let(:content_type)  { instance_double('Songs', slug: 'songs', association_fields: [field], select_fields: [], file_fields: [], password_fields: [], fields_by_name: {}) }
+
+      before { allow(loader).to receive(:_load).and_return([{ 'One' => attributes }]) }
+
+      context 'the entry never names the association' do
+
+        let(:attributes) { {} }
+
+        it 'leaves the ids missing' do
+          expect(subject.first.key?(:tag_ids)).to be false
+        end
+
+      end
+
+      context 'the entry names the association with an explicit null' do
+
+        let(:attributes) { { tags: nil } }
+
+        it 'keeps the null ids' do
+          expect(subject.first.key?(:tag_ids)).to be true
+          expect(subject.first[:tag_ids]).to be_nil
+        end
+
+      end
+
+    end
+
+    context 'a content type with a file field' do
+
+      let(:field)         { instance_double('Field', name: 'photo', type: :file) }
+      let(:content_type)  { instance_double('Bands', slug: 'bands', select_fields: [], association_fields: [], file_fields: [field], password_fields: [], fields_by_name: {}) }
+
+      before { allow(loader).to receive(:_load).and_return([{ 'One' => {} }]) }
+
+      it 'does not invent file metadata for a missing file' do
+        expect(subject.first.key?(:photo_size)).to be false
+      end
+
     end
 
     context 'a content type with a select field' do
@@ -148,6 +225,16 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
         expect(subject.first[:kind]).to eq nil
       end
 
+      context 'the entry never names the select' do
+
+        before { allow(loader).to receive(:_load).and_return([{ 'One' => {} }]) }
+
+        it 'leaves the foreign key missing' do
+          expect(subject.first.key?(:kind_id)).to be false
+        end
+
+      end
+
     end
 
     context 'a content type with a password field' do
@@ -158,6 +245,27 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
       it 'adds a new attribute for the hashed password' do
         expect(subject.first[:password_hash]).not_to eq 'easyone'
         expect(subject.first[:password]).to eq nil
+      end
+
+      context 'the entry never names the password' do
+
+        before { allow(loader).to receive(:_load).and_return([{ 'One' => {} }]) }
+
+        it 'leaves the hash missing' do
+          expect(subject.first.key?(:password_hash)).to be false
+        end
+
+      end
+
+      context 'the entry names the password with an explicit null' do
+
+        before { allow(loader).to receive(:_load).and_return([{ 'One' => { password: nil } }]) }
+
+        it 'keeps the null hash instead of hashing an empty secret' do
+          expect(subject.first.key?(:password_hash)).to be true
+          expect(subject.first[:password_hash]).to be_nil
+        end
+
       end
 
     end

@@ -87,6 +87,8 @@ module Locomotive::Steam
 
           # localized fields
           @localized_attributes.each do |name|
+            next unless entity.attributes.key?(name)
+
             # hack: force the name for select type fields (content entries only)
             value = entity.send(name)
             value.serialize(attributes, name) if value.respond_to?(:serialize)
@@ -120,7 +122,11 @@ module Locomotive::Steam
       def build_localized_attributes(attributes)
         @localized_attributes.each do |name|
           _name = name.to_sym
-          attributes[_name] = I18nField.new(_name, attributes[name.to_s] || attributes[_name])
+
+          # A field the store never held must not materialize on load.
+          next unless attributes.key?(_name)
+
+          attributes[_name] = I18nField.new(_name, attributes[_name])
         end
       end
 
@@ -171,7 +177,10 @@ module Locomotive::Steam
       # Stored scalars keep their all-locale fallback; caller input belongs to one locale.
       def localize_input(entity)
         @localized_attributes.each do |name|
-          default = entity[name.to_sym].default
+          field = entity[name.to_sym]
+          next if field.nil?
+
+          default = field.default
           next if default.nil?
 
           entity[name.to_sym] = I18nField.new(name.to_sym, input_locale => default)

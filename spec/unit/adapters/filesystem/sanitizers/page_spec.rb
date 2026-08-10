@@ -1,7 +1,6 @@
 require 'spec_helper'
 
-require_relative '../../../../../lib/locomotive/steam/adapters/filesystem/sanitizer.rb'
-require_relative '../../../../../lib/locomotive/steam/adapters/filesystem/sanitizers/page.rb'
+require_relative '../../../../../lib/locomotive/steam/adapters/filesystem.rb'
 require_relative '../../../../../lib/locomotive/steam/errors.rb'
 
 describe Locomotive::Steam::Adapters::Filesystem::Sanitizers::Page do
@@ -89,6 +88,31 @@ describe Locomotive::Steam::Adapters::Filesystem::Sanitizers::Page do
       let(:content) { %({"a":"\xFF"}) }
 
       it { expect { subject }.to raise_error(Locomotive::Steam::JsonParsingError) }
+    end
+
+  end
+
+  describe 'materializing the localized fields' do
+
+    let(:pages)      { [{ _fullpath: 'index' }] }
+    let(:site)       { instance_double('Site', _id: 1, default_locale: :en, locales: %i(en fr)) }
+    let(:adapter)    { Locomotive::Steam::FilesystemAdapter.new(nil) }
+    let(:repository) { Locomotive::Steam::PageRepository.new(adapter, site, :en) }
+
+    before do
+      allow(adapter).to receive(:collection).and_return(pages)
+      adapter.cache = NoCacheStore.new
+    end
+
+    # Page normalization requires these fields even when the source omits them.
+    %i(title slug fullpath template_path redirect_url
+       sections_content sections_dropzone_content
+       seo_title meta_description meta_keywords).each do |name|
+
+      it "materializes #{name} as a localized field" do
+        expect(repository.all.first[name]).to respond_to(:translations)
+      end
+
     end
 
   end

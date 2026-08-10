@@ -72,12 +72,22 @@ module Locomotive
         end
 
         def __get_localized_value__(name)
+          # A field the store never held reads as nil without materializing.
+          return nil unless __getobj__.respond_to?(name.to_sym)
+
           field = __getobj__.public_send(name.to_sym)
           field ? field[__locale__] || field[__default_locale__] : nil
         end
 
         def __set_localized_value__(name, value)
-          field = __getobj__.public_send(name.to_sym)
+          field = __getobj__.public_send(name.to_sym) if __getobj__.respond_to?(name.to_sym)
+
+          # Preserve a scalar as the all-locale fallback.
+          unless field.respond_to?(:translations)
+            field = Locomotive::Steam::Models::I18nField.new(name.to_sym, field)
+            __getobj__[name.to_sym] = field
+          end
+
           field[__locale__] = value
         end
 

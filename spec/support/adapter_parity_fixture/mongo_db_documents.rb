@@ -176,9 +176,11 @@ module AdapterParityFixture
 
       entry[:attributes].each { |name, value| write_attribute(document, slug, name, value) }
 
-      # Match Wagon's inverse-association order derived from file position.
+      # Match Wagon's inverse-association order derived from file position;
+      # like Filesystem, an unlinked entry carries no inverse position.
       WagonSite.fields(slug).each do |field|
         next unless field.fetch('type') == :belongs_to
+        next unless document["#{field.fetch('name')}_id"]
 
         document["position_in_#{field.fetch('name')}"] = position
       end

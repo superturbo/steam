@@ -126,7 +126,7 @@ describe 'Adapter parity' do
         expect(entry('explicit-nils').status).to be_nil
         expect(entry('scalars').status).to eq 'published'
         expect(entry('scalars').rank).to be_nil
-        expect(entry('scalars').blurb[:en]).to be_nil
+        expect(entry('scalars').blurb).to be_nil
         expect(entry('explicit-nils').visibility_id).to be_nil
       end
 
@@ -185,6 +185,47 @@ describe 'Adapter parity' do
       let(:adapter)  { AdapterParityFixture.mongodb_adapter }
 
       def filesystem?; false; end
+    end
+
+    # The seed mirrors Filesystem: an unlinked document carries no inverse
+    # position and no foreign key. The raw document is the proof — an entity
+    # could hide a wrong stored form.
+    describe 'what the store holds for an unlinked belongs_to' do
+
+      let(:adapter) { AdapterParityFixture.mongodb_adapter }
+
+      def zero_document
+        AdapterParityFixture.mongodb_client[
+          AdapterParityFixture::MongoDBDocuments::CONTENT_ENTRIES_COLLECTION]
+          .find('_id' => AdapterParityFixture::WagonSite.entry_id('specimens', 'zero')).first
+      end
+
+      it 'holds neither the foreign key nor the inverse position' do
+        document = zero_document
+
+        expect(document.key?('maker_id')).to be false
+        expect(document.key?('position_in_maker')).to be false
+        expect(document.key?('title')).to be false
+      end
+
+      it 'still holds neither after an unrelated update' do
+        site    = Locomotive::Steam::SiteRepository.new(adapter).by_handle_or_domain('adapter-parity', nil)
+        types   = Locomotive::Steam::ContentTypeRepository.new(adapter, site, AdapterParityFixture::LOCALE)
+        entries = Locomotive::Steam::ContentEntryRepository.new(adapter, site, AdapterParityFixture::LOCALE, types)
+                    .with(types.by_slug('specimens'))
+
+        entry = entries.by_slug('zero')
+        entry[:score] = 0 # the stored value, so the fixture stays as seeded
+
+        entries.update(entry)
+
+        document = zero_document
+
+        expect(document.key?('maker_id')).to be false
+        expect(document.key?('position_in_maker')).to be false
+        expect(document.key?('title')).to be false
+      end
+
     end
 
     # Filesystem rejects invalid types while loading, so this case is MongoDB-only.

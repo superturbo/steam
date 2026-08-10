@@ -5,7 +5,7 @@ require_relative '../../../lib/locomotive/steam/adapters/filesystem.rb'
 describe Locomotive::Steam::ContentEntryRepository do
 
   let(:_fields) { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
-  let(:type)    { build_content_type('Articles', label_field_name: :title, localized_names: [:title], fields: _fields, fields_by_name: { title: instance_double('Field', name: :title, type: :string) }, fields_with_default: []) }
+  let(:type)    { build_content_type('Articles', label_field_name: :title, localized_names: %w(title), fields: _fields, fields_by_name: { title: instance_double('Field', name: :title, type: :string) }, fields_with_default: []) }
   let(:entries) { [{ content_type_id: 1, _position: 0, _label: 'Update #1', title: { fr: 'Mise a jour #1' }, text: { en: 'added some free stuff', fr: 'phrase FR' }, date: '2009/05/12', category: 'General' }] }
   let(:locale)  { :en }
   let(:site)    { instance_double('Site', _id: 1, default_locale: :en, locales: %i(en fr), timezone: ActiveSupport::TimeZone['UTC']) }
@@ -191,7 +191,7 @@ describe Locomotive::Steam::ContentEntryRepository do
     context 'a localized date' do
       let(:type) do
         build_content_type('Articles', label_field_name: :title, fields: _fields, fields_with_default: [],
-                           localized_names: [:held_on],
+                           localized_names: %w(held_on),
                            fields_by_name: { title:   instance_double('Field', name: :title, type: :string),
                                              held_on: instance_double('Field', name: :held_on, type: :date,
                                                                       persisted_name: 'held_on') })
@@ -306,7 +306,7 @@ describe Locomotive::Steam::ContentEntryRepository do
     end
 
     context 'with a has_many field' do
-      let(:type) { build_content_type('Articles', label_field_name: :title, localized_names: [:title], fields: _fields, fields_by_name: { articles: instance_double('Field', type: :has_many) }, fields_with_default: []) }
+      let(:type) { build_content_type('Articles', label_field_name: :title, localized_names: %w(title), fields: _fields, fields_by_name: { articles: instance_double('Field', type: :has_many) }, fields_with_default: []) }
       let(:proxy_repository) { repository.dup }
       let(:entry) { instance_double('Entry', articles: proxy_repository) }
       let(:name) { :articles }
@@ -398,7 +398,7 @@ describe Locomotive::Steam::ContentEntryRepository do
           category: instance_double('SelectField', name: :category, type: :select, localized: true, select_options: [])
         }
       end
-      let(:type) { build_content_type('Articles', order_by: '_position asc', label_field_name: :title, localized_names: [:title, :category_id], fields: _fields, fields_by_name: fields, fields_with_default: []) }
+      let(:type) { build_content_type('Articles', order_by: '_position asc', label_field_name: :title, localized_names: %w(title category_id), fields: _fields, fields_by_name: fields, fields_with_default: []) }
       let(:name) { :category }
 
       let(:options) {

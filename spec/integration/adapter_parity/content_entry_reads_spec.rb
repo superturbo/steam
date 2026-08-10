@@ -83,6 +83,43 @@ describe 'Adapter parity' do
           .to eq %w(arrays scalars)
       end
 
+      # A key holding null exists; a missing key does not.
+      describe 'querying by a field presence' do
+
+        it 'tells a stored null from a missing belongs_to' do
+          expect(slugs('maker.exists' => true)).to match_array %w(arrays embedded explicit-nils scalars)
+          expect(slugs('maker.exists' => false)).to match_array %w(all-missing zero)
+        end
+
+        it 'reads a stored null association as nil' do
+          expect(specimens.by_slug('explicit-nils').maker.name).to be_nil
+        end
+
+        it 'tells a stored null from a missing many_to_many' do
+          expect(slugs('topics.exists' => true)).to match_array %w(arrays embedded explicit-nils scalars zero)
+          expect(slugs('topics.exists' => false)).to match_array %w(all-missing)
+        end
+
+        it 'tells a stored null from a missing select' do
+          expect(slugs('category.exists' => true)).to match_array %w(arrays explicit-nils scalars)
+          expect(slugs('category.exists' => false)).to match_array %w(all-missing embedded zero)
+        end
+
+        it 'tells a stored translation from a missing localized field' do
+          expect(slugs('title.exists' => true)).to match_array %w(arrays embedded scalars)
+          expect(slugs('title.exists' => false)).to match_array %w(all-missing explicit-nils zero)
+        end
+
+        # A locale the source never spelled is missing; one spelled as null exists.
+        it 'answers a localized exists for the locale that asks' do
+          expect(specimens(:fr).all('title.exists' => true).map(&:name))
+            .to match_array ['Embedded', 'Scalars']
+          expect(specimens(:fr).all('title.exists' => false).map(&:name))
+            .to match_array ['All missing', 'Arrays', 'Explicit nils', 'Zero']
+        end
+
+      end
+
       describe 'querying by visibility' do
 
         it 'reads only visible entries by default' do

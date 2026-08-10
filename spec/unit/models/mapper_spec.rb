@@ -31,6 +31,17 @@ describe Locomotive::Steam::Models::Mapper do
 
     it { expect(subject).to eq('title' => 'Hello world', 'body' => 'Lorem ipsum', 'published_at' => DateTime.parse('2007/06/29 00:00:00')) }
 
+    describe 'a localized attribute the entity never had' do
+
+      let(:block)      { ->(_) { localized_attributes(:title, :subtitle) } }
+      let(:attributes) { { title: { 'en' => 'Hello world' } } }
+
+      it 'stays out of the serialized form' do
+        expect(subject.keys).not_to include('subtitle', :subtitle)
+      end
+
+    end
+
     describe 'a value read in every locale but kept in none' do
 
       let(:block)      { ->(_) { localized_attributes(:title, :category); virtual_attributes(:category) } }
@@ -190,6 +201,27 @@ describe Locomotive::Steam::Models::Mapper do
 
         it { expect(subject.attributes[:title][:en]).to eq('Hello world') }
         it { expect(subject.attributes[:title][:fr]).to eq('Hello world') }
+
+      end
+
+      context 'the attribute was never stored' do
+
+        let(:attributes) { {} }
+
+        it 'does not materialize a field' do
+          expect(subject.attributes.key?(:title)).to be false
+        end
+
+      end
+
+      context 'the attribute was stored as an explicit null' do
+
+        let(:attributes) { { title: nil } }
+
+        it 'builds an empty field, because the key itself existed' do
+          expect(subject.attributes[:title]).to be_a(Locomotive::Steam::Models::I18nField)
+          expect(subject.attributes[:title][:en]).to be_nil
+        end
 
       end
 

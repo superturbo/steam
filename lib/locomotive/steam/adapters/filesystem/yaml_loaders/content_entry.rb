@@ -95,6 +95,8 @@ module Locomotive
 
             def modify_for_selects(attributes)
               content_type.select_fields.each do |field|
+                next unless attributes.key?(field.name.to_sym)
+
                 if (option = attributes.delete(field.name.to_sym)).is_a?(Hash)
                   attributes[:"#{field.name}_id"] = option.inject({}) do |memo, (locale, name)|
                     field.select_options.scope.with_locale(locale) do
@@ -110,6 +112,8 @@ module Locomotive
 
             def modify_for_files(attributes)
               content_type.file_fields.each do |field|
+                next unless attributes.key?(field.name.to_sym)
+
                 attributes[:"#{field.name}_size"] ||= {}
                 value = attributes[:"#{field.name}_size"]
 
@@ -123,8 +127,11 @@ module Locomotive
 
             def modify_for_passwords(attributes)
               content_type.password_fields.each do |field|
-                uncrypted_password = attributes.delete(field.name.to_sym)
-                attributes[:"#{field.name}_hash"] = BCrypt::Password.create(uncrypted_password)
+                next unless attributes.key?(field.name.to_sym)
+
+                password = attributes.delete(field.name.to_sym)
+                attributes[:"#{field.name}_hash"] =
+                  password.nil? ? nil : BCrypt::Password.create(password)
               end
             end
 
@@ -148,14 +155,18 @@ module Locomotive
             end
 
             def modify_belongs_to_association(field, attributes)
-              # <name>_id
-              attributes[:"#{field.name}_id"] = attributes.delete(field.name.to_sym)
+              return unless attributes.key?(field.name.to_sym)
 
-              # Preserve synced association order.
-              attributes[:"position_in_#{field.name}"] ||= attributes[:_position]
+              id = attributes.delete(field.name.to_sym)
+              attributes[:"#{field.name}_id"] = id
+
+              # A blank slug links no entry.
+              attributes[:"position_in_#{field.name}"] ||= attributes[:_position] if id.present?
             end
 
             def modify_many_to_many_association(field, attributes)
+              return unless attributes.key?(field.name.to_sym)
+
               attributes[:"#{field.name.to_s.singularize}_ids"] = attributes.delete(field.name.to_sym)
             end
 
