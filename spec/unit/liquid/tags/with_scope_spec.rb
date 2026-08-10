@@ -88,6 +88,54 @@ describe Locomotive::Steam::Liquid::Tags::WithScope do
 
   end
 
+  describe 'a runtime value shaped like a regexp' do
+
+    let(:assigns) { { 'my_regexp' => '/^Hello World/' } }
+    let(:source) { "{% with_scope title: my_regexp %}{% assign conditions = with_scope %}{% endwith_scope %}" }
+
+    it 'stays text' do
+      output
+      expect(conditions['title']).to eq '/^Hello World/'
+    end
+
+    context 'built by capture around a visitor parameter' do
+
+      let(:assigns) { { 'params' => { 'd' => 'shoe' } } }
+      let(:source) do
+        "{% assign searched_words = params.d %}" \
+        "{% capture filter_query %}/{{ searched_words }}/i{% endcapture %}" \
+        "{% with_scope name: filter_query %}{% assign conditions = with_scope %}{% endwith_scope %}"
+      end
+
+      it 'stays text' do
+        output
+        expect(conditions['name']).to eq '/shoe/i'
+      end
+
+    end
+
+    context 'a real Regexp handed over from the host inside a criteria hash' do
+
+      let(:assigns) { { 'my_filters' => { 'title' => /^hello world/ix } } }
+      let(:source)  { '{% with_scope my_filters %}{% assign conditions = with_scope %}{% endwith_scope %}' }
+
+      it 'passes as a typed value' do
+        output
+        expect(conditions['title']).to eq(/^hello world/ix)
+      end
+
+    end
+
+  end
+
+  describe 'a quoted string shaped like a regexp' do
+
+    let(:source) { "{% with_scope title: '/foo/i' %}42{% endwith_scope %}" }
+
+    it { expect { output }.to raise_error(::Liquid::SyntaxError, /must be a literal/) }
+
+  end
+
   describe 'valid syntax' do
 
     before { output }
@@ -108,13 +156,13 @@ describe Locomotive::Steam::Liquid::Tags::WithScope do
 
     describe 'pass directly a hash built with the Action liquid tag for example' do
 
-      let(:assigns) { { 'my_filters' => { active: true, price: 42, title: "/like this/ix", hidden: false } } }
+      let(:assigns) { { 'my_filters' => { active: true, price: 42, title: '/like this/ix', hidden: false } } }
 
       let(:source)  { "{% with_scope my_filters %}{% assign conditions = with_scope %}{% assign content_type = with_scope_content_type %}{% endwith_scope %}" }
 
       it { expect(context['conditions'].keys).to eq(%w(active price title hidden)) }
       it { expect(conditions['active']).to eq true }
-      it { expect(conditions['title']).to eq(/like this/ix) }
+      it { expect(conditions['title']).to eq '/like this/ix' }
 
       context "the variable doesn't exist" do
 
@@ -194,22 +242,6 @@ describe Locomotive::Steam::Liquid::Tags::WithScope do
       let(:assigns) { { 'params' => { 'type' => 'posts' } } }
       let(:source) { "{% with_scope category: params.type %}{% assign conditions = with_scope %}{% endwith_scope %}" }
       it { expect(conditions['category']).to eq 'posts' }
-
-    end
-
-    describe 'decode a regexp stored in a context variable' do
-
-      let(:assigns) { { 'my_regexp' => '/^Hello World/' } }
-      let(:source) { "{% with_scope title: my_regexp %}{% assign conditions = with_scope %}{% endwith_scope %}" }
-      it { expect(conditions['title']).to eq(/^Hello World/) }
-
-    end
-
-    describe 'decode a regexp stored in a context variable, with case-insensitive' do
-
-      let(:assigns) { { 'my_regexp' => '/^hello world/ix' } }
-      let(:source) { "{% with_scope title: my_regexp %}{% assign conditions = with_scope %}{% endwith_scope %}" }
-      it { expect(conditions['title']).to eq(/^hello world/ix) }
 
     end
 

@@ -8,18 +8,6 @@ module Locomotive
           module AttributesEvaluator
             extend ActiveSupport::Concern
 
-            included do
-              # Regexps are allowed as strings
-              RegexpFragment        = /\/([^\/]+)\/([imx]+)?/o.freeze
-              StrictRegexpFragment  = /\A#{RegexpFragment}\z/o.freeze
-
-              REGEX_OPTIONS = {
-                'i' => Regexp::IGNORECASE,
-                'm' => Regexp::MULTILINE,
-                'x' => Regexp::EXTENDED
-              }.freeze
-            end
-
             protected
 
             # The tag is parsed once and rendered many times, so a render reads
@@ -82,8 +70,6 @@ module Locomotive
                 value.map { |v| evaluate_attribute(context, v) }
               when Hash
                 evaluate_hash(context, value, &:to_s)
-              when StrictRegexpFragment
-                create_regexp($1, $2)
               when ::Liquid::VariableLookup
                 evaluated_value = context.evaluate(value)
                 evaluated_value.respond_to?(:_id) ? evaluated_value.send(:_source) : evaluate_attribute(context, evaluated_value)
@@ -93,13 +79,6 @@ module Locomotive
               else
                 value
               end
-            end
-
-            def create_regexp(value, unparsed_options)
-              options = unparsed_options.blank? ? nil : unparsed_options.split('').uniq.inject(0) do |_options, letter|
-                _options |= REGEX_OPTIONS[letter]
-              end
-              Regexp.new(value, options)
             end
           end
         end

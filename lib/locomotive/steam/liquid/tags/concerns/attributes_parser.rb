@@ -45,7 +45,7 @@ module Locomotive
               when ::Prism::HashNode               then visit_hash(node)
               when ::Prism::ArrayNode              then node.elements.map { |e| visit(e) }
               when ::Prism::SymbolNode             then node.unescaped.to_sym
-              when ::Prism::StringNode             then node.unescaped
+              when ::Prism::StringNode             then string_value(node)
               when ::Prism::IntegerNode            then node.value
               when ::Prism::FloatNode              then node.value
               when ::Prism::TrueNode               then true
@@ -111,6 +111,21 @@ module Locomotive
             def variable_chain?(node)
               node.is_a?(::Prism::CallNode) && !node.safe_navigation? &&
                 node.arguments.nil? && node.block.nil?
+            end
+
+            REGEXP_SHAPE = %r{\A/[^/]+/[imx]*\z}.freeze
+
+            private_constant :REGEXP_SHAPE
+
+            # Reject the removed quoted-regexp form instead of treating it as text.
+            def string_value(node)
+              value = node.unescaped
+
+              if value.match?(REGEXP_SHAPE)
+                raise ::Liquid::SyntaxError, 'A with_scope regexp must be a literal, not a quoted string'
+              end
+
+              value
             end
 
             # Only i/m/x flags are supported; encoding (u/e/s/n) and once (o)
