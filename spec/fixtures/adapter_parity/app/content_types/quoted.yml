@@ -23,3 +23,6 @@ fields:
 - published:
     type: boolean
     localized: true
+- maker:
+    type: belongs_to
+    class_name: makers

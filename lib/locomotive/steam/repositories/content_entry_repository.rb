@@ -511,20 +511,25 @@ module Locomotive
           [*value].map { |_value| value_to_id(_value, target_id) }
         end
 
+        # Strings are slugs; IDs must be explicit. Inferring from string shape
+        # gives the same operand different meanings across adapters.
         def value_to_id(value, target_id)
-          return values_to_ids(value, target_id) if value.kind_of?(Array)
-
-          _value = if value.is_a?(Hash)
-            value['_id'] || value[:_id]
-          else
-            value.respond_to?(:_id) ? value._id : value
+          case value
+          when nil            then nil
+          when Array          then values_to_ids(value, target_id)
+          when String, Symbol then slug_to_id(value.to_s, target_id)
+          when Hash           then explicit_id(value['_id'] || value[:_id])
+          else value.respond_to?(:_id) ? explicit_id(value._id) : explicit_id(value)
           end
+        end
 
-          if (id = @target_repository.adapter.make_id(_value)) == false
-            slug_to_id(value, target_id)
-          else
-            id
-          end
+        # Only a direct nil operand has missing-association semantics.
+        def explicit_id(id)
+          return Locomotive::Steam::Adapters::Query::Values.unmatchable if id.nil?
+
+          key = @target_repository.adapter.make_id(id)
+
+          key == false ? Locomotive::Steam::Adapters::Query::Values.unmatchable : key
         end
 
         # An unresolved slug must not gain nil semantics; only a real nil keeps it.

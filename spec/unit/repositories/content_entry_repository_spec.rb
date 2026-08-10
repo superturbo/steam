@@ -1201,10 +1201,35 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       context 'the documented all form, once the parser has normalized it' do
 
+        let(:target_fields) do
+          instance_double('Fields', selects: [], belongs_to: [], many_to_many: [],
+                                    dates_and_date_times: [], numbers: [], booleans: [])
+        end
+        let(:target_type) do
+          build_content_type('Tags', _id: 9, order_by: '_position', fields: target_fields, label_field_name: :name)
+        end
+        let(:entries) do
+          [{ content_type_id: 9, _position: 0, _slug: { en: 'A' } },
+           { content_type_id: 9, _position: 1, _slug: { en: 'B' } }]
+        end
         let(:conditions) { { 'tags.all' => %w(A B) } }
 
-        it 'resolves every element to an id under the persisted name' do
+        before { allow(content_type_repository).to receive(:find).with('42').and_return(target_type) }
+
+        # Filesystem entries use their slugs as IDs.
+        it 'resolves every element as a slug under the persisted name' do
           expect(subject.first).to include('tag_ids.all' => %w(A B))
+        end
+
+        context 'with an element no slug holds' do
+
+          let(:conditions) { { 'tags.all' => %w(A C) } }
+
+          it 'marks the unresolved element as unmatchable' do
+            expect(subject.first['tag_ids.all'])
+              .to eq ['A', Locomotive::Steam::Adapters::Query::Values.unmatchable]
+          end
+
         end
 
       end

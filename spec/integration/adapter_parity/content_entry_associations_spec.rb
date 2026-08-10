@@ -88,6 +88,59 @@ describe 'Adapter parity' do
 
       end
 
+      describe 'querying association operands by form' do
+
+        def quoted(conditions)
+          repository = Locomotive::Steam::ContentEntryRepository.new(
+            adapter, site, AdapterParityFixture::LOCALE, type_repository)
+
+          repository.with(type_repository.by_slug('quoted')).all(conditions).map do |entry|
+            entry._slug[AdapterParityFixture::LOCALE]
+          end
+        end
+
+        it 'reads a 24-hex string as a slug, never as an id' do
+          expect(quoted(maker: '0123456789abcdef01234567')).to eq %w(spelled)
+        end
+
+        it 'finds the linked entries through the target entry' do
+          expect(slugs(maker: makers.by_slug('maker-one')))
+            .to match_array %w(arrays scalars)
+        end
+
+        it 'finds them through the id the store issued' do
+          expect(slugs(maker: makers.by_slug('maker-one')._id))
+            .to match_array %w(arrays scalars)
+        end
+
+        it 'finds them through a hash naming a stringified id' do
+          expect(slugs(maker: { _id: makers.by_slug('maker-one')._id.to_s }))
+            .to match_array %w(arrays scalars)
+        end
+
+        it 'matches nothing through an id no store issued' do
+          expect(slugs(maker: { _id: 'ffffffffffffffffffffffff' })).to eq []
+        end
+
+        it 'matches nothing through a hash naming no id' do
+          expect(slugs(maker: { _id: nil })).to eq []
+        end
+
+        it 'reads a symbol as the slug it spells' do
+          expect(slugs(maker: :'maker-one')).to match_array %w(arrays scalars)
+        end
+
+        it 'reads a set as a list of slugs' do
+          expect(slugs('maker.in' => Set['maker-one', 'maker-nobody']))
+            .to match_array %w(arrays scalars)
+        end
+
+        it 'matches nothing through an entry the store never persisted' do
+          expect(slugs(maker: makers.build(name: 'Ghost'))).to eq []
+        end
+
+      end
+
     end
 
   end
