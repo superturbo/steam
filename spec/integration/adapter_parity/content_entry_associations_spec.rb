@@ -16,27 +16,29 @@ describe 'Adapter parity' do
       # Source states: missing, null, [], [nil], [id, nil], and linked ids.
       describe 'querying a many_to_many by nil' do
 
-        # A lone nil is currently coerced to an empty list.
-        it 'matches only the emptied list' do
-          expect(slugs(topics: nil)).to eq %w(zero)
+        # A lone nil reaches the operator layer untouched; the emptied list is
+        # a value of its own, not a shade of nil.
+        it 'matches a missing, null, or null-holding list through nil' do
+          expect(slugs(topics: nil))
+            .to match_array %w(all-missing arrays embedded explicit-nils)
         end
 
-        it 'negates the emptied list' do
-          expect(slugs('topics.ne' => nil))
-            .to match_array %w(all-missing arrays embedded explicit-nils scalars)
+        it 'negates nil to the lists free of nulls' do
+          expect(slugs('topics.ne' => nil)).to match_array %w(scalars zero)
         end
 
-        it 'matches nothing through in' do
-          expect(slugs('topics.in' => nil)).to eq []
+        it 'treats in nil as in [null]' do
+          expect(slugs('topics.in' => nil))
+            .to match_array %w(all-missing arrays embedded explicit-nils)
         end
 
-        it 'matches everything through nin' do
-          expect(slugs('topics.nin' => nil))
-            .to match_array %w(all-missing arrays embedded explicit-nils scalars zero)
+        it 'treats nin nil as its complement' do
+          expect(slugs('topics.nin' => nil)).to match_array %w(scalars zero)
         end
 
-        it 'matches nothing through all' do
-          expect(slugs('topics.all' => nil)).to eq []
+        it 'treats all nil as all [null]' do
+          expect(slugs('topics.all' => nil))
+            .to match_array %w(all-missing arrays embedded explicit-nils)
         end
 
         # Explicit lists keep exact-list equality.

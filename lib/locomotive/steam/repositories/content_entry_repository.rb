@@ -504,7 +504,10 @@ module Locomotive
           end
         end
 
+        # A lone nil keeps nil semantics; only a real list maps element-wise.
         def values_to_ids(value, target_id)
+          return nil if value.nil?
+
           [*value].map { |_value| value_to_id(_value, target_id) }
         end
 
