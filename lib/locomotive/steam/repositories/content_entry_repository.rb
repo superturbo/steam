@@ -1,4 +1,5 @@
 require_relative '../adapters/numeric_bounds'
+require_relative '../adapters/time_precision'
 require_relative '../content_field_values'
 
 module Locomotive
@@ -53,8 +54,12 @@ module Locomotive
         ordered_entries(conditions, &block).all
       end
 
+      # New entries get defaults here; loads only reflect stored values.
       def build(attributes, &block)
-        super(with_field_defaults(attributes), &block)
+        super(with_field_defaults(attributes), &block).tap do |entity|
+          entity[:_visible]  = true unless entity.attributes.key?(:_visible)
+          entity[:_position] = 0    unless entity.attributes.key?(:_position)
+        end
       end
 
       def count(conditions = {})
@@ -106,11 +111,25 @@ module Locomotive
       def create(entity)
         raise InvalidEntry.new(entity) unless entity.valid?
 
+        # One instant fills the moments the caller left out; a spelled-out
+        # moment normalizes the same way, and an explicit null stays a null.
+        now = Adapters::TimePrecision.utc_ms
+        %i(created_at updated_at).each do |name|
+          if entity.attributes.key?(name)
+            entity[name] = Adapters::TimePrecision.utc_ms(entity[name]) unless entity[name].nil?
+          else
+            entity[name] = now
+          end
+        end
+
         super
       end
 
       def update(entity)
         raise InvalidEntry.new(entity) unless entity.valid?
+
+        # Steam owns updated_at; whatever the caller put there loses.
+        entity[:updated_at] = Adapters::TimePrecision.utc_ms
 
         super
       end

@@ -56,7 +56,7 @@ describe Locomotive::Steam::Adapters::MongoDB::Command do
             { views: { '$exists' => false } },
             { views: { '$type' => %w(int long), '$gte' => -2**63, '$lte' => 2**63 - 4 } }
           ] },
-        { '$inc' => { views: 3 } },
+        { '$inc' => { views: 3 }, '$set' => { 'updated_at' => kind_of(Time) } },
         return_document: :after, projection: { views: 1 }
       )
     end

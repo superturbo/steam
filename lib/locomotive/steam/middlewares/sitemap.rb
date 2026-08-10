@@ -63,7 +63,7 @@ module Locomotive::Steam
 
         repositories.content_entry.with(content_type).all({ _visible: true }).map do |content_entry|
           _content_entry  = Locomotive::Steam::Decorators::I18nDecorator.new(content_entry, locale)
-          entry           = { date: content_entry.updated_at.to_date, links: [] }
+          entry           = { date: content_entry.updated_at&.to_date, links: [] }
 
           site.locales.each_with_index do |locale, index|
             page.__locale__           = locale
@@ -89,7 +89,7 @@ module Locomotive::Steam
         <<-XML
   <url>
     <loc>#{base_url}#{entry[:loc]}</loc>
-    <lastmod>#{entry[:date].to_fs('%Y-%m-%d')}</lastmod>
+    #{"<lastmod>#{entry[:date].to_fs('%Y-%m-%d')}</lastmod>" if entry[:date]}
     #{entry_links_to_xml(entry[:links])}
   </url>
         XML

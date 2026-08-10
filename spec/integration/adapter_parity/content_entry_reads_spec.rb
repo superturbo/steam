@@ -120,6 +120,15 @@ describe 'Adapter parity' do
 
       end
 
+      describe 'reading the system timestamps' do
+
+        it 'reads missing timestamps as nil' do
+          expect(specimens.by_slug('scalars').created_at).to be_nil
+          expect(specimens.by_slug('scalars').updated_at).to be_nil
+        end
+
+      end
+
       describe 'querying by visibility' do
 
         it 'reads only visible entries by default' do

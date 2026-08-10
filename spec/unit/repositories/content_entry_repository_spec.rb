@@ -14,8 +14,13 @@ describe Locomotive::Steam::ContentEntryRepository do
   let(:content_type_repository) { instance_double('ContentTypeRepository') }
   let(:repository)  { described_class.new(adapter, site, locale, content_type_repository) }
 
+  # Mirror the YAML loader's implicit visibility.
+  def loaded(list)
+    list.map { |attributes| { _visible: true }.merge(attributes) }
+  end
+
   before do
-    allow(adapter).to receive(:collection).and_return(entries)
+    allow(adapter).to receive(:collection).and_return(loaded(entries))
     adapter.cache = NoCacheStore.new
   end
 
@@ -41,6 +46,30 @@ describe Locomotive::Steam::ContentEntryRepository do
       expect(repository.exists?).to be true
       expect(dataset).to have_received(:empty?)
       expect(dataset).not_to have_received(:all)
+    end
+
+  end
+
+  describe '#build system fields' do
+
+    before { repository.with(type) }
+
+    it 'gives a new entry its system defaults, but no timestamps' do
+      built = repository.build({})
+
+      expect(built[:_visible]).to be true
+      expect(built[:_position]).to eq 0
+      expect(built.attributes.key?(:created_at)).to be false
+      expect(built.attributes.key?(:updated_at)).to be false
+    end
+
+    it 'keeps what the caller spelled out' do
+      moment = Time.utc(2020, 1, 1)
+      built  = repository.build(_visible: false, _position: 5, created_at: moment)
+
+      expect(built[:_visible]).to be false
+      expect(built[:_position]).to eq 5
+      expect(built[:created_at]).to eq moment
     end
 
   end
@@ -455,7 +484,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     it 'calls the new repository to fetch the target entity' do
       author = subject.author
-      allow(adapter).to receive(:collection).and_return(other_entries)
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
       expect(author.name).to eq 'John Doe'
     end
 
@@ -496,27 +525,27 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     it 'calls the new repository to fetch the target entities' do
       articles = subject.articles
-      allow(adapter).to receive(:collection).and_return(other_entries)
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
       expect(articles.all.map(&:title)).to eq ['Lorem ipsum', 'Hello world']
     end
 
     it 'applies a runtime order_by to the returned entries (over the field default)' do
       articles = repository.value_for(subject, :articles, order_by: 'title.asc')
-      allow(adapter).to receive(:collection).and_return(other_entries)
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
 
       expect(articles.all.map(&:title)).to eq ['Hello world', 'Lorem ipsum']
     end
 
     it 'applies a runtime order_by given as a hash (symbol direction)' do
       articles = repository.value_for(subject, :articles, order_by: { title: :asc })
-      allow(adapter).to receive(:collection).and_return(other_entries)
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
 
       expect(articles.all.map(&:title)).to eq ['Hello world', 'Lorem ipsum']
     end
 
     it 'does not leak a scoped copy back into the original association' do
       scoped = repository.value_for(subject, :articles, order_by: 'title.asc')
-      allow(adapter).to receive(:collection).and_return(other_entries)
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
       scoped.all
 
       expect(subject.articles.all.map(&:title)).to eq ['Lorem ipsum', 'Hello world']
@@ -524,7 +553,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     it 'does not change the parent scope content type when the association loads' do
       articles = subject.articles
-      allow(adapter).to receive(:collection).and_return(other_entries)
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
       articles.all
 
       expect(repository.scope.context[:content_type]).to eq type
@@ -544,7 +573,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       it 'matches children referencing either component and skips foreign and orphan ones' do
         articles = subject.articles
-        allow(adapter).to receive(:collection).and_return(other_entries)
+        allow(adapter).to receive(:collection).and_return(loaded(other_entries))
         expect(articles.all.map(&:title)).to eq ['Lorem ipsum', 'Hello world']
       end
 
@@ -579,20 +608,20 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     it 'calls the new repository to fetch the target entities' do
       articles = subject.articles
-      allow(adapter).to receive(:collection).and_return(other_entries)
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
       expect(articles.all.map(&:title)).to eq ['Hello world', 'Lorem ipsum']
     end
 
     it 'applies a runtime order_by to the returned entries' do
       articles = repository.value_for(subject, :articles, order_by: 'title.desc')
-      allow(adapter).to receive(:collection).and_return(other_entries)
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
 
       expect(articles.all.map(&:title)).to eq ['Lorem ipsum', 'Hello world']
     end
 
     it 'does not leak a scoped copy back into the original association' do
       scoped = repository.value_for(subject, :articles, order_by: 'title.desc')
-      allow(adapter).to receive(:collection).and_return(other_entries)
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
       scoped.all
 
       expect(subject.articles.all.map(&:title)).to eq ['Hello world', 'Lorem ipsum']

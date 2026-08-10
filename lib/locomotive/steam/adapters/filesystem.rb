@@ -1,5 +1,6 @@
 require_relative 'memory'
 require_relative 'numeric_bounds'
+require_relative 'time_precision'
 
 require_relative 'filesystem/json_file'
 require_relative 'filesystem/simple_cache_store'
@@ -61,9 +62,13 @@ module Locomotive::Steam
       end
 
       value = current + amount
+      now   = Adapters::TimePrecision.utc_ms
 
       record[attribute] = value
       entity[attribute] = value
+
+      record[:updated_at] = now
+      entity[:updated_at] = now
 
       entity
     end

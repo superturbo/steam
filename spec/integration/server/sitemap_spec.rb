@@ -35,6 +35,13 @@ describe Locomotive::Steam::Server do
       ).strip)
     end
 
+    it 'omits lastmod when an entry has no stored timestamp' do
+      block = subject[%r{<url>\s*<loc>http://example\.org/songs/song-number-1</loc>.*?</url>}m]
+
+      expect(block).not_to be_nil
+      expect(block).not_to include('<lastmod>')
+    end
+
     context 'existing sitemap page' do
 
       let(:template)  { %{<?xml version="1.0" encoding="utf-8"?>OK</xml>} }

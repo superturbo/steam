@@ -41,6 +41,56 @@ describe 'Adapter parity' do
           expect(specimens.exists?(_id: entry._id, 'maker.exists' => false)).to be(true)
         end
 
+        describe 'the timestamps a write sets' do
+
+          it 'stamps a creation once, in UTC milliseconds both stores keep' do
+            moment   = Time.utc(2021, 3, 4, 5, 6, 7.123456789r)
+            entry    = Timecop.freeze(moment) { create_specimen }
+            reloaded = specimens.find(entry._id)
+
+            expect(reloaded.created_at).to eq Time.utc(2021, 3, 4, 5, 6, 7.123r)
+            expect(reloaded.created_at).to eq reloaded.updated_at
+            expect(reloaded.created_at).to be_utc
+            expect(reloaded.created_at).to eq entry.created_at
+          end
+
+          it 'normalizes the moments an import spells out to UTC milliseconds' do
+            created = Time.new(2020, 1, 1, 14, 30, 0.123456789r, '+02:00')
+            updated = Time.new(2020, 2, 2, 10, 0, 0.5r, '+02:00')
+
+            entry    = create_specimen(created_at: created, updated_at: updated)
+            reloaded = specimens.find(entry._id)
+
+            expect(reloaded.created_at).to eq Time.utc(2020, 1, 1, 12, 30, 0.123r)
+            expect(reloaded.created_at).to be_utc
+            expect(reloaded.updated_at).to eq Time.utc(2020, 2, 2, 8, 0, 0.5r)
+          end
+
+          it 'keeps an explicit null a null' do
+            entry    = create_specimen(created_at: nil, updated_at: nil)
+            reloaded = specimens.find(entry._id)
+
+            expect(reloaded.created_at).to be_nil
+            expect(reloaded.updated_at).to be_nil
+          end
+
+          it 'owns updated_at on update, and leaves created_at alone' do
+            entry   = create_specimen
+            created = specimens.find(entry._id).created_at
+            moment  = Time.utc(2022, 5, 6, 7, 8, 9.987654321r)
+
+            entry[:updated_at] = Time.utc(2000, 1, 1)
+            entry[:score]      = 5
+            Timecop.freeze(moment) { specimens.update(entry) }
+
+            reloaded = specimens.find(entry._id)
+
+            expect(reloaded.updated_at).to eq Time.utc(2022, 5, 6, 7, 8, 9.987r)
+            expect(reloaded.created_at).to eq created
+          end
+
+        end
+
         it 'links an association an entry never had' do
           created = create_specimen
           entry   = another_specimens_repository.find(created._id)

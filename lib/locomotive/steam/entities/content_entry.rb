@@ -14,15 +14,6 @@ module Locomotive::Steam
 
     private_constant :NIL_IS_THE_ONLY_BLANK, :REQUIRED_FROM_ATTRIBUTES, :READ_THROUGH_GRAMMAR
 
-    def initialize(attributes = {})
-      super({
-        _visible:     true,
-        _position:    0,
-        created_at:   Time.zone.now,
-        updated_at:   Time.zone.now
-      }.merge(attributes))
-    end
-
     # Positional locale preserves calls such as change(title: 'x').
     def change(new_attributes, locale = nil)
       super((new_attributes || {}).each_with_object({}) do |(name, value), changed|
@@ -37,6 +28,10 @@ module Locomotive::Steam
 
     def _slug; self[:_slug]; end
     alias :_permalink :_slug
+
+    # Reading a moment the store never held answers nil without materializing it.
+    def created_at; self[:created_at]; end
+    def updated_at; self[:updated_at]; end
 
     def method_missing(name, *args, &block)
       if is_dynamic_attribute?(name)

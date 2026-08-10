@@ -39,6 +39,25 @@ describe 'Adapter parity' do
           expect(specimens.find(entry._id)[:price]).to be_nil
         end
 
+        it 'updates updated_at along with the number' do
+          entry  = create_specimen(updated_at: Time.utc(2000, 1, 1))
+          moment = Time.utc(2023, 7, 8, 9, 10, 11.222333444r)
+
+          Timecop.freeze(moment) { specimens.inc(entry, :score) }
+
+          expect(specimens.find(entry._id).updated_at).to eq Time.utc(2023, 7, 8, 9, 10, 11.222r)
+          expect(entry.updated_at).to eq Time.utc(2023, 7, 8, 9, 10, 11.222r)
+        end
+
+        it 'leaves updated_at alone when the increment is refused' do
+          entry = create_specimen(price: nil, updated_at: Time.utc(2000, 1, 1))
+
+          expect { specimens.inc(entry, :price) }
+            .to raise_error(Locomotive::Steam::InvalidIncrement)
+          expect(specimens.find(entry._id).updated_at).to eq Time.utc(2000, 1, 1)
+          expect(entry.updated_at).to eq Time.utc(2000, 1, 1)
+        end
+
         it 'refuses to increment a field that holds no number' do
           expect { specimens.inc(create_specimen, :name, 1) }
             .to raise_error(Locomotive::Steam::InvalidIncrement, 'specimens.name is not a number')

@@ -1,4 +1,5 @@
 require_relative '../numeric_bounds'
+require_relative '../time_precision'
 
 module Locomotive::Steam
   module Adapters
@@ -31,12 +32,19 @@ module Locomotive::Steam
 
         # Guard the stored type and remaining range in the atomic update filter.
         def inc(entity, attribute, amount = 1)
+          now = Adapters::TimePrecision.utc_ms
+
           document = @collection.find_one_and_update(
             increment_filter(entity, attribute, amount),
-            { '$inc' => { attribute => amount } },
+            { '$inc' => { attribute => amount }, '$set' => { 'updated_at' => now } },
             return_document: :after, projection: { attribute => 1 })
 
-          return entity.tap { entity[attribute] = document[attribute] } if document
+          if document
+            return entity.tap do
+              entity[attribute]   = document[attribute]
+              entity[:updated_at] = now
+            end
+          end
 
           refuse_increment!(entity, attribute, amount)
         end

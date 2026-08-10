@@ -218,6 +218,12 @@ describe 'Liquid adapter parity' do
           .to eq '[][Arrays en][Embedded en][][Scalars en][]'
       end
 
+      it 'renders a timestamp the store never held as empty text' do
+        source = "{% assign entry = contents.specimens.first %}[{{ entry.created_at }}]"
+
+        expect(render_liquid(source)).to eq '[]'
+      end
+
       it 'reaches hidden entries when the template asks for them' do
         source = '{% with_scope _visible: false %}' \
                  '{% for entry in contents.specimens %}[{{ entry.name }}]{% endfor %}' \

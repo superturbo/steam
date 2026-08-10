@@ -20,6 +20,9 @@ module Locomotive
                 each(content_type_slug) do |label, attributes, position|
                   _attributes = { _position: position, _label: label.to_s }.merge(attributes || {})
 
+                  # A missing _visible key means visible in Wagon files.
+                  _attributes[:_visible] = true unless _attributes.key?(:_visible)
+
                   modify_for_selects(_attributes)
                   modify_for_associations(_attributes)
                   modify_for_files(_attributes)
