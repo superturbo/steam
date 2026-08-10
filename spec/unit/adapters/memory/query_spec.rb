@@ -69,6 +69,29 @@ describe Locomotive::Steam::Adapters::Memory::Query do
         ).to eq(['zone', 'foo', 'bar'])
       end
     end
+
+    context 'equal keys' do
+
+      let(:records) do
+        (1..32).to_h do |index|
+          group = index.odd? ? 'a' : 'b'
+          [index, OpenStruct.new(id: index, group: group, attributes: { id: index, group: group })]
+        end
+      end
+
+      it 'keeps the dataset order inside each group' do
+        expect(
+          query.new(dataset, locale) { order_by('group asc') }.all.map(&:id)
+        ).to eq((1..32).select(&:odd?) + (1..32).select(&:even?))
+      end
+
+      it 'keeps it for the reversed direction too' do
+        expect(
+          query.new(dataset, locale) { order_by('group desc') }.all.map(&:id)
+        ).to eq((1..32).select(&:even?) + (1..32).select(&:odd?))
+      end
+
+    end
   end
 
   describe '#where' do

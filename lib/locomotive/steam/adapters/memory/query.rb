@@ -82,7 +82,8 @@ module Locomotive::Steam
         def sorted(entries)
           return entries if @sorting.blank?
 
-          entries.sort_by { |entry| @sorting.apply_to(entry, @locale) }
+          # Preserve dataset order when the explicit sort keys are equal.
+          entries.sort_by.with_index { |entry, index| [@sorting.apply_to(entry, @locale), index] }
         end
 
         def limited(entries)
