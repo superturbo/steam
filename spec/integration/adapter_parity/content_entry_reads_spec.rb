@@ -13,7 +13,7 @@ describe 'Adapter parity' do
 
     describe 'the content entry repository' do
 
-      it 'counts what it holds' do
+      it 'counts visible entries by default' do
         expect(specimens.count).to eq 6
       end
 
@@ -81,6 +81,37 @@ describe 'Adapter parity' do
       it 'filters and orders by a date' do
         expect(slugs('held_on.lte' => Date.new(2020, 1, 1), order_by: 'held_on desc'))
           .to eq %w(arrays scalars)
+      end
+
+      describe 'querying by visibility' do
+
+        it 'reads only visible entries by default' do
+          expect(specimens.all.map(&:name)).not_to include 'Hidden'
+        end
+
+        it 'reads the same entries for an explicit true as by default' do
+          expect(specimens.all(_visible: true).map(&:name))
+            .to eq specimens.all.map(&:name)
+        end
+
+        it 'reads only hidden entries for false' do
+          expect(specimens.all(_visible: false).map(&:name)).to eq ['Hidden']
+        end
+
+        it 'reads every entry, hidden or not, for nil' do
+          names = specimens.all(_visible: nil).map(&:name)
+
+          expect(names).to include 'Hidden'
+          expect(names.size).to eq 7
+        end
+
+        ['true', 'false', 'yes', 0, 1].each do |bad|
+          it "rejects #{bad.inspect}" do
+            expect { specimens.all(_visible: bad) }
+              .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+          end
+        end
+
       end
 
     end

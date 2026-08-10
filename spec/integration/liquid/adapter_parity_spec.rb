@@ -18,17 +18,25 @@ describe 'Liquid adapter parity' do
       expect(entries_built { names('offset: 4') }).to eq 2
     end
 
+    it 'builds only the visible rows when the loop is unlimited' do
+      expect(entries_built { names('') }).to eq 6
+    end
+
   end
 
-  # Filesystem builds its full in-memory dataset before applying a window.
+  # Filesystem materializes its full dataset before filtering or slicing.
   shared_examples_for 'a store that builds every entry when it loads' do
 
     it 'builds every row for a window' do
-      expect(entries_built { names('limit: 2') }).to eq 6
+      expect(entries_built { names('limit: 2') }).to eq 7
     end
 
     it 'builds every row for an offset' do
-      expect(entries_built { names('offset: 4') }).to eq 6
+      expect(entries_built { names('offset: 4') }).to eq 7
+    end
+
+    it 'builds every row when the loop is unlimited' do
+      expect(entries_built { names('') }).to eq 7
     end
 
   end
@@ -187,10 +195,6 @@ describe 'Liquid adapter parity' do
 
         it_behaves_like store_behaviour
 
-        it 'builds every row when the loop is unlimited' do
-          expect(entries_built { names('') }).to eq 6
-        end
-
       end
 
     end
@@ -205,6 +209,14 @@ describe 'Liquid adapter parity' do
                  '{% endwith_scope %}]{% endfor %}'
 
         expect(render_liquid(source)).to eq '[alpha:1:Scalars ][beta:1:Arrays ][gamma:0:]'
+      end
+
+      it 'reaches hidden entries when the template asks for them' do
+        source = '{% with_scope _visible: false %}' \
+                 '{% for entry in contents.specimens %}[{{ entry.name }}]{% endfor %}' \
+                 '{% endwith_scope %}'
+
+        expect(render_liquid(source)).to eq '[Hidden]'
       end
 
       # all requires every operand; stored order and extra values do not matter.

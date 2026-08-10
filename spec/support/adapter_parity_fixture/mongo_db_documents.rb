@@ -205,7 +205,7 @@ module AdapterParityFixture
       yield(value)
     end
 
-    ENTRY_METADATA = %w(seo_title meta_description meta_keywords).freeze
+    ENTRY_METADATA = %w(_visible seo_title meta_description meta_keywords).freeze
 
     def write_attribute(document, slug, name, value)
       return document[name] = value if ENTRY_METADATA.include?(name)

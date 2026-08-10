@@ -277,13 +277,16 @@ module Locomotive
         _conditions = Conditions.new(conditions.first, self.content_type.fields, simple_clone).prepare
 
         super(_conditions).tap do |final_conditions|
-          # skip the default visible condition (_visible: true) by just passing nil
-          skip_visible = final_conditions.stringify_keys.fetch('_visible', true).nil?
+          visibility =
+            final_conditions.key?(:_visible) ? final_conditions.delete(:_visible) : true
 
-          # clean it
-          final_conditions.delete(:_visible) || final_conditions.delete('_visible')
-
-          final_conditions[:_visible] = true unless skip_visible
+          case visibility
+          when true, false then final_conditions[:_visible] = visibility
+          when nil # disable the default filter
+          else
+            raise Locomotive::Steam::Adapters::Query::InvalidValue,
+                  '_visible takes a boolean or nil'
+          end
         end
       end
 

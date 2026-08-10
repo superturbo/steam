@@ -93,3 +93,7 @@
     score: 0
     flag: false
     topics: []
+
+- Hidden:
+    _slug: hidden
+    _visible: false

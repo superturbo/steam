@@ -634,6 +634,32 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1 }, nil]) }
 
+    context 'the _visible condition' do
+
+      it 'keeps an explicit true' do
+        expect(prepared_for('_visible' => true)).to include('_visible' => true)
+      end
+
+      it 'keeps an explicit false' do
+        expect(prepared_for('_visible' => false)).to include('_visible' => false)
+        expect(prepared_for(_visible: false)).to include('_visible' => false)
+      end
+
+      it 'drops the default filter for nil' do
+        expect(prepared_for('_visible' => nil).keys).not_to include('_visible')
+      end
+
+      ['true', 'false', 'yes', 0, 1].each do |bad|
+        it "rejects #{bad.inspect} without echoing it" do
+          expect { prepared_for('_visible' => bad) }
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue) do |error|
+              expect(error.message).not_to include(bad.to_s)
+            end
+        end
+      end
+
+    end
+
     context 'select fields' do
 
       let(:value)       { 'CMS' }
