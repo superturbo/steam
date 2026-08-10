@@ -527,13 +527,13 @@ module Locomotive
           end
         end
 
+        # An unresolved slug must not gain nil semantics; only a real nil keeps it.
         def slug_to_id(slug, target_id)
-          return nil if slug.blank?
+          return nil if slug.nil?
 
-          if _repository = @target_repository.with(target_id)
-            _entry = _repository.first { where(_slug: slug).only(:_id) }
-            _entry.try(:_id)
-          end
+          _entry = @target_repository.with(target_id).first { where(_slug: slug).only(:_id) }
+
+          _entry.try(:_id) || Locomotive::Steam::Adapters::Query::Values.unmatchable
         end
 
         def value_to_date(value, type)

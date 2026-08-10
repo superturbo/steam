@@ -56,6 +56,38 @@ describe 'Adapter parity' do
 
       end
 
+      # An unresolved slug is not a missing association.
+      describe 'querying an association by an unresolved slug' do
+
+        it 'matches nothing through equality' do
+          expect(slugs(maker: 'maker-nobody')).to eq []
+        end
+
+        it 'matches nothing through a blank slug' do
+          expect(slugs(maker: '')).to eq []
+        end
+
+        it 'negates an unresolved slug to everything' do
+          expect(slugs('maker.ne' => 'maker-nobody'))
+            .to match_array %w(all-missing arrays embedded explicit-nils scalars zero)
+        end
+
+        it 'drops the unresolved element from in' do
+          expect(slugs('maker.in' => %w(maker-one maker-nobody)))
+            .to match_array %w(arrays scalars)
+        end
+
+        it 'drops the unresolved element from nin' do
+          expect(slugs('maker.nin' => %w(maker-one maker-nobody)))
+            .to match_array %w(all-missing embedded explicit-nils zero)
+        end
+
+        it 'matches nothing through all with an unresolved element' do
+          expect(slugs('topics.all' => %w(topic-a topic-nobody))).to eq []
+        end
+
+      end
+
     end
 
   end
