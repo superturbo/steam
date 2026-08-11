@@ -17,6 +17,7 @@ module Locomotive::Steam
       def initialize_copy(field)
         super
         self.translations = Copy.of(field.translations)
+        @scalar_fallback = field.scalar_fallback?
       end
 
       def [](locale)
@@ -24,15 +25,17 @@ module Locomotive::Steam
       end
 
       def []=(locale, value)
+        @scalar_fallback = false
         @translations[locale] = value
       end
 
+      # Scalar and nil values are all-locale fallbacks. Remember their stored
+      # form because nil and {} both produce empty translations.
       def translations=(translations)
-        @translations = (if translations.respond_to?(:fetch)
-          translations
-        else
-          Hash.new(translations)
-        end).with_indifferent_access
+        @scalar_fallback = !translations.respond_to?(:fetch)
+
+        translations = Hash.new(translations) if @scalar_fallback
+        @translations = translations.with_indifferent_access
       end
 
       def each(&block)
@@ -58,7 +61,7 @@ module Locomotive::Steam
       end
 
       def duplicate(new_name)
-        self.class.new(new_name, self.translations)
+        self.class.new(new_name, @scalar_fallback ? default : translations)
       end
 
       alias :__translations__ :translations
@@ -66,11 +69,25 @@ module Locomotive::Steam
       alias :to_hash :translations
 
       def serialize(attributes, custom_name = nil)
-        attributes[custom_name || @name] = @translations
+        attributes[custom_name || @name] = serialized_value
       end
 
       def to_json
         to_hash.to_json
+      end
+
+      protected
+
+      def scalar_fallback?
+        @scalar_fallback
+      end
+
+      private
+
+      def serialized_value
+        return default if @scalar_fallback && @translations.empty?
+
+        @translations
       end
 
     end

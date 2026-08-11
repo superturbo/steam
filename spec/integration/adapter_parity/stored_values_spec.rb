@@ -228,6 +228,50 @@ describe 'Adapter parity' do
 
     end
 
+    # Legacy localized scalars are all-locale fallbacks and must survive
+    # unrelated updates.
+    describe 'a localized field the store holds as a scalar' do
+
+      let(:adapter) { AdapterParityFixture.mongodb_adapter }
+      let(:site)    { Locomotive::Steam::SiteRepository.new(adapter).by_handle_or_domain('adapter-parity', nil) }
+      let(:types)   { Locomotive::Steam::ContentTypeRepository.new(adapter, site, AdapterParityFixture::LOCALE) }
+      let(:quoted)  do
+        Locomotive::Steam::ContentEntryRepository.new(adapter, site, AdapterParityFixture::LOCALE, types)
+          .with(types.by_slug('quoted'))
+      end
+
+      def spelled_document
+        AdapterParityFixture.mongodb_client[
+          AdapterParityFixture::MongoDBDocuments::CONTENT_ENTRIES_COLLECTION]
+          .find('_id' => AdapterParityFixture::WagonSite.entry_id('quoted', 'spelled')).first
+      end
+
+      around do |example|
+        entries  = AdapterParityFixture.mongodb_client[
+          AdapterParityFixture::MongoDBDocuments::CONTENT_ENTRIES_COLLECTION]
+        selector = { '_id' => AdapterParityFixture::WagonSite.entry_id('quoted', 'spelled') }
+        original = entries.find(selector).first
+
+        entries.update_one(selector, '$set' => { 'title' => 'Plain' })
+        example.run
+      ensure
+        entries.replace_one(selector, original) if original
+      end
+
+      it 'reads it in every locale and keeps it through an unrelated update' do
+        entry = quoted.by_slug('spelled')
+
+        expect(entry.title[:en]).to eq 'Plain'
+        expect(entry.title[:fr]).to eq 'Plain'
+
+        entry[:score] = 7
+        quoted.update(entry)
+
+        expect(spelled_document['title']).to eq 'Plain'
+      end
+
+    end
+
     # Filesystem rejects invalid types while loading, so this case is MongoDB-only.
     describe 'a value the store holds as text' do
 

@@ -85,13 +85,13 @@ module Locomotive::Steam
           # scope
           @repository.scope.apply(attributes)
 
-          # localized fields
+          # Serialize stored localized values directly; accessors may cast
+          # them for presentation.
           @localized_attributes.each do |name|
             next unless entity.attributes.key?(name)
 
-            # hack: force the name for select type fields (content entries only)
-            value = entity.send(name)
-            value.serialize(attributes, name) if value.respond_to?(:serialize)
+            field = entity.attributes[name]
+            field.serialize(attributes, name) if field.respond_to?(:serialize)
           end
 
           @virtual_attributes.each { |name| attributes.delete(name.to_s) }

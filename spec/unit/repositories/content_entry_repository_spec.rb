@@ -208,6 +208,24 @@ describe Locomotive::Steam::ContentEntryRepository do
       expect(repository.with(type).send(:mapper).serialize(subject)).not_to have_key(:site)
     end
 
+    context 'a localized file field' do
+
+      let(:type) do
+        build_content_type('Articles', label_field_name: :title, fields: _fields, fields_with_default: [],
+                           localized_names: %w(photo),
+                           fields_by_name: { photo: instance_double('Field', name: :photo, type: :file) })
+      end
+      let(:entries) { [{ content_type_id: 1, _position: 0, _label: 'Stored', photo: { en: 'photo.jpg' } }] }
+
+      it 'serializes the stored filename after the accessor presents a file' do
+        entry = repository.with(type).all.first
+
+        expect(entry.photo[:en]).to respond_to(:url)
+        expect(repository.with(type).send(:mapper).serialize(entry)['photo']).to eq('en' => 'photo.jpg')
+      end
+
+    end
+
     # A day names no instant, so nothing here picks one for it.
     context 'a date in a date time field' do
       let(:entries) do

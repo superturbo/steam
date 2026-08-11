@@ -42,6 +42,53 @@ describe Locomotive::Steam::Models::Mapper do
 
     end
 
+    describe 'a localized scalar without explicit translations' do
+
+      let(:block)      { ->(_) { localized_attributes(:title) } }
+      let(:attributes) { { title: 'Hello world' } }
+
+      it 'serializes back as the scalar the store holds' do
+        expect(subject['title']).to eq 'Hello world'
+      end
+
+    end
+
+    describe 'a localized attribute stored as an explicit null' do
+
+      let(:block)      { ->(_) { localized_attributes(:title) } }
+      let(:attributes) { { title: nil } }
+
+      it 'stays a null' do
+        expect(subject.key?('title')).to be true
+        expect(subject['title']).to be_nil
+      end
+
+    end
+
+    describe 'a localized attribute stored as an empty hash' do
+
+      let(:block)      { ->(_) { localized_attributes(:title) } }
+      let(:attributes) { { title: {} } }
+
+      it 'stays an empty hash, not a null' do
+        expect(subject['title']).to eq({})
+      end
+
+    end
+
+    describe 'a localized accessor with a presentation value' do
+
+      let(:block)      { ->(_) { localized_attributes(:title) } }
+      let(:attributes) { { title: { 'en' => 'Hello world' } } }
+
+      it 'serializes the stored representation, not what an accessor presents' do
+        allow(entity).to receive(:title).and_return('PRESENTATION')
+
+        expect(subject['title']).to eq('en' => 'Hello world')
+      end
+
+    end
+
     describe 'a value read in every locale but kept in none' do
 
       let(:block)      { ->(_) { localized_attributes(:title, :category); virtual_attributes(:category) } }

@@ -53,4 +53,34 @@ describe Locomotive::Steam::Models::I18nField do
 
   end
 
+  describe '#serialize' do
+
+    def serialized(field)
+      {}.tap { |attributes| field.serialize(attributes) }[field.name]
+    end
+
+    it 'keeps a scalar a scalar, through dup and duplicate' do
+      field = described_class.new(:title, 'Plain')
+
+      expect(serialized(field)).to eq 'Plain'
+      expect(serialized(field.dup)).to eq 'Plain'
+      expect(serialized(field.duplicate(:other))).to eq 'Plain'
+    end
+
+    it 'keeps an empty hash an empty hash, through dup too' do
+      field = described_class.new(:title, {})
+
+      expect(serialized(field)).to eq({})
+      expect(serialized(field.dup)).to eq({})
+    end
+
+    it 'becomes a locale hash once a translation is written' do
+      field = described_class.new(:title, 'Plain')
+      field[:fr] = 'Bonjour'
+
+      expect(serialized(field)).to eq('fr' => 'Bonjour')
+    end
+
+  end
+
 end
