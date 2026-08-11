@@ -49,6 +49,46 @@ module Locomotive::Steam
     def required?; self[:required]; end
     def localized?; self[:localized]; end
 
+    CAPABILITIES = {
+      string:       %i(localization required),
+      text:         %i(localization required),
+      email:        %i(localization required),
+      color:        %i(localization required),
+      integer:      %i(localization required),
+      float:        %i(localization required),
+      date:         %i(localization required),
+      date_time:    %i(localization required),
+      boolean:      %i(localization required),
+      select:       %i(localization required),
+      file:         %i(localization required),
+      tags:         %i(localization),
+      json:         %i(localization required),
+      belongs_to:   %i(required),
+      many_to_many: %i(required),
+      has_many:     %i(required),
+      password:     []
+    }.transform_values(&:freeze).freeze
+
+    NO_CAPABILITIES = [].freeze
+
+    private_constant :CAPABILITIES, :NO_CAPABILITIES
+
+    def supported?
+      CAPABILITIES.key?(type)
+    end
+
+    def supports_localization?
+      capabilities.include?(:localization)
+    end
+
+    def supports_required?
+      capabilities.include?(:required)
+    end
+
+    private def capabilities
+      CAPABILITIES.fetch(type, NO_CAPABILITIES)
+    end
+
     def association_options
       {
         target_id:  target_id,
