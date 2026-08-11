@@ -20,7 +20,6 @@ module Locomotive::Steam
         @default_attributes   = []
         @associations         = []
 
-        @entity_map           = {}
         @after_load           = nil
 
         instance_eval(&block) if block_given?
@@ -62,13 +61,9 @@ module Locomotive::Steam
       end
 
       def to_entity(attributes)
-        cache_entity(entity_klass, attributes) do
-          new_entity(attributes).tap { |entity| @after_load&.call(entity, @repository) }
-        end
+        new_entity(attributes).tap { |entity| @after_load&.call(entity, @repository) }
       end
 
-      # The identity map belongs to the store: a caller-built entity never
-      # enters it, and never comes back out of it either.
       def build_entity(attributes)
         new_entity(attributes).tap { |entity| localize_input(entity) }
       end
@@ -110,10 +105,6 @@ module Locomotive::Steam
       def i18n_value_of(entity, name, locale)
         value = entity.send(name.to_sym)
         (value.respond_to?(:translations) ? value[locale] : value)
-      end
-
-      def reset_entity_map
-        @entity_map = {}
       end
 
       private
@@ -190,20 +181,6 @@ module Locomotive::Steam
       def input_locale
         @repository.scope.locale || @repository.scope.default_locale ||
           raise(MissingLocale, 'a locale is required to write a localized value')
-      end
-
-      def cache_entity(entity_klass, attributes, &block)
-        entity_id = attributes['_id'] || attributes[:_id] # FIXME: in Wagon, we deal with symbols
-
-        return yield if entity_id.blank?
-
-        key = "#{entity_klass.to_s}-#{entity_id}"
-
-        if (entity = @entity_map[key]).nil?
-          entity = @entity_map[key] = yield
-        end
-
-        entity
       end
 
     end

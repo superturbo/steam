@@ -183,7 +183,7 @@ describe Locomotive::Steam::Models::Mapper do
       expect(seen).to be_empty
     end
 
-    describe 'sharing an id with the identity map' do
+    describe 'sharing an id with an earlier read' do
 
       let(:attributes) { { _id: 7, title: 'Hello world' } }
 
@@ -200,9 +200,9 @@ describe Locomotive::Steam::Models::Mapper do
         expect(mapper.build_entity(attributes)).not_to be(stored)
       end
 
-      it 'runs once for an entity the store hands back twice' do
-        expect(mapper.to_entity(attributes)).to be(mapper.to_entity(attributes))
-        expect(seen.size).to eq 1
+      it 'runs for every entity the store hands back' do
+        expect(mapper.to_entity(attributes)).not_to be(mapper.to_entity(attributes))
+        expect(seen.size).to eq 2
       end
 
     end

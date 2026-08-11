@@ -113,6 +113,18 @@ describe 'Adapter parity' do
           expect(specimens.find(entry._id).score).to eq 99
         end
 
+        it "shows another instance's update to a later read" do
+          repo    = specimens
+          created = create_specimen(score: 5)
+
+          expect(repo.find(created._id).score).to eq 5
+
+          moved_on = another_specimens_repository
+          moved_on.update(moved_on.find(created._id).tap { |stored| stored[:score] = 6 })
+
+          expect(repo.find(created._id).score).to eq 6
+        end
+
         it 'reports an update of an entry no longer in the store' do
           entry = create_specimen
 

@@ -120,7 +120,6 @@ RSpec.shared_context 'adapter parity service writing' do
                    topic_ids: [entries_of('topics').by_slug('topic-a')._id])
   end
 
-  # Use a fresh mapper so cached entities cannot hide persisted state.
   def stored_specimen(id)
     entries_of('specimens').find(id)
   end

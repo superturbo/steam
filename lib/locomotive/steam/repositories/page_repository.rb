@@ -27,7 +27,7 @@ module Locomotive
         query do
           where(k(:handle, :ne) => nil).
             only(:_id, :title, :handle, :fullpath)
-        end.all.tap { mapper.reset_entity_map }
+        end.all
       end
 
       def by_handle(handle)

@@ -120,6 +120,27 @@ describe 'Adapter parity' do
 
       end
 
+      describe 'every read answers from the store' do
+
+        it 'does not show an unsaved mutation to a later read' do
+          repo  = specimens
+          entry = repo.by_slug('scalars')
+
+          entry[:score] = 999
+
+          expect(repo.by_slug('scalars').score).to eq 5
+        end
+
+        it 'does not let a projection pollute a full read' do
+          repo = specimens
+
+          repo.first { where(_slug: 'scalars').only(:_id) }
+
+          expect(repo.by_slug('scalars').name).to eq 'Scalars'
+        end
+
+      end
+
       describe 'reading the system timestamps' do
 
         it 'reads missing timestamps as nil' do
