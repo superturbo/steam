@@ -453,8 +453,8 @@ module Locomotive
 
         def prepare
           # _id (primary key)
-          _prepare([Locomotive::Steam::ContentTypeField.new(name: '_id')], id_backed: true) do |_, value|
-            value_to_primary_key(value)
+          _prepare([Locomotive::Steam::ContentTypeField.new(name: '_id', type: 'id')], id_backed: true) do |field, value|
+            value_to_primary_key(value, field)
           end
 
           # select
@@ -467,19 +467,19 @@ module Locomotive
           end
 
           # date
-          _prepare(@fields.dates_and_date_times) { |field, value| value_to_date(value, field.type) }
+          _prepare(@fields.dates_and_date_times) { |field, value| value_to_date(value, field) }
 
           # integer / float
-          _prepare(@fields.numbers) { |field, value| value_to_number(value, field.type) }
+          _prepare(@fields.numbers) { |field, value| value_to_number(value, field) }
 
           # boolean
-          _prepare(@fields.booleans) { |_, value| value_to_boolean(value) }
+          _prepare(@fields.booleans) { |field, value| value_to_boolean(value, field) }
 
           # belongs_to
-          _prepare(@fields.belongs_to, id_backed: true) { |field, value| value_to_id(value, field.target_id) }
+          _prepare(@fields.belongs_to, id_backed: true) { |field, value| value_to_id(value, field) }
 
           # many_to_many
-          _prepare(@fields.many_to_many, id_backed: true) { |field, value| values_to_ids(value, field.target_id) }
+          _prepare(@fields.many_to_many, id_backed: true) { |field, value| values_to_ids(value, field) }
 
           @conditions
         end
@@ -520,14 +520,14 @@ module Locomotive
           end
         end
 
-        def value_to_primary_key(value)
+        def value_to_primary_key(value, field)
           case value
-          when Array then value.map { |element| value_to_primary_key(element) }
-          when Set   then value.map { |element| value_to_primary_key(element) }
+          when Array then value.map { |element| value_to_primary_key(element, field) }
+          when Set   then value.map { |element| value_to_primary_key(element, field) }
           else
             id = @target_repository.adapter.make_id(value)
 
-            id == false ? Locomotive::Steam::Adapters::Query::Values.unmatchable : id
+            id == false ? unmatchable(field, :invalid_id) : id
           end
         end
 
@@ -567,66 +567,66 @@ module Locomotive
           when Array then value.map { |element| value_to_option_id(field, element) }
           when Set   then value.map { |element| value_to_option_id(field, element) }
           else field.select_options.by_name(value).try(:_id) ||
-               Locomotive::Steam::Adapters::Query::Values.unmatchable
+               unmatchable(field, :unknown_select_option)
           end
         end
 
         # A lone nil keeps nil semantics; only a real list maps element-wise.
-        def values_to_ids(value, target_id)
+        def values_to_ids(value, field)
           return nil if value.nil?
 
-          [*value].map { |_value| value_to_id(_value, target_id) }
+          [*value].map { |_value| value_to_id(_value, field) }
         end
 
         # Strings are slugs; IDs must be explicit. Inferring from string shape
         # gives the same operand different meanings across adapters.
-        def value_to_id(value, target_id)
+        def value_to_id(value, field)
           case value
           when nil            then nil
-          when Array          then values_to_ids(value, target_id)
-          when String, Symbol then slug_to_id(value.to_s, target_id)
-          when Hash           then explicit_id(value['_id'] || value[:_id])
-          else value.respond_to?(:_id) ? explicit_id(value._id) : explicit_id(value)
+          when Array          then values_to_ids(value, field)
+          when String, Symbol then slug_to_id(value.to_s, field)
+          when Hash           then explicit_id(value['_id'] || value[:_id], field)
+          else value.respond_to?(:_id) ? explicit_id(value._id, field) : explicit_id(value, field)
           end
         end
 
         # Only a direct nil operand has missing-association semantics.
-        def explicit_id(id)
-          return Locomotive::Steam::Adapters::Query::Values.unmatchable if id.nil?
+        def explicit_id(id, field)
+          return unmatchable(field, :invalid_id) if id.nil?
 
           key = @target_repository.adapter.make_id(id)
 
-          key == false ? Locomotive::Steam::Adapters::Query::Values.unmatchable : key
+          key == false ? unmatchable(field, :invalid_id) : key
         end
 
         # An unresolved slug must not gain nil semantics; only a real nil keeps it.
-        def slug_to_id(slug, target_id)
+        def slug_to_id(slug, field)
           return nil if slug.nil?
 
-          _entry = @target_repository.with(target_id).first { where(_slug: slug).only(:_id) }
+          _entry = @target_repository.with(field.target_id).first { where(_slug: slug).only(:_id) }
 
-          _entry.try(:_id) || Locomotive::Steam::Adapters::Query::Values.unmatchable
+          _entry.try(:_id) || unmatchable(field, :unknown_slug)
         end
 
-        def value_to_date(value, type)
+        def value_to_date(value, field)
           case value
           # a Range or Regexp is its own plain-field expression, not an operand
           when nil, Range, Regexp then value
-          when Array  then value.map { |element| value_to_date(element, type) }
-          when Set    then value.map { |element| value_to_date(element, type) }
-          when String then parse_date(value, type)
-          else typed_date_operand(value, type)
+          when Array  then value.map { |element| value_to_date(element, field) }
+          when Set    then value.map { |element| value_to_date(element, field) }
+          when String then parse_date(value, field)
+          else typed_date_operand(value, field.type)
           end
         end
 
-        def value_to_boolean(value)
+        def value_to_boolean(value, field)
           case value
           # a Range or Regexp is its own plain-field expression, not an operand
           when nil, Range, Regexp then value
-          when Array       then value.map { |element| value_to_boolean(element) }
-          when Set         then value.map { |element| value_to_boolean(element) }
+          when Array       then value.map { |element| value_to_boolean(element, field) }
+          when Set         then value.map { |element| value_to_boolean(element, field) }
           when true, false then value
-          when String      then parse_boolean(value)
+          when String      then parse_boolean(value, field)
           else
             raise Locomotive::Steam::Adapters::Query::InvalidValue,
                   "expected a boolean, got #{value.inspect}"
@@ -634,15 +634,15 @@ module Locomotive
         end
 
         # Numeric strings are coerced where field metadata is available.
-        def value_to_number(value, type)
+        def value_to_number(value, field)
           case value
           # a Regexp is its own plain-field expression, not an operand
           when nil, Regexp then value
-          when Range   then numeric_range(value, type)
+          when Range   then numeric_range(value, field)
           when Numeric then validate_numeric_bounds!(value)
-          when Array  then value.map { |element| value_to_number(element, type) }
-          when Set    then value.map { |element| value_to_number(element, type) }
-          when String then parse_number(value, type)
+          when Array  then value.map { |element| value_to_number(element, field) }
+          when Set    then value.map { |element| value_to_number(element, field) }
+          when String then parse_number(value, field)
           else
             raise Locomotive::Steam::Adapters::Query::InvalidValue,
                   "expected a number, got #{value.inspect}"
@@ -651,9 +651,9 @@ module Locomotive
 
         # Bounds meet the same rules as gt/lte operands: text is read as a
         # number or matches nothing, a wrong type raises.
-        def numeric_range(range, type)
-          low  = numeric_range_bound(range.begin, type)
-          high = numeric_range_bound(range.end, type)
+        def numeric_range(range, field)
+          low  = numeric_range_bound(range.begin, field)
+          high = numeric_range_bound(range.end, field)
 
           if [low, high].any? { |bound| Locomotive::Steam::Adapters::Query::Values.unmatchable?(bound) }
             return Locomotive::Steam::Adapters::Query::Values.unmatchable
@@ -662,21 +662,21 @@ module Locomotive
           Range.new(low, high, range.exclude_end?)
         end
 
-        def numeric_range_bound(value, type)
+        def numeric_range_bound(value, field)
           case value
           when nil then nil
           when Array, Set, Hash, Range, Regexp
             raise Locomotive::Steam::Adapters::Query::InvalidValue,
                   "#{value.class} cannot bound a numeric range"
-          else value_to_number(value, type)
+          else value_to_number(value, field)
           end
         end
 
         # Invalid strings cannot equal a valid field value.
-        def parse_number(value, type)
-          Locomotive::Steam::ContentFieldValues.number(value, type)
-        rescue Locomotive::Steam::ContentFieldValues::ParseError
-          Locomotive::Steam::Adapters::Query::Values.unmatchable
+        def parse_number(value, field)
+          Locomotive::Steam::ContentFieldValues.number(value, field.type)
+        rescue Locomotive::Steam::ContentFieldValues::ParseError => error
+          unmatchable(field, error.reason)
         end
 
         def typed_date_operand(value, type)
@@ -685,10 +685,10 @@ module Locomotive
           raise Locomotive::Steam::Adapters::Query::InvalidValue, error.message
         end
 
-        def parse_boolean(value)
+        def parse_boolean(value, field)
           Locomotive::Steam::ContentFieldValues.boolean(value)
-        rescue Locomotive::Steam::ContentFieldValues::ParseError
-          Locomotive::Steam::Adapters::Query::Values.unmatchable
+        rescue Locomotive::Steam::ContentFieldValues::ParseError => error
+          unmatchable(field, error.reason)
         end
 
         def validate_numeric_bounds!(value)
@@ -698,9 +698,19 @@ module Locomotive
                 "#{value.class} is not a supported numeric operand or is outside its bounds"
         end
 
-        def parse_date(value, type)
-          ContentFieldValues.coerce_date_operand(value, type, @target_repository.site)
-        rescue Locomotive::Steam::ContentFieldValues::ParseError
+        def parse_date(value, field)
+          ContentFieldValues.coerce_date_operand(value, field.type, @target_repository.site)
+        rescue Locomotive::Steam::ContentFieldValues::ParseError => error
+          unmatchable(field, error.reason)
+        end
+
+        # Production stays silent; Wagon reports only field context and reason.
+        def unmatchable(field, reason)
+          if Locomotive::Steam.configuration.mode == :test && (@reported_rejections ||= Set.new).add?([field.name, field.type, reason])
+            Locomotive::Common::Logger.warn "[Steam query] operand for #{field.name.inspect} " \
+                                            "(type: #{field.type}) was rejected (#{reason}) and matches nothing"
+          end
+
           Locomotive::Steam::Adapters::Query::Values.unmatchable
         end
 

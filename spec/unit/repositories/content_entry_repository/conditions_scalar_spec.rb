@@ -202,6 +202,77 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     end
 
+    describe 'Wagon diagnostics for rejected operands' do
+
+      before { allow(Locomotive::Steam.configuration).to receive(:mode).and_return(:test) }
+
+      let(:field)      { instance_double('Field', name: 'score', persisted_name: 'score', type: :integer) }
+      let(:_fields)    { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [field], booleans: []) }
+      let(:conditions) { { 'score' => 'abc' } }
+
+      it 'names the field, its type and the reason, never the value' do
+        expect(Locomotive::Common::Logger).to receive(:warn) do |message|
+          expect(message).to include('"score"', 'integer', 'invalid_number')
+          expect(message).not_to include('abc')
+        end
+
+        subject
+      end
+
+      it 'stays silent in production' do
+        allow(Locomotive::Steam.configuration).to receive(:mode).and_return(:production)
+
+        expect(Locomotive::Common::Logger).not_to receive(:warn)
+
+        subject
+      end
+
+      context 'a readable operand' do
+        let(:conditions) { { 'score' => '12' } }
+
+        it 'passes without a word' do
+          expect(Locomotive::Common::Logger).not_to receive(:warn)
+
+          subject
+        end
+      end
+
+      context 'a list repeating the same mistake' do
+        let(:conditions) { { 'score.in' => %w(abc def) } }
+
+        it 'reports it once' do
+          expect(Locomotive::Common::Logger).to receive(:warn).once
+
+          subject
+        end
+      end
+
+      context 'a date operand no field can read' do
+        let(:field)      { instance_double('Field', name: 'held_on', persisted_name: 'held_on', type: :date) }
+        let(:_fields)    { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: [], booleans: []) }
+        let(:conditions) { { 'held_on' => 'tomorrow' } }
+
+        it 'reports the unreadable date' do
+          expect(Locomotive::Common::Logger).to receive(:warn).with(/"held_on".*invalid_date/)
+
+          subject
+        end
+      end
+
+      context 'a boolean operand no field can read' do
+        let(:field)      { instance_double('Field', name: 'flag', persisted_name: 'flag', type: :boolean) }
+        let(:_fields)    { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: [field]) }
+        let(:conditions) { { 'flag' => 'yes' } }
+
+        it 'reports the unreadable boolean' do
+          expect(Locomotive::Common::Logger).to receive(:warn).with(/"flag".*invalid_boolean/)
+
+          subject
+        end
+      end
+
+    end
+
     context 'boolean fields' do
 
       let(:field)       { instance_double('BooleanField', name: 'flag', persisted_name: 'flag', type: :boolean) }

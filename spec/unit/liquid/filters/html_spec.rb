@@ -136,13 +136,16 @@ describe Locomotive::Steam::Liquid::Filters::Html do
 
     describe 'with checksum' do
 
-      before do
-        Locomotive::Steam.configure { |c| c.theme_assets_checksum = true }
-        allow(theme_asset_repository).to receive(:checksums).and_return('stylesheets/main.css' => 42)
+      around do |example|
+        previous = Locomotive::Steam.configuration.theme_assets_checksum
+        Locomotive::Steam.configuration.theme_assets_checksum = true
+        example.run
+      ensure
+        Locomotive::Steam.configuration.theme_assets_checksum = previous
       end
 
-      after do
-        Locomotive::Steam.reset
+      before do
+        allow(theme_asset_repository).to receive(:checksums).and_return('stylesheets/main.css' => 42)
       end
 
       it 'returns an url with the checksum' do

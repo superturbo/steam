@@ -77,13 +77,26 @@ describe Locomotive::Steam::ContentEntryRepository do
         expect(prepared_for('_id.in' => Set['a'])).to include('_id.in' => %w(id-a))
       end
 
+      context 'an id the adapter cannot read' do
+
+        before { allow(adapter).to receive(:make_id) { false } }
+
+        it 'reports the invalid id' do
+          allow(Locomotive::Steam.configuration).to receive(:mode).and_return(:test)
+          expect(Locomotive::Common::Logger).to receive(:warn).with(/"_id".*invalid_id/)
+
+          prepared_for('_id' => 'nope')
+        end
+
+      end
+
     end
 
     context 'select fields carrying a list or an unknown option' do
 
       let(:option)  { instance_double('Option', _id: 42) }
       let(:options) { instance_double('OptionRepository', :'locale=' => nil) }
-      let(:field)   { instance_double('SelectField', name: 'category', persisted_name: 'category_id', select_options: options) }
+      let(:field)   { instance_double('SelectField', name: 'category', persisted_name: 'category_id', type: :select, select_options: options) }
       let(:_fields) { instance_double('Fields', selects: [field], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
 
       before do
@@ -116,6 +129,13 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       it 'still resolves a nil operand to nil' do
         expect(prepared_for('category' => nil)).to include('category_id' => nil)
+      end
+
+      it 'reports the unknown option' do
+        allow(Locomotive::Steam.configuration).to receive(:mode).and_return(:test)
+        expect(Locomotive::Common::Logger).to receive(:warn).with(/"category".*unknown_select_option/)
+
+        prepared_for('category' => 'nope')
       end
 
     end
@@ -173,7 +193,7 @@ describe Locomotive::Steam::ContentEntryRepository do
     context 'many_to_many fields' do
 
       let(:value)       { 42 }
-      let(:field)       { instance_double('ManyToManyField', name: 'tags', persisted_name: 'tag_ids', target_id: '42') }
+      let(:field)       { instance_double('ManyToManyField', name: 'tags', persisted_name: 'tag_ids', type: :many_to_many, target_id: '42') }
       let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [field], dates_and_date_times: [], numbers: [], booleans: []) }
       let(:conditions)  { { 'tags.in' => value } }
 
@@ -208,6 +228,13 @@ describe Locomotive::Steam::ContentEntryRepository do
           it 'marks the unresolved element as unmatchable' do
             expect(subject.first['tag_ids.all'])
               .to eq ['A', Locomotive::Steam::Adapters::Query::Values.unmatchable]
+          end
+
+          it 'reports the unresolved slug' do
+            allow(Locomotive::Steam.configuration).to receive(:mode).and_return(:test)
+            expect(Locomotive::Common::Logger).to receive(:warn).with(/"tags".*unknown_slug/)
+
+            subject
           end
 
         end
