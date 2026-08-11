@@ -7,6 +7,8 @@ require_relative '../../support/adapter_parity_fixture'
 # Fixed expected rows catch query bugs shared by both adapters.
 describe 'Query parity' do
 
+  TRANSPORT_MOMENT = Time.utc(2013, 2, 11, 23, 30).in_time_zone('Europe/Paris')
+
   CASES = [
     { desc: 'a scalar equals an array field element',
       conditions: { labels: 'x' }, expected: %w(arrays embedded) },
@@ -252,6 +254,24 @@ describe 'Query parity' do
 
     { desc: "a moment matches the date in the site's timezone",
       conditions: { held_on: DateTime.new(2013, 2, 12, 0, 30, 0, '+01:00') },
+      expected: %w(scalars) },
+
+    # The same instant answers the same rows however it travels — as a Ruby
+    # moment, its as_json string or its to_s string.
+    { desc: "a zoned moment matches the date in the site's timezone",
+      conditions: { held_on: TRANSPORT_MOMENT },
+      expected: %w(scalars) },
+
+    { desc: "an as_json moment matches the date in the site's timezone",
+      conditions: { held_on: TRANSPORT_MOMENT.as_json },
+      expected: %w(scalars) },
+
+    { desc: "a to_s moment matches the date in the site's timezone",
+      conditions: { held_on: TRANSPORT_MOMENT.to_s },
+      expected: %w(scalars) },
+
+    { desc: 'a to_s moment bounds a date_time field',
+      conditions: { 'at.lte' => '2012-06-06 15:00:00 +0300' },
       expected: %w(scalars) },
 
     { desc: 'eq text in another encoding',

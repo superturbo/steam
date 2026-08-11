@@ -48,6 +48,20 @@ describe Locomotive::Steam::ContentEntryRepository do
         expect(subject.first['launched_at']).to eql Time.utc(2007, 6, 29, 21, 15)
       end
 
+      context 'a to_s string' do
+        let(:value) { '2007-06-29 23:15:00 +0200' }
+
+        it 'reads as the instant it names' do
+          expect(subject.first['launched_at']).to eql Time.utc(2007, 6, 29, 21, 15)
+        end
+      end
+
+      context 'a to_s string of a UTC site' do
+        let(:value) { '2007-06-29 21:15:00 UTC' }
+
+        it { expect(subject.first['launched_at']).to eql Time.utc(2007, 6, 29, 21, 15) }
+      end
+
       context 'a site behind UTC' do
         let(:site) do
           instance_double('Site', _id: 1, default_locale: :en, locales: %i(en fr),
@@ -121,11 +135,31 @@ describe Locomotive::Steam::ContentEntryRepository do
         end
       end
 
-      ['2012-01-02T10:00:00', 'tomorrow', '2012-99-99', ''].each do |bad|
+      ['tomorrow', '2012-99-99', '2012-01-02 10:00:00', '2012-01-02 10:00:00 +03:00', ''].each do |bad|
         context bad.inspect do
           let(:value) { bad }
           it { expect(subject.first['held_on']).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable }
         end
+      end
+
+      # Liquid renders {{ now }} through to_s and the action bridge through
+      # as_json; the framework's own output has to work as an operand.
+      describe 'a moment spelled as text reads like the Ruby moment' do
+
+        { 'an offset-less ISO time (site zone)' => '2012-01-02T10:00:00',
+          'an as_json string'                   => '2012-01-02T23:30:00.123+03:00',
+          'a to_s string'                       => '2012-01-02 23:30:00 +0300' }.each do |label, written|
+          context label do
+            let(:value) { written }
+            it { expect(subject.first['held_on']).to eq Date.new(2012, 1, 2) }
+          end
+        end
+
+        context 'an instant that is still the previous site day' do
+          let(:value) { '2012-01-03T00:30:00+01:00' }
+          it { expect(subject.first['held_on']).to eq Date.new(2012, 1, 2) }
+        end
+
       end
 
       context 'a Date operand' do

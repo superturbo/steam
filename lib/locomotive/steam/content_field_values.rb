@@ -1,4 +1,5 @@
 require 'json'
+require 'time'
 
 require_relative 'adapters/numeric_bounds'
 
@@ -38,6 +39,8 @@ module Locomotive::Steam
     DASH_DATE  = /\A\d{4}-\d{2}-\d{2}\z/.freeze
     SLASH_DATE = %r{\A\d{4}/\d{2}/\d{2}\z}.freeze
     ISO_TIME   = /\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?\z/.freeze
+    # Time and TimeWithZone#to_s, including UTC's named offset.
+    TO_S_TIME  = /\A\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} (?:UTC|[+-]\d{4})\z/.freeze
 
     BOOLEANS = { true => true, false => false, 'true' => true, 'false' => false,
                  '1' => true, '0' => false }.freeze
@@ -46,7 +49,7 @@ module Locomotive::Steam
     MAX_JSON_DEPTH = 98
 
     private_constant :INTEGER_FORMAT, :FLOAT_FORMAT, :DASH_DATE, :SLASH_DATE, :ISO_TIME,
-                     :BOOLEANS, :MAX_JSON_DEPTH
+                     :TO_S_TIME, :BOOLEANS, :MAX_JSON_DEPTH
 
     module_function
 
@@ -123,7 +126,34 @@ module Locomotive::Steam
       value.is_a?(Date) && !value.is_a?(DateTime)
     end
 
-    # A calendar date names a day, not an instant: the zone decides which.
+    def coerce_date_operand(value, type, site)
+      candidate = readable_text(value).strip
+
+      if type == :date
+        return date(candidate) unless moment_format?(candidate)
+
+        zone = zone_of(site)
+        parse_moment(candidate, zone).in_time_zone(zone).to_date
+      else
+        parse_moment(candidate, zone_of(site)).getutc
+      end
+    end
+
+    def moment_format?(candidate)
+      ISO_TIME.match?(candidate) || TO_S_TIME.match?(candidate)
+    end
+
+    def parse_moment(candidate, zone)
+      return date_time(candidate, zone) unless TO_S_TIME.match?(candidate)
+
+      begin
+        Time.strptime(candidate, '%Y-%m-%d %H:%M:%S %z')
+      rescue ArgumentError
+        raise ParseError.new(:invalid_date, 'invalid date and time value')
+      end
+    end
+
+    # A calendar day begins at the site's midnight.
     def date_at_midnight(value, zone)
       zone.local(value.year, value.month, value.day).getutc
     end
@@ -357,7 +387,8 @@ module Locomotive::Steam
     private_class_method :input_json, :parse_json, :json_value, :json_hash, :json_array,
                          :guard_depth, :json_key, :json_number, :readable_text,
                          :read_number, :read_boolean, :read_date, :read_date_time,
-                         :read_json, :read_text, :wrong_stored_type!
+                         :read_json, :read_text, :wrong_stored_type!,
+                         :moment_format?, :parse_moment
 
     def zone_of(site)
       raise ConfigurationError, 'a site timezone is required to read this value' if site.nil?

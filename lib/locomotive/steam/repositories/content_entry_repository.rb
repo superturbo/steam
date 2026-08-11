@@ -685,10 +685,6 @@ module Locomotive
           raise Locomotive::Steam::Adapters::Query::InvalidValue, error.message
         end
 
-        def site_zone
-          ContentFieldValues.zone_of(@target_repository.site)
-        end
-
         def parse_boolean(value)
           Locomotive::Steam::ContentFieldValues.boolean(value)
         rescue Locomotive::Steam::ContentFieldValues::ParseError
@@ -703,9 +699,7 @@ module Locomotive
         end
 
         def parse_date(value, type)
-          return ContentFieldValues.date(value) if type == :date
-
-          ContentFieldValues.date_time(value, site_zone).getutc
+          ContentFieldValues.coerce_date_operand(value, type, @target_repository.site)
         rescue Locomotive::Steam::ContentFieldValues::ParseError
           Locomotive::Steam::Adapters::Query::Values.unmatchable
         end
