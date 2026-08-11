@@ -250,6 +250,10 @@ describe 'Query parity' do
       conditions: { 'labels.exists' => false },
       expected: %w(all-missing scalars zero) },
 
+    { desc: "a moment matches the date in the site's timezone",
+      conditions: { held_on: DateTime.new(2013, 2, 12, 0, 30, 0, '+01:00') },
+      expected: %w(scalars) },
+
     { desc: 'eq text in another encoding',
       conditions: { name: 'Scalars'.encode(Encoding::UTF_16LE) }, expected: %w(scalars) },
 

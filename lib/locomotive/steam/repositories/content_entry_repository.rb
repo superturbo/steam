@@ -615,15 +615,7 @@ module Locomotive
           when Array  then value.map { |element| value_to_date(element, type) }
           when Set    then value.map { |element| value_to_date(element, type) }
           when String then parse_date(value, type)
-          else
-            converter = type == :date ? :to_date : :to_time
-
-            unless value.respond_to?(converter)
-              raise Locomotive::Steam::Adapters::Query::InvalidValue,
-                    "expected a date-compatible value, got #{value.inspect}"
-            end
-
-            typed_date_operand(value, type)
+          else typed_date_operand(value, type)
           end
         end
 
@@ -688,10 +680,9 @@ module Locomotive
         end
 
         def typed_date_operand(value, type)
-          return value.to_date if type == :date
-          return ContentFieldValues.date_at_midnight(value, site_zone) if ContentFieldValues.plain_date?(value)
-
-          value.to_time.getutc
+          ContentFieldValues.normalize_input(type, value, @target_repository.site)
+        rescue Locomotive::Steam::ContentFieldValues::ParseError => error
+          raise Locomotive::Steam::Adapters::Query::InvalidValue, error.message
         end
 
         def site_zone

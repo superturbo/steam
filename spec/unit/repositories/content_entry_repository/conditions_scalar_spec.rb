@@ -128,6 +128,44 @@ describe Locomotive::Steam::ContentEntryRepository do
         end
       end
 
+      context 'a Date operand' do
+        let(:value) { Date.new(2012, 1, 2) }
+        it { expect(subject.first['held_on']).to eq Date.new(2012, 1, 2) }
+      end
+
+      context 'an object that merely answers to_date' do
+        let(:value) { double('DateOnly', to_date: Date.new(2012, 1, 2)) }
+
+        it 'is rejected as a date operand' do
+          expect { subject }
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /expected a date/)
+        end
+      end
+
+      describe 'a moment reads as the day at the site' do
+
+        context 'a zoned moment before the site midnight' do
+          let(:value) { Time.utc(2020, 1, 1, 23, 30).in_time_zone('Paris') }
+          it { expect(subject.first['held_on']).to eq Date.new(2020, 1, 1) }
+        end
+
+        context 'a DateTime before the site midnight' do
+          let(:value) { DateTime.new(2020, 1, 2, 0, 30, 0, '+1') }
+          it { expect(subject.first['held_on']).to eq Date.new(2020, 1, 1) }
+        end
+
+        context 'the site keeps its own day' do
+          let(:site) do
+            instance_double('Site', _id: 1, default_locale: :en, locales: %i(en fr),
+                                    timezone: ActiveSupport::TimeZone['Vilnius'])
+          end
+          let(:value) { Time.utc(2020, 1, 1, 23, 30) }
+
+          it { expect(subject.first['held_on']).to eq Date.new(2020, 1, 2) }
+        end
+
+      end
+
     end
 
     context 'boolean fields' do
