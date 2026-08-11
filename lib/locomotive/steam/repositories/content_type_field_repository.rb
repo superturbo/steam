@@ -70,11 +70,13 @@ module Locomotive
       end
 
       def required
-        query { where(required: true) }.all
+        # Stored metadata may declare a requirement a type does not support.
+        query { where(required: true) }.all.select(&:supports_required?)
       end
 
       def localized_names(include_select_field_id: true)
-        query { where(localized: true) }.all.map do |field|
+        # Stored metadata may declare localization a type does not support.
+        query { where(localized: true) }.all.select(&:supports_localization?).map do |field|
           field.type == :select && include_select_field_id ? [field.name, "#{field.name}_id"] : field.name
         end.flatten
       end

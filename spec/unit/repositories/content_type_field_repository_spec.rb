@@ -80,6 +80,25 @@ describe Locomotive::Steam::ContentTypeFieldRepository do
 
   end
 
+  describe '#required' do
+
+    let(:collection) do
+      [{ name: 'title', type: 'string', required: true },
+       { name: 'flag', type: 'boolean', required: true },
+       { name: 'labels', type: 'tags', required: true },
+       { name: 'reviews', type: 'has_many', required: true },
+       { name: 'secret', type: 'password', required: true },
+       { name: 'price', type: 'money', required: true }]
+    end
+
+    subject { repository.required }
+
+    it 'leaves out the fields whose type does not support a requirement' do
+      expect(subject.map(&:name)).to eq ['title', 'flag', 'reviews']
+    end
+
+  end
+
   describe '#localized_names' do
 
     let(:collection)  { [{ name: 'name', type: 'string', localized: true }, { name: 'picture', type: 'file' }, { name: 'category', type: 'select', localized: true }] }
@@ -93,6 +112,17 @@ describe Locomotive::Steam::ContentTypeFieldRepository do
       subject { repository.localized_names(include_select_field_id: false) }
 
       it { expect(subject).to eq(['name', 'category']) }
+
+    end
+
+    context 'stored metadata declares localization an association cannot have' do
+
+      let(:collection) do
+        [{ name: 'name', type: 'string', localized: true },
+         { name: 'author', type: 'belongs_to', localized: true }]
+      end
+
+      it { expect(subject).to eq(['name']) }
 
     end
 

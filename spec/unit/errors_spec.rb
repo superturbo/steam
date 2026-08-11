@@ -46,6 +46,21 @@ describe Locomotive::Steam::JsonParsingError do
 
 end
 
+describe Locomotive::Steam::UnsupportedSchemaError do
+
+  it 'carries a stable reason' do
+    error = described_class.new(:unsupported_localization,
+                                'posts.yml, field author: a belongs_to field cannot be localized')
+
+    expect(error.reason).to eq :unsupported_localization
+  end
+
+  it 'refuses a reason it does not know' do
+    expect { described_class.new(:made_up, 'x') }.to raise_error(ArgumentError)
+  end
+
+end
+
 describe Locomotive::Steam::RenderError do
 
   let(:error) { double('error', message: 'boom', line_number: 2, backtrace: []) }

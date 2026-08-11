@@ -19,19 +19,19 @@ module Locomotive
               [].tap do |array|
                 each_file do |filepath, slug|
                   attributes = _load(filepath)
-                  attributes[:entries_custom_fields] = build_fields(attributes.delete(:fields))
+                  attributes[:entries_custom_fields] = build_fields(attributes.delete(:fields), filepath)
                   array << { _id: slug.to_s, slug: slug }.merge(attributes)
                 end
               end
             end
 
-            def build_fields(list)
+            def build_fields(list, filepath)
               list.each_with_index.map do |attributes, index|
-                build_field(attributes.keys.first, attributes.values.first, index)
+                build_field(attributes.keys.first, attributes.values.first, index, filepath)
               end
             end
 
-            def build_field(name, attributes, position)
+            def build_field(name, attributes, position, filepath)
               attributes.tap do |attributes|
                 attributes[:_id]      = name.to_s
                 attributes[:name]     = name.to_s
@@ -42,13 +42,30 @@ module Locomotive
                   attributes[:label] = name.to_s.humanize
                 end
 
-                if %w(belongs_to has_many many_to_many).include?(attributes[:type])
-                  attributes[:localized] = false
-                end
+                validate_capabilities!(attributes, filepath)
 
                 if select_options = attributes.delete(:select_options)
                   attributes[:select_options] = build_select_options(select_options)
                 end
+              end
+            end
+
+            def validate_capabilities!(attributes, filepath)
+              field = Locomotive::Steam::ContentTypeField.new(type: attributes[:type])
+
+              unless field.supported?
+                raise Locomotive::Steam::UnsupportedSchemaError.new(:unknown_field_type,
+                  "#{filepath}, field #{attributes[:name]}: unknown field type #{attributes[:type].inspect}")
+              end
+
+              if attributes[:localized] && !field.supports_localization?
+                raise Locomotive::Steam::UnsupportedSchemaError.new(:unsupported_localization,
+                  "#{filepath}, field #{attributes[:name]}: a #{attributes[:type]} field cannot be localized")
+              end
+
+              if attributes[:required] && !field.supports_required?
+                raise Locomotive::Steam::UnsupportedSchemaError.new(:unsupported_required,
+                  "#{filepath}, field #{attributes[:name]}: a #{attributes[:type]} field cannot be required")
               end
             end
 

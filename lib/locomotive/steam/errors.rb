@@ -24,6 +24,23 @@ module Locomotive::Steam
   class MissingLocale < ::ArgumentError
   end
 
+  # Reasons are stable identifiers.
+  class UnsupportedSchemaError < ::StandardError
+
+    REASONS = %i(unknown_field_type unsupported_localization unsupported_required).freeze
+
+    attr_reader :reason
+
+    def initialize(reason, message)
+      raise ArgumentError, "no such schema error reason: #{reason.inspect}" unless REASONS.include?(reason)
+
+      @reason = reason
+
+      super(message)
+    end
+
+  end
+
   class InvalidEntry < ::StandardError
 
     attr_reader :entry
