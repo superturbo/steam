@@ -76,7 +76,14 @@ module Locomotive::Steam
       attr_reader :session
 
       def build_session(uri_or_hosts, client_options)
-        @session ||= Mongo::Client.new(uri_or_hosts, client_options)
+        @session ||= Mongo::Client.new(uri_or_hosts, client_options).tap do |client|
+          # Missing-record detection requires acknowledged write results; a
+          # nil concern is the driver default, which acknowledges.
+          if client.write_concern && !client.write_concern.acknowledged?
+            client.close
+            raise ArgumentError, 'the MongoDB adapter requires acknowledged writes; w: 0 is not supported'
+          end
+        end
       end
 
       def disconnect_session

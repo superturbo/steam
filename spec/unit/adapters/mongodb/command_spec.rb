@@ -14,7 +14,9 @@ describe Locomotive::Steam::Adapters::MongoDB::Command do
 
   before do
     allow(collection).to receive(:update_one)
+      .and_return(double('result', matched_count: 1))
     allow(collection).to receive(:delete_one)
+      .and_return(double('result', deleted_count: 1))
     allow(collection).to receive(:find_one_and_update).and_return({ _id: 7, views: 4 })
     allow(mapper).to receive(:serialize).and_return({ name: 'Hello' })
 
@@ -24,6 +26,14 @@ describe Locomotive::Steam::Adapters::MongoDB::Command do
   describe '#update' do
 
     subject { command.update(entity) }
+
+    it 'reports an update that matched nothing' do
+      allow(collection).to receive(:update_one)
+        .and_return(double('result', matched_count: 0))
+
+      expect { subject }
+        .to raise_error(Locomotive::Steam::Models::Repository::RecordNotFound)
+    end
 
     it 'issues a tenant-scoped $set update' do
       subject
@@ -100,6 +110,14 @@ describe Locomotive::Steam::Adapters::MongoDB::Command do
     it 'issues a tenant-scoped delete' do
       subject
       expect(collection).to have_received(:delete_one).with(_id: 7, site_id: 42)
+    end
+
+    it 'reports a delete that removed nothing' do
+      allow(collection).to receive(:delete_one)
+        .and_return(double('result', deleted_count: 0))
+
+      expect { subject }
+        .to raise_error(Locomotive::Steam::Models::Repository::RecordNotFound)
     end
 
     context 'when the scope has no site' do

@@ -113,6 +113,32 @@ describe 'Adapter parity' do
           expect(specimens.find(entry._id).score).to eq 99
         end
 
+        it 'reports an update of an entry no longer in the store' do
+          entry = create_specimen
+
+          specimens.delete(entry)
+          entry[:score] = 99
+
+          expect { specimens.update(entry) }
+            .to raise_error(Locomotive::Steam::Models::Repository::RecordNotFound)
+        end
+
+        it 'reports a delete of an entry no longer in the store' do
+          entry = create_specimen
+
+          specimens.delete(entry)
+
+          expect { specimens.delete(entry) }
+            .to raise_error(Locomotive::Steam::Models::Repository::RecordNotFound)
+        end
+
+        it 'accepts an idempotent update' do
+          moment = Time.utc(2024, 1, 2, 3, 4, 5)
+          entry  = Timecop.freeze(moment) { create_specimen }
+
+          expect { Timecop.freeze(moment) { specimens.update(entry) } }.not_to raise_error
+        end
+
         it 'removes an entry from later reads' do
           entry = create_specimen
 

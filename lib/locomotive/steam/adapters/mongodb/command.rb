@@ -25,9 +25,11 @@ module Locomotive::Steam
         end
 
         def update(entity)
-          entity.tap do
-            @collection.update_one(write_filter(entity), '$set' => @mapper.serialize(entity))
-          end
+          result = @collection.update_one(write_filter(entity), '$set' => @mapper.serialize(entity))
+
+          missing_record!(entity) if result.matched_count.zero?
+
+          entity
         end
 
         # Guard the stored type and remaining range in the atomic update filter.
@@ -50,7 +52,11 @@ module Locomotive::Steam
         end
 
         def delete(entity)
-          @collection.delete_one(write_filter(entity))
+          result = @collection.delete_one(write_filter(entity))
+
+          missing_record!(entity) if result.deleted_count.zero?
+
+          result
         end
 
         private
@@ -75,12 +81,16 @@ module Locomotive::Steam
         # increment cannot reach.
         def refuse_increment!(entity, attribute, amount)
           unless @collection.find(write_filter(entity), projection: { _id: 1 }).limit(1).first
-            raise Locomotive::Steam::Models::Repository::RecordNotFound,
-                  "could not find #{@collection.name} with _id = #{entity._id}"
+            missing_record!(entity)
           end
 
           raise Locomotive::Steam::InvalidIncrement,
                 "#{attribute} cannot be incremented by #{amount.inspect}"
+        end
+
+        def missing_record!(entity)
+          raise Locomotive::Steam::Models::Repository::RecordNotFound,
+                "could not find #{@collection.name} with _id = #{entity._id}"
         end
 
         # Keep writes within the current site.

@@ -43,7 +43,7 @@ module Locomotive::Steam
         end
 
         def delete(id)
-          records.delete(id)
+          records.delete(id) { find(id) }
         end
 
         def reindex!

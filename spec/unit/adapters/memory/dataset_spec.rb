@@ -73,6 +73,13 @@ describe Locomotive::Steam::Adapters::Memory::Dataset do
     end
   end
 
+  describe '#delete' do
+    it 'raises rather than ignoring an unknown record' do
+      expect { subject.delete('nope') }
+        .to raise_error(Locomotive::Steam::Models::Repository::RecordNotFound)
+    end
+  end
+
   describe '#exists?' do
     let(:dataset) { Locomotive::Steam::Adapters::Memory::Dataset.new(:dummy) }
     before do
