@@ -23,7 +23,7 @@ module Locomotive
                   # A missing _visible key means visible in Wagon files.
                   _attributes[:_visible] = true unless _attributes.key?(:_visible)
 
-                  modify_for_selects(_attributes)
+                  modify_for_selects(_attributes, label)
                   modify_for_associations(_attributes)
                   modify_for_files(_attributes)
                   modify_for_passwords(_attributes)
@@ -96,21 +96,43 @@ module Locomotive
               Locomotive::Steam::ContentFieldValues.normalize_input(field.type, value, @scope.site)
             end
 
-            def modify_for_selects(attributes)
+            def modify_for_selects(attributes, label)
               content_type.select_fields.each do |field|
                 next unless attributes.key?(field.name.to_sym)
 
                 if (option = attributes.delete(field.name.to_sym)).is_a?(Hash)
-                  attributes[:"#{field.name}_id"] = option.inject({}) do |memo, (locale, name)|
+                  unless field.localized?
+                    raise Locomotive::Steam::ContentFieldValues::ParseError.new(
+                      :wrong_type,
+                      "#{File.join(path, "#{content_type_slug}.yml")}, entry #{label}, " \
+                      "field #{field.name}: a locale hash for a select that is not localized")
+                  end
+
+                  attributes[field.persisted_name.to_sym] = option.inject({}) do |memo, (locale, name)|
                     field.select_options.scope.with_locale(locale) do
-                      memo[locale] = field.select_options.by_name(name).try(:_id)
+                      memo[locale] = option_id!(field, name, label, locale)
                     end
                     memo
                   end
                 else
-                  attributes[:"#{field.name}_id"] = field.select_options.by_name(option).try(:_id)
+                  # A YAML scalar names the option in the default locale and
+                  # reads as the every-locale fallback.
+                  attributes[field.persisted_name.to_sym] = field.select_options.scope.with_locale(default_locale) do
+                    option_id!(field, option, label)
+                  end
                 end
               end
+            end
+
+            def option_id!(field, name, label, locale = nil)
+              return nil if name.nil?
+
+              option = field.select_options.by_name(name)
+
+              option&._id || raise(Locomotive::Steam::ContentFieldValues::ParseError.new(
+                :unknown_select_option,
+                "#{File.join(path, "#{content_type_slug}.yml")}, entry #{label}, " \
+                "field #{field.name}#{", locale #{locale}" if locale}: unknown select option"))
             end
 
             def modify_for_files(attributes)

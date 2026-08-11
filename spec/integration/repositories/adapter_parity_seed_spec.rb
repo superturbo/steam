@@ -110,15 +110,17 @@ describe 'Adapter parity seed' do
 
   it 'writes a localized select as the same declared option id in each locale' do
     options = specimens_field('tier').fetch('select_options')
+    gold    = options.detect { |option| option.dig('name', 'en') == 'Gold' }
+    silver  = options.detect { |option| option.dig('name', 'en') == 'Silver' }
 
     expect(document('scalars')['tier_id']).to eq(
-      'en' => options.first['_id'],
-      'fr' => options.first['_id']
+      'en' => gold['_id'],
+      'fr' => gold['_id']
     )
 
     expect(document('arrays')['tier_id']).to eq(
-      'en' => options.last['_id'],
-      'fr' => options.last['_id']
+      'en' => silver['_id'],
+      'fr' => silver['_id']
     )
   end
 

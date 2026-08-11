@@ -26,7 +26,7 @@ module Locomotive
 
       def build(type_slug, attributes)
         with_repository(type_slug) do |_repository|
-          _attributes = prepare_attributes(_repository.content_type, attributes)
+          _attributes = prepare_attributes(_repository, attributes)
 
           entry = _repository.build(_attributes)
 
@@ -37,7 +37,7 @@ module Locomotive
       # Warning: does not work with file fields
       def create(type_slug, attributes, as_json = false)
         with_repository(type_slug) do |_repository|
-          _attributes = prepare_attributes(_repository.content_type, attributes)
+          _attributes = prepare_attributes(_repository, attributes)
 
           entry = _repository.build(_attributes)
 
@@ -59,7 +59,7 @@ module Locomotive
       def update(type_slug, id_or_slug, attributes, as_json = false)
         with_repository(type_slug) do |_repository|
           entry       = _repository.by_slug(id_or_slug) || _repository.find(id_or_slug)
-          _attributes = prepare_attributes(_repository.content_type, attributes)
+          _attributes = prepare_attributes(_repository, attributes)
 
           # A rejected update must not mutate the memoized or filesystem-backed entry.
           candidate       = entry.dup
@@ -80,7 +80,7 @@ module Locomotive
       def update_decorated_entry(decorated_entry, attributes)
         with_repository(decorated_entry.content_type) do |_repository|
           entry       = decorated_entry.__getobj__
-          _attributes = prepare_attributes(_repository.content_type, attributes)
+          _attributes = prepare_attributes(_repository, attributes)
 
           # A refused write must not reach the entry the caller is holding.
           candidate = entry.dup
@@ -139,14 +139,18 @@ module Locomotive
         as_json ? entry.as_json : entry
       end
 
-      def prepare_attributes(content_type, attributes)
-        select_field_names = content_type.fields.selects.map(&:name)
-        json_field_names   = content_type.fields.json.map { |field| field.name.to_s }
+      def prepare_attributes(_repository, attributes)
+        # An option name is data to look up, not text to render.
+        attributes = _repository.resolve_selects(attributes)
+
+        fields       = _repository.content_type.fields
+        skipped_keys = fields.json.map { |field| field.name.to_s } +
+                       fields.selects.map { |field| field.persisted_name.to_s }
 
         # JSON is validated as data; HTML escaping belongs to rendering.
         attributes.each do |key, value|
           next unless value.is_a?(String)
-          next if json_field_names.include?(key.to_s)
+          next if skipped_keys.include?(key.to_s)
 
           text = sanitizable_text(value)
           next unless text
@@ -154,11 +158,7 @@ module Locomotive
           attributes[key] = Sanitize.clean(text, Sanitize::Config::BASIC)
         end
 
-        # special case: select fields. <name> becomes <name>_id
-        attributes.map do |key, value|
-          _key = select_field_names.include?(key.to_s) ? "#{key}_id" : key
-          [_key, value]
-        end.to_h
+        attributes
       end
 
       def sanitizable_text(value)

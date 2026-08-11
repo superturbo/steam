@@ -49,6 +49,24 @@ describe 'Adapter parity' do
           expect(stored_specimen(created._id).attributes).not_to have_key('price')
         end
 
+        it 'resolves a select name on update, and a null clears it' do
+          created = readable_specimen(category_id: option_id(:category, 'alpha'))
+
+          service.update('specimens', created._id, category: 'beta')
+          expect(stored_specimen(created._id).attributes['category_id']).to eq option_id(:category, 'beta')
+
+          service.update('specimens', created._id, category: nil)
+          expect(stored_specimen(created._id).attributes['category_id']).to be_nil
+        end
+
+        it 'refuses an unknown option name without touching the entry' do
+          created = readable_specimen(category_id: option_id(:category, 'alpha'))
+          updated = service.update('specimens', created._id, { category: 'bogus' }, true)
+
+          expect(updated['errors']['category']).to be_present
+          expect(stored_specimen(created._id).attributes['category_id']).to eq option_id(:category, 'alpha')
+        end
+
         it 'keeps a localized field localized through an update' do
           created = localized_specimen
 

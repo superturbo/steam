@@ -56,9 +56,31 @@ module Locomotive
 
       # New entries get defaults here; loads only reflect stored values.
       def build(attributes, &block)
-        super(with_field_defaults(attributes), &block).tap do |entity|
+        super(with_field_defaults(resolve_selects(attributes)), &block).tap do |entity|
           entity[:_visible]  = true unless entity.attributes.key?(:_visible)
           entity[:_position] = 0    unless entity.attributes.key?(:_position)
+        end
+      end
+
+      # A select named by its field takes an option name or an option;
+      # its persisted key is the explicit id. Naming both is ambiguous and
+      # fails validation, like an unknown name.
+      def resolve_selects(attributes)
+        content_type.fields.selects.each_with_object(attributes.dup) do |field, memo|
+          name_keys = memo.keys.select { |key| key.to_s == field.name.to_s }
+          id_keys   = memo.keys.select { |key| key.to_s == field.persisted_name.to_s }
+
+          next if name_keys.empty? && id_keys.size <= 1
+
+          values = name_keys.map { |key| memo.delete(key) }
+
+          memo[field.persisted_name.to_sym] =
+            if name_keys.size > 1 || id_keys.size > 1 || (name_keys.any? && id_keys.any?)
+              id_keys.each { |key| memo.delete(key) }
+              ContentEntry::INVALID_SELECT_VALUE
+            else
+              select_value_to_id(field, values.first)
+            end
         end
       end
 
@@ -208,6 +230,29 @@ module Locomotive
         end
 
         option._id
+      end
+
+      # A scalar name resolves in the active locale, falling back to the
+      # site default; a hash names its locales itself, so it only fits a
+      # localized select.
+      def select_value_to_id(field, value, locale = self.locale || site.try(:default_locale))
+        case value
+        when nil then nil
+        when Hash
+          return ContentEntry::INVALID_SELECT_VALUE unless field.localized?
+
+          value.to_h { |_locale, name| [_locale, select_value_to_id(field, name, _locale)] }
+        when String, Symbol then option_id_by_name(field, value.to_s, locale)
+        else value.respond_to?(:_id) ? value._id : ContentEntry::INVALID_SELECT_VALUE
+        end
+      end
+
+      def option_id_by_name(field, name, locale)
+        option = field.select_options.scope.with_locale(locale) do
+          field.select_options.by_name(name)
+        end
+
+        option ? option._id : ContentEntry::INVALID_SELECT_VALUE
       end
 
       def increment_amount(attribute, amount)

@@ -3,7 +3,7 @@ require 'spec_helper'
 describe Locomotive::Steam::ContentEntry do
 
   let(:fields)      { nil }
-  let(:repository)  { instance_double('FieldRepository', all: fields) }
+  let(:repository)  { instance_double('FieldRepository', all: fields, selects: []) }
   let(:type)        { instance_double('ContentType', slug: 'articles', label_field_name: :title, fields: repository) }
   let(:attributes)  { { title: 'Hello world', _slug: 'hello-world' } }
   let(:content_entry) { described_class.new(attributes) }

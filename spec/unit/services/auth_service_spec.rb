@@ -93,7 +93,7 @@ describe Locomotive::Steam::AuthService do
 
     describe Locomotive::Steam::AuthService::ContentEntryAuth do
 
-      let(:repository)  { instance_double('FieldRepository', all: nil, required: []) }
+      let(:repository)  { instance_double('FieldRepository', all: nil, required: [], selects: []) }
       let(:type)        { instance_double('ContentType', slug: 'accounts', label_field_name: :title, fields: repository, fields_by_name: {}) }
       let(:attributes)  { { password: 'easyone', password_confirmation: 'easyone' } }
       let(:content_entry) { Locomotive::Steam::ContentEntry.new(attributes).tap { |e| e.content_type = type } }

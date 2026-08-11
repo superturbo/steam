@@ -30,7 +30,8 @@ describe 'Adapter parity' do
         options = type_repository.select_options(specimens, :tier)
 
         expect(options.map { |option| option.name.translations })
-          .to eq [{ 'en' => 'Gold', 'fr' => 'Or' }, { 'en' => 'Silver', 'fr' => 'Argent' }]
+          .to eq [{ 'en' => 'Gold', 'fr' => 'Or' }, { 'en' => 'Silver', 'fr' => 'Argent' },
+                  { 'en' => 'R&D', 'fr' => 'R&D fr' }]
       end
 
       # A name declared without a locale is stored differently by each side, and

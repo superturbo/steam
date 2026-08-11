@@ -43,10 +43,14 @@ module Locomotive::Steam
       end
     end
 
+    INVALID_SELECT_VALUE = Object.new.freeze
+
     def valid?
       errors.clear
 
-      validate_required_fields(normalize_fields)
+      invalid = validate_select_fields
+
+      validate_required_fields(invalid + normalize_fields)
 
       errors.empty?
     end
@@ -137,6 +141,22 @@ module Locomotive::Steam
       return ContentFieldValues.normalize_input(field.type, value, site) unless value.respond_to?(:translations)
 
       value.dup.apply { |translated| ContentFieldValues.normalize_input(field.type, translated, site) }
+    end
+
+    # An unresolved select is invalid, not blank as well.
+    def validate_select_fields
+      content_type.fields.selects.each_with_object([]) do |field, invalid|
+        value  = attributes[field.persisted_name.to_sym]
+        values = if value.respond_to?(:translations) then value.translations.values
+                 elsif value.is_a?(Hash)             then value.values
+                 else [value]
+                 end
+
+        next unless values.any? { |id| id.equal?(INVALID_SELECT_VALUE) }
+
+        errors.add(field.name.to_sym, :invalid)
+        invalid << field.name.to_sym
+      end
     end
 
     def validate_required_fields(invalid)

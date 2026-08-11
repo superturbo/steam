@@ -29,6 +29,46 @@ describe 'Adapter parity' do
           expect(entry['errors']).to be_blank
         end
 
+        it 'resolves a select name to the option id its own store issued' do
+          created = service.create('specimens', name: 'Named option', topic_ids: [], category: 'alpha')
+          stored  = stored_specimen(created._id)
+
+          expect(stored.attributes['category_id']).to eq option_id(:category, 'alpha')
+          expect(stored.category[:en]).to eq 'alpha'
+        end
+
+        it 'resolves a localized hash of option names locale by locale' do
+          created = service.create('specimens', name: 'Localized names', topic_ids: [],
+                                                tier: { en: 'Gold', fr: 'Argent' })
+
+          expect(stored_specimen(created._id).attributes['tier_id'].translations)
+            .to eq('en' => option_id(:tier, 'Gold'), 'fr' => option_id(:tier, 'Silver'))
+        end
+
+        it 'resolves an option name before HTML sanitization' do
+          created = service.create('specimens', name: 'Ampersand option', topic_ids: [], tier: 'R&D')
+
+          expect(stored_specimen(created._id).attributes['tier_id'].translations)
+            .to eq('en' => option_id(:tier, 'R&D'))
+        end
+
+        it 'writes a scalar name into the locale that sent it' do
+          created = service_in(:fr).create('specimens', name: 'Scalar fr option', topic_ids: [],
+                                                        tier: 'Or')
+
+          expect(stored_specimen(created._id).attributes['tier_id'].translations)
+            .to eq('fr' => option_id(:tier, 'Gold'))
+        end
+
+        it 'refuses an unknown option name without writing anything' do
+          entry = nil
+
+          expect { entry = service.create('specimens', { name: 'Bogus option', topic_ids: [], category: 'bogus' }, true) }
+            .not_to change { service.all('specimens').size }
+
+          expect(entry['errors']['category']).to be_present
+        end
+
         it 'writes a lone value into the locale the entry is created in' do
           created = service.create('specimens', name: 'Lone', topic_ids: [],
                                                 category_id: option_id(:category, 'alpha'),

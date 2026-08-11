@@ -48,8 +48,8 @@ fields:
     localized: true
     default: Silver
     select_options:
-      en: [Gold, Silver]
-      fr: [Or, Argent]
+      en: [Gold, Silver, R&D]
+      fr: [Or, Argent, R&D fr]
 - at:
     type: date_time
 - held_on:

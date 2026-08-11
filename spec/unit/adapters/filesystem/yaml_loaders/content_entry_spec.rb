@@ -7,7 +7,7 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
 
   let(:site_path)     { default_fixture_site_path }
   let(:content_type)  { instance_double('Bands', _id: 42, slug: 'bands', association_fields: [], select_fields: [], file_fields: [], password_fields: [], fields_by_name: {}) }
-  let(:scope)         { instance_double('Scope', locale: :en, site: nil, context: { content_type: content_type }) }
+  let(:scope)         { instance_double('Scope', locale: :en, default_locale: :en, site: nil, context: { content_type: content_type }) }
   let(:loader)        { described_class.new(site_path) }
 
   describe '#load' do
@@ -214,8 +214,11 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
 
     context 'a content type with a select field' do
 
-      let(:options)       { instance_double('Options') }
-      let(:field)         { instance_double('Field', name: 'kind', type: :select, select_options: options) }
+      let(:options_scope) { instance_double('OptionsScope') }
+      let(:options)       { instance_double('Options', scope: options_scope) }
+
+      before { allow(options_scope).to receive(:with_locale) { |&block| block.call } }
+      let(:field)         { instance_double('Field', name: 'kind', persisted_name: 'kind_id', type: :select, localized?: false, select_options: options) }
       let(:content_type)  { instance_double('Bands', slug: 'bands', select_fields: [field], association_fields: [], file_fields: [], password_fields: [], fields_by_name: {}) }
 
       it 'adds a new attribute for the foreign key' do
@@ -231,6 +234,46 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
 
         it 'leaves the foreign key missing' do
           expect(subject.first.key?(:kind_id)).to be false
+        end
+
+      end
+
+      context 'the entry names the select with an explicit null' do
+
+        before { allow(loader).to receive(:_load).and_return([{ 'One' => { kind: nil } }]) }
+
+        it 'keeps the null foreign key' do
+          expect(subject.first.key?(:kind_id)).to be true
+          expect(subject.first[:kind_id]).to be_nil
+        end
+
+      end
+
+      context 'the entry spells a hash for a select that is not localized' do
+
+        before { allow(loader).to receive(:_load).and_return([{ 'One' => { kind: { en: 'grunge' } } }]) }
+
+        it 'raises instead of resolving locales the field does not have' do
+          expect { subject }.to raise_error(Locomotive::Steam::ContentFieldValues::ParseError,
+                                            /bands\.yml, entry One, field kind/) do |error|
+            expect(error.reason).to eq :wrong_type
+          end
+        end
+
+      end
+
+      context 'the entry names an option no schema holds' do
+
+        before do
+          allow(loader).to receive(:_load).and_return([{ 'One' => { kind: 'bogus' } }])
+          allow(options).to receive(:by_name).with('bogus').and_return(nil)
+        end
+
+        it 'raises with the file, entry and field spelled out' do
+          expect { subject }.to raise_error(Locomotive::Steam::ContentFieldValues::ParseError,
+                                            /bands\.yml, entry One, field kind/) do |error|
+            expect(error.reason).to eq :unknown_select_option
+          end
         end
 
       end
@@ -274,7 +317,7 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
 
       let(:options_scope) { instance_double('Scope', :locale= => true) }
       let(:options)       { instance_double('SelectOptionsRepository', scope: options_scope) }
-      let(:field)         { instance_double('Field', name: 'category', type: :select, localized: true, select_options: options) }
+      let(:field)         { instance_double('Field', name: 'category', persisted_name: 'category_id', type: :select, localized: true, localized?: true, select_options: options) }
       let(:content_type)  { instance_double('Updates', slug: 'updates', select_fields: [field], association_fields: [], file_fields: [], password_fields: [], fields_by_name: {}) }
 
       it 'adds a new localized attribute for the foreign key' do
@@ -284,6 +327,23 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
         allow(options).to receive(:by_name).with('Général').and_return(option)
         expect(subject.last[:category_id]).to eq({ en: 0, fr: 0 })
         expect(subject.last[:category]).to eq nil
+      end
+
+      context 'a name no locale holds' do
+
+        before do
+          allow(loader).to receive(:_load).and_return([{ 'One' => { category: { fr: 'inconnu' } } }])
+          allow(options_scope).to receive(:with_locale) { |_, &block| block.call }
+          allow(options).to receive(:by_name).with('inconnu').and_return(nil)
+        end
+
+        it 'raises naming the locale' do
+          expect { subject }.to raise_error(Locomotive::Steam::ContentFieldValues::ParseError,
+                                            /field category, locale fr/) do |error|
+            expect(error.reason).to eq :unknown_select_option
+          end
+        end
+
       end
 
     end
