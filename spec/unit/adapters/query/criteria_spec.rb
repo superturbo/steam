@@ -21,6 +21,11 @@ describe Locomotive::Steam::Adapters::Query::Criteria do
     end
   end
 
+  it 'rejects a raw operator spelled in another encoding' do
+    expect { described_class.reject_raw_operators!('payload' => { '$gt'.encode(Encoding::UTF_16BE) => 1 }) }
+      .to raise_error(Locomotive::Steam::Adapters::Query::UnsupportedOperator)
+  end
+
   it 'rejects a raw operator nested in a value' do
     [
       { 'price' => { '$gt' => 5 } },
@@ -54,6 +59,14 @@ describe Locomotive::Steam::Adapters::Query::Criteria do
        { 'payload' => [{ :a => 1, 'a' => 2 }] }].each do |criteria|
         expect { described_class.normalize(criteria) }
           .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+      end
+    end
+
+    it 'rejects a key that spells an existing key in another encoding' do
+      [{ 'score' => '1', 'score'.encode(Encoding::UTF_16LE) => '2' },
+       { 'payload' => { 'name' => 1, 'name'.encode(Encoding::UTF_16LE) => 2 } }].each do |criteria|
+        expect { described_class.normalize(criteria) }
+          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /duplicate query key/)
       end
     end
 

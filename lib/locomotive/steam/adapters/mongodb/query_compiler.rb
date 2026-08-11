@@ -57,11 +57,17 @@ module Locomotive::Steam
 
         # Sort and projection are a separate boundary from the criteria — a
         # Mongo-only field such as $natural must not reach the driver either.
-        def reject_raw_operator!(subject, name)
-          return unless name.to_s.split('.').any? { |part| part.start_with?('$') }
+        def field_name!(subject, name)
+          text = Adapters::Query::Text.utf8(name.to_s)
 
-          raise Adapters::Query::UnsupportedOperator,
-                "#{subject} may not contain a Mongo operator: #{name.inspect}"
+          raise Adapters::Query::InvalidValue, "a #{subject} must be readable text" if text.nil?
+
+          if text.split('.').any? { |part| part.start_with?('$') }
+            raise Adapters::Query::UnsupportedOperator,
+                  "#{subject} may not contain a Mongo operator: #{name.inspect}"
+          end
+
+          text
         end
 
         # A fresh one each time; compiled filters are mutable.
@@ -105,6 +111,8 @@ module Locomotive::Steam
         def range_bounds(range)
           range = Adapters::Query::Values.range(range)
 
+          return range if Adapters::Query::Values.unmatchable?(range)
+
           bounds = {}
           bounds['$gte'] = range.begin unless range.begin.nil?
           bounds[range.exclude_end? ? '$lt' : '$lte'] = range.end unless range.end.nil?
@@ -116,8 +124,7 @@ module Locomotive::Steam
 
           sort = spec.each_with_object({}) do |(field, direction), result|
             next if field.nil? || field.to_s.empty?
-            reject_raw_operator!('sort field', field)
-            result[aliased(field.to_s)] = direction == :desc ? -1 : 1
+            result[aliased(field_name!('sort field', field))] = direction == :desc ? -1 : 1
           end
 
           sort.empty? ? nil : sort
@@ -130,8 +137,7 @@ module Locomotive::Steam
           return nil if fields.empty?
 
           fields.each_with_object({}) do |field, result|
-            reject_raw_operator!('projection field', field)
-            result[aliased(field.to_s)] = 1
+            result[aliased(field_name!('projection field', field))] = 1
           end
         end
 

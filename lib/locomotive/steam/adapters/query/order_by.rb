@@ -40,7 +40,7 @@ module Locomotive::Steam
           when nil    then []
           when Symbol then [pair(criterion)]
           when Hash   then criterion.map { |field, direction| pair(field, direction) }
-          when String then criterion.split(',').map { |part| parse(part) }
+          when String then split_criteria(criterion)
           when Array  then array_criteria(criterion)
           else raise InvalidValue, "unsupported order_by: #{criterion.inspect}"
           end
@@ -72,6 +72,12 @@ module Locomotive::Steam
           array.none? { |element| element.is_a?(Array) || element.is_a?(Hash) }
         end
 
+        def split_criteria(criterion)
+          criterion = readable!(criterion, 'an order_by criterion must be readable text')
+
+          criterion.split(',').map { |part| parse(part) }
+        end
+
         def parse(part)
           tokens = part.strip.split(/[\s.|]+/)
 
@@ -86,6 +92,8 @@ module Locomotive::Steam
           name = field.to_s
           raise InvalidValue, "order_by needs a field name, got #{field.inspect}" if name.empty?
 
+          name = readable!(name, 'an order field must be readable text')
+
           if operator_field?(name)
             raise UnsupportedOperator, "order field may not contain a Mongo operator: #{name.inspect}"
           end
@@ -98,10 +106,16 @@ module Locomotive::Steam
           when nil, 1 then :asc
           when -1     then :desc
           else
-            DIRECTIONS.fetch(value.to_s.downcase) do
+            name = readable!(value.to_s, 'an order direction must be readable text')
+
+            DIRECTIONS.fetch(name.downcase) do
               raise InvalidValue, "unsupported order direction: #{value.inspect}"
             end
           end
+        end
+
+        def readable!(value, message)
+          Text.utf8(value) || raise(InvalidValue, message)
         end
 
         def operator_field?(name)

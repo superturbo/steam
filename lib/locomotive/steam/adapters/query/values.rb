@@ -34,9 +34,10 @@ module Locomotive::Steam
           case value
           when Regexp, Range
             raise InvalidValue, "#{value.class} is only supported on a plain field: #{value.inspect}"
-          when Array then propagate_unmatchable(value.map { |element| literal(element) })
-          when Set   then propagate_unmatchable(value.map { |element| literal(element) })
-          when Hash  then propagate_unmatchable(literal_hash(value))
+          when Array  then propagate_unmatchable(value.map { |element| literal(element) })
+          when Set    then propagate_unmatchable(value.map { |element| literal(element) })
+          when Hash   then propagate_unmatchable(literal_hash(value))
+          when String, Symbol then readable_operand(value.to_s)
           else Comparison.normalize_scalar(value)
           end
         end
@@ -46,7 +47,9 @@ module Locomotive::Steam
         # silently dropped pair.
         def literal_hash(hash)
           hash.each_with_object({}) do |(key, value), result|
-            name = key.to_s
+            name = readable_operand(key.to_s)
+
+            return UNMATCHABLE if unmatchable?(name)
 
             if result.key?(name)
               raise InvalidValue, "duplicate key after normalization: #{name.inspect}"
@@ -63,7 +66,11 @@ module Locomotive::Steam
           return value if value.equal?(true) || value.equal?(false)
 
           if value.is_a?(String)
-            case value.downcase
+            text = readable_operand(value)
+
+            raise InvalidValue, 'expected a boolean, got unreadable text' if unmatchable?(text)
+
+            case text.downcase
             when 'true'  then return true
             when 'false' then return false
             end
@@ -81,7 +88,7 @@ module Locomotive::Steam
           integer =
             case value
             when Integer then value
-            when String  then Integer(value, 10) if value.match?(/\A\d{1,10}\z/)
+            when String  then readable_size(value)
             end
 
           unless integer.is_a?(Integer) && integer.between?(0, INT32_MAX)
@@ -91,13 +98,19 @@ module Locomotive::Steam
           integer
         end
 
-        # A plain-field Range must have at least one bound.
+        # A plain-field Range must have at least one bound. Bounds read like
+        # the scalar operands they stand for.
         def range(value)
           if value.begin.nil? && value.end.nil?
             raise InvalidValue, "a range needs at least one bound: #{value.inspect}"
           end
 
-          value
+          lower = range_bound(value.begin)
+          upper = range_bound(value.end)
+
+          return UNMATCHABLE if unmatchable?(lower) || unmatchable?(upper)
+
+          Range.new(lower, upper, value.exclude_end?)
         end
 
         # A unique value no stored field can equal.
@@ -125,6 +138,7 @@ module Locomotive::Steam
           when nil                              then UNMATCHABLE
           when Array, Hash, Set, Range, Regexp  then raise InvalidValue, "#{value.class} cannot be compared: #{value.inspect}"
           when true, false                      then value
+          when String, Symbol                   then readable_operand(value.to_s)
           when Comparable                       then Comparison.normalize_scalar(value)
           else raise InvalidValue, "value is not comparable: #{value.inspect}"
           end
@@ -156,12 +170,33 @@ module Locomotive::Steam
 
         # A container with an unmatchable element cannot match as a literal.
         def propagate_unmatchable(normalized)
+          return normalized if unmatchable?(normalized)
+
           values = normalized.is_a?(Hash) ? normalized.values : normalized
 
           values.any? { |element| unmatchable?(element) } ? UNMATCHABLE : normalized
         end
 
-        private_class_method :list_elements, :propagate_unmatchable
+        # Both stores hold UTF-8 text; an unreadable operand can never equal it.
+        def readable_operand(value)
+          Text.utf8(value) || UNMATCHABLE
+        end
+
+        def readable_size(value)
+          text = readable_operand(value)
+
+          Integer(text, 10) if !unmatchable?(text) && text.match?(/\A\d{1,10}\z/)
+        end
+
+        def range_bound(bound)
+          case bound
+          when String, Symbol then readable_operand(bound.to_s)
+          else bound
+          end
+        end
+
+        private_class_method :list_elements, :propagate_unmatchable, :readable_operand,
+                             :readable_size, :range_bound
 
       end
 

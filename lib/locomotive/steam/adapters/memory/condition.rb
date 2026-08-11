@@ -101,6 +101,8 @@ module Locomotive::Steam
 
         # Different array elements may satisfy a Range's bounds.
         def range_match?(value)
+          return false if Adapters::Query::Values.unmatchable?(@range)
+
           from, to = @range.begin, @range.end
 
           (from.nil? || compare(value, from) { |order| order >= 0 }) &&

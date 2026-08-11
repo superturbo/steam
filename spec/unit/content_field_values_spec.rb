@@ -57,6 +57,23 @@ describe Locomotive::Steam::ContentFieldValues do
 
   end
 
+  describe 'reading a query operand in no readable encoding' do
+
+    it 'raises the structured encoding error before any parsing' do
+      utc = ActiveSupport::TimeZone['UTC']
+
+      [-> { described_class.number(%(12\xFF), :integer) },
+       -> { described_class.boolean(%(tru\xFF)) },
+       -> { described_class.date(%(2020-01-01\xFF)) },
+       -> { described_class.date_time(%(2020-01-01T10:00\xFF), utc) }].each do |call|
+        expect { call.call }.to raise_error(described_class::ParseError) do |error|
+          expect(error.reason).to eq :invalid_encoding
+        end
+      end
+    end
+
+  end
+
   describe '#normalize_read' do
 
     { 'an integer'    => [:integer, '7',          7],

@@ -92,6 +92,16 @@ describe Locomotive::Steam::Adapters::Query::Operators do
       expect(described_class.decode('name.==').last.name).to eq :eq
     end
 
+    it 'reads a readable field name through its own encoding' do
+      expect(described_class.decode('title'.encode(Encoding::UTF_16LE))).to eq ['title', nil]
+    end
+
+    it 'rejects a field name in no readable encoding without echoing it' do
+      expect { described_class.decode(%(caf\xFF)) }
+        .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue,
+                        'a field name must be readable text')
+    end
+
     it 'raises on a removed or unknown operator' do
       %w(title.neq title.matches title.bogus).each do |key|
         expect { described_class.decode(key) }.to raise_error(unsupported)

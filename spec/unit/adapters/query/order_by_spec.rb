@@ -28,6 +28,29 @@ describe Locomotive::Steam::Adapters::Query::OrderBy do
     it('a Hash with a symbol direction') { expect(decode(name: :desc)).to eq [[:name, :desc]] }
 
     it('two symbol args form a single pair') { expect(decode(:name, :desc)).to eq [[:name, :desc]] }
+
+    it 'reads a readable criterion through its own encoding' do
+      expect(decode('name asc'.encode(Encoding::UTF_16LE))).to eq [[:name, :asc]]
+    end
+
+    it 'reads a readable direction through its own encoding' do
+      expect(decode(name: 'asc'.encode(Encoding::UTF_16LE))).to eq [[:name, :asc]]
+    end
+
+    it 'rejects a criterion in no readable encoding without echoing it' do
+      expect { decode(%(name\xFF asc)) }
+        .to raise_error(invalid, 'an order_by criterion must be readable text')
+    end
+
+    it 'rejects a field in no readable encoding without echoing it' do
+      expect { decode(%(name\xFF) => 'asc') }
+        .to raise_error(invalid, 'an order field must be readable text')
+    end
+
+    it 'rejects a direction in no readable encoding without echoing it' do
+      expect { decode(name: %(asc\xFF)) }
+        .to raise_error(invalid, 'an order direction must be readable text')
+    end
     it('a field-only array') { expect(decode(['_position'])).to eq [[:_position, :asc]] }
 
     it 'a flat array is a list of criteria' do

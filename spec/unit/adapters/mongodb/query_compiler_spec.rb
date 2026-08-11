@@ -241,6 +241,19 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
     it 'rejects a $-prefixed field such as $natural' do
       expect { sort([[:'$natural', :asc]]) }.to raise_error(unsupported)
     end
+
+    it 'rejects a $-prefixed field spelled in another encoding' do
+      expect { sort([['$natural'.encode(Encoding::UTF_16BE), :asc]]) }.to raise_error(unsupported)
+    end
+
+    it 'rejects a field in no readable encoding' do
+      expect { sort([[%(caf\xFF), :asc]]) }
+        .to raise_error(invalid, 'a sort field must be readable text')
+    end
+
+    it 'reads a readable field through its own encoding' do
+      expect(sort([['date'.encode(Encoding::UTF_16LE), :desc]])).to eq('date' => -1)
+    end
   end
 
   describe '#compile options — projection' do
@@ -253,6 +266,11 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
 
     it 'rejects a $-prefixed field' do
       expect { projection(['$natural']) }.to raise_error(unsupported)
+    end
+
+    it 'rejects a field in no readable encoding' do
+      expect { projection([%(caf\xFF)]) }
+        .to raise_error(invalid, 'a projection field must be readable text')
     end
   end
 

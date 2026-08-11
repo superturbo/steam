@@ -51,7 +51,7 @@ module Locomotive::Steam
     module_function
 
     def number(value, type)
-      candidate = value.strip
+      candidate = readable_text(value).strip
       format    = type == :integer ? INTEGER_FORMAT : FLOAT_FORMAT
 
       raise ParseError.new(:invalid_number, "invalid #{type} value") unless format.match?(candidate)
@@ -71,7 +71,7 @@ module Locomotive::Steam
     end
 
     def date(value)
-      candidate = value.strip
+      candidate = readable_text(value).strip
 
       unless DASH_DATE.match?(candidate) || SLASH_DATE.match?(candidate)
         raise ParseError.new(:invalid_date, 'invalid date value')
@@ -87,7 +87,7 @@ module Locomotive::Steam
     # A date on its own resolves to midnight in the zone it is given; an offset
     # the value carries decides the instant on its own.
     def date_time(value, zone)
-      candidate = value.strip
+      candidate = readable_text(value).strip
 
       unless DASH_DATE.match?(candidate) || ISO_TIME.match?(candidate)
         raise ParseError.new(:invalid_date, 'invalid date and time value')
@@ -368,7 +368,7 @@ module Locomotive::Steam
 
     # Invalid boolean text breaks the grammar; other objects have the wrong type.
     def boolean(value)
-      key = value.is_a?(String) ? value.strip.downcase : value
+      key = value.is_a?(String) ? readable_text(value).strip.downcase : value
 
       BOOLEANS.fetch(key) do
         raise ParseError.new(:invalid_boolean, 'invalid boolean value') if value.is_a?(String)

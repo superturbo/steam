@@ -56,15 +56,16 @@ module Locomotive::Steam
         # The one key grammar shared by every engine: no dot is a plain field,
         # one dot is a field and a registered operator, more is a nested path.
         def decode(key)
-          field, separator, suffix = key.to_s.rpartition('.')
+          name = readable_key(key)
+          field, separator, suffix = name.rpartition('.')
 
-          return [field!(key.to_s), nil] if separator.empty?
+          return [field!(name), nil] if separator.empty?
 
           [field!(field), fetch(suffix)]
         end
 
         def field!(name)
-          name = name.to_s
+          name = readable_key(name)
 
           if name.empty? || name.include?('.')
             raise InvalidValue, "invalid field name: #{name.inspect}"
@@ -73,7 +74,11 @@ module Locomotive::Steam
           name
         end
 
-        private_class_method :field!
+        def readable_key(name)
+          Text.utf8(name.to_s) || raise(InvalidValue, 'a field name must be readable text')
+        end
+
+        private_class_method :field!, :readable_key
 
       end
 

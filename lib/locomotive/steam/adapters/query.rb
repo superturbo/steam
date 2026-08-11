@@ -9,6 +9,21 @@ module Locomotive::Steam
       class InvalidValue < StandardError; end
       class UnsupportedOperator < StandardError; end
 
+      # Returns UTF-8 query text, or nil when it cannot be transcoded.
+      module Text
+
+        module_function
+
+        def utf8(value)
+          return nil unless value.valid_encoding?
+
+          value.encode(Encoding::UTF_8)
+        rescue EncodingError
+          nil
+        end
+
+      end
+
     end
   end
 end

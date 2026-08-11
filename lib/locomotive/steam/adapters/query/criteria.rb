@@ -9,7 +9,7 @@ module Locomotive::Steam
 
         module_function
 
-        # Stringify keys recursively and reject collisions.
+        # Normalize readable keys before rejecting collisions.
         def normalize(criteria)
           return {} if criteria.nil?
 
@@ -19,6 +19,7 @@ module Locomotive::Steam
 
           criteria.each_with_object({}) do |(key, value), memo|
             name = key.to_s
+            name = Text.utf8(name) || name
 
             raise InvalidValue, "duplicate query key: #{name.inspect}" if memo.key?(name)
 
@@ -61,8 +62,12 @@ module Locomotive::Steam
           end
         end
 
+        # Invalid encodings are handled by the key or value grammar.
         def reject!(subject, name)
-          return unless name.to_s.split('.').any? { |part| part.start_with?('$') }
+          text = Text.utf8(name.to_s)
+
+          return if text.nil?
+          return unless text.split('.').any? { |part| part.start_with?('$') }
 
           raise UnsupportedOperator, "#{subject} may not contain a Mongo operator: #{name.inspect}"
         end

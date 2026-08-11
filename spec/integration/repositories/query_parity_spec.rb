@@ -248,7 +248,28 @@ describe 'Query parity' do
 
     { desc: 'exists false on an array field',
       conditions: { 'labels.exists' => false },
-      expected: %w(all-missing scalars zero) }
+      expected: %w(all-missing scalars zero) },
+
+    { desc: 'eq text in another encoding',
+      conditions: { name: 'Scalars'.encode(Encoding::UTF_16LE) }, expected: %w(scalars) },
+
+    { desc: 'eq text in no readable encoding matches nothing',
+      conditions: { name: %(caf\xFF) }, expected: [] },
+
+    { desc: 'an unreadable list element cannot match, the readable ones still do',
+      conditions: { 'name.in' => ['Scalars', %(caf\xFF)] }, expected: %w(scalars) },
+
+    { desc: 'eq text in no readable encoding on an integer field matches nothing',
+      conditions: { score: %(5\xFF) }, expected: [] },
+
+    { desc: 'gt text in no readable encoding on an integer field matches nothing',
+      conditions: { 'score.gt' => %(1\xFF) }, expected: [] },
+
+    { desc: 'an embedded document with an unreadable key matches nothing',
+      conditions: { payload: { %(caf\xFF) => 1 } }, expected: [] },
+
+    { desc: 'a range with a bound in no readable encoding matches nothing',
+      conditions: { name: 'a'..%(caf\xFF) }, expected: [] }
   ].freeze
 
   # A rejected input has to be rejected the same way everywhere, not merely
@@ -284,6 +305,10 @@ describe 'Query parity' do
 
     { desc: 'a raw Mongo operator nested in a value',
       conditions: { 'name' => { '$ne' => 'Scalars' } },
+      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
+
+    { desc: 'a raw Mongo operator spelled in another encoding',
+      conditions: { 'payload' => { '$gt'.encode(Encoding::UTF_16BE) => 1 } },
       error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
 
     { desc: 'a raw Mongo operator inside an array value',
@@ -397,6 +422,18 @@ describe 'Query parity' do
 
     { desc: 'an order_by criterion naming more than a field and a direction',
       conditions: { order_by: 'name asc desc' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an exists operand in no readable encoding',
+      conditions: { 'title.exists' => %(tru\xFF) },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an order_by criterion in no readable encoding',
+      conditions: { order_by: %(name\xFF asc) },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a field name in no readable encoding',
+      conditions: { %(caf\xFF) => 'x' },
       error: Locomotive::Steam::Adapters::Query::InvalidValue }
   ].freeze
 

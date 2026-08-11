@@ -22,6 +22,15 @@ describe Locomotive::Steam::Adapters::Query::Values do
       end
     end
 
+    it 'rejects text in no readable encoding without echoing it' do
+      expect { described_class.boolean(%(tru\xFF)) }
+        .to raise_error(invalid, 'expected a boolean, got unreadable text')
+    end
+
+    it 'reads readable text through its own encoding' do
+      expect(described_class.boolean('true'.encode(Encoding::UTF_16LE))).to eq true
+    end
+
     it { expect { described_class.boolean(1) }.to raise_error(invalid) }
     it { expect { described_class.boolean(nil) }.to raise_error(invalid) }
 
@@ -36,6 +45,8 @@ describe Locomotive::Steam::Adapters::Query::Values do
     it { expect(described_class.size(2**31 - 1)).to eq 2**31 - 1 }
 
     it { expect { described_class.size(-1) }.to raise_error(invalid) }
+    it { expect { described_class.size(%(2\xFF)) }.to raise_error(invalid) }
+    it { expect(described_class.size('2'.encode(Encoding::UTF_16LE))).to eq 2 }
     it { expect { described_class.size(2.5) }.to raise_error(invalid) }
     it { expect { described_class.size('2.5') }.to raise_error(invalid) }
     it { expect { described_class.size('two') }.to raise_error(invalid) }
@@ -56,6 +67,17 @@ describe Locomotive::Steam::Adapters::Query::Values do
 
     it { expect { described_class.range(Range.new(nil, nil)) }.to raise_error(invalid) }
 
+    it 'reads readable text bounds through their own encoding' do
+      range = described_class.range('a'.encode(Encoding::UTF_16LE)..'b'.encode(Encoding::UTF_16LE))
+
+      expect(range).to eq('a'..'b')
+      expect(range.begin.encoding).to eq Encoding::UTF_8
+    end
+
+    it 'cannot match a bound in no readable encoding' do
+      expect(described_class.unmatchable?(described_class.range('a'..%(caf\xFF)))).to be true
+    end
+
   end
 
   describe '.list' do
@@ -64,6 +86,7 @@ describe Locomotive::Steam::Adapters::Query::Values do
     it { expect(described_class.list(5)).to eq [5] }
     it { expect(described_class.list(nil)).to eq [nil] }
     it { expect(described_class.list(['a', 1, nil, :sym])).to eq ['a', 1, nil, 'sym'] }
+    it { expect(described_class.list(['ok', %(caf\xFF)])).to eq ['ok'] }
     it { expect(described_class.list(Set.new([1, 2]))).to match_array [1, 2] }
 
     it 'does not alias the caller array' do
@@ -104,6 +127,26 @@ describe Locomotive::Steam::Adapters::Query::Values do
 
     it 'reads a Symbol as the string naming it' do
       expect(described_class.literal(:sym)).to eq 'sym'
+    end
+
+    it 'normalizes readable text to UTF-8' do
+      expect(described_class.literal('café'.encode(Encoding::ISO_8859_1))).to eq 'café'
+    end
+
+    it 'cannot match text in no readable encoding' do
+      expect(described_class.unmatchable?(described_class.literal(%(caf\xFF)))).to be true
+    end
+
+    it 'cannot match a Symbol naming unreadable bytes' do
+      expect(described_class.unmatchable?(described_class.literal(%(caf\xFF).b.to_sym))).to be true
+    end
+
+    it 'cannot match an embedded document holding unreadable text' do
+      expect(described_class.unmatchable?(described_class.literal('a' => %(caf\xFF)))).to be true
+    end
+
+    it 'cannot match an embedded document with an unreadable key' do
+      expect(described_class.unmatchable?(described_class.literal(%(caf\xFF) => 1))).to be true
     end
 
     it 'normalizes a Set to an Array, recursively' do
@@ -158,6 +201,14 @@ describe Locomotive::Steam::Adapters::Query::Values do
 
     it 'reads a Symbol as the string naming it' do
       expect(described_class.scalar(:sym)).to eq 'sym'
+    end
+
+    it 'cannot compare text in no readable encoding' do
+      expect(described_class.unmatchable?(described_class.scalar(%(caf\xFF)))).to be true
+    end
+
+    it 'cannot compare a Symbol naming unreadable bytes' do
+      expect(described_class.unmatchable?(described_class.scalar(%(caf\xFF).b.to_sym))).to be true
     end
 
     it 'passes a comparable value the query layer does not know about' do
