@@ -14,10 +14,14 @@ module Locomotive::Steam
         @total_entries  = source.count
         @total_pages    = (@total_entries.to_f / @per_page).ceil
 
-        index   = (@current_page - 1) * @per_page
-        offset  = (index + @per_page - 1) >= @total_entries ? @total_entries : (index + @per_page - 1)
+        index = (@current_page - 1) * @per_page
 
-        @collection = paginate(source, index, offset)
+        @collection =
+          if index >= @total_entries
+            []
+          else
+            source.send(:slice, index, @per_page) || []
+          end
       end
 
       def previous_page
@@ -38,14 +42,6 @@ module Locomotive::Steam
           total_entries:    total_entries,
           total_pages:      total_pages
         }
-      end
-
-      private
-
-      def paginate(source, index, offset)
-        limit = offset - index + 1
-        limit = 0 if limit < 1
-        source.send(:slice, index, limit) || []
       end
 
     end

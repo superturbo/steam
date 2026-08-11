@@ -43,6 +43,33 @@ describe Locomotive::Steam::Models::Pager do
       it { is_expected.to eq ['MongoDB', 'Rails'] }
     end
 
+    describe 'a page starting exactly at the end' do
+
+      let(:source) { instance_double('Collection', count: 6) }
+      let(:page)   { 4 }
+
+      it 'does not request a slice at the end boundary' do
+        expect(source).not_to receive(:slice)
+
+        expect(pager.collection).to eq []
+      end
+
+    end
+
+    describe 'the requested window' do
+
+      let(:source)   { instance_double('Collection', count: 7) }
+      let(:per_page) { 5 }
+      let(:page)     { 2 }
+
+      it 'requests per_page even when fewer entries remain' do
+        allow(source).to receive(:slice).with(5, 5).and_return(['Rack', 'Devise'])
+
+        expect(pager.collection).to eq ['Rack', 'Devise']
+      end
+
+    end
+
   end
 
   describe '#previous_page' do
