@@ -10,6 +10,41 @@ describe Locomotive::Steam::ContentEntryService do
 
   before { allow(entry_repository).to receive(:with).and_return(entry_repository) }
 
+  describe '#update_decorated_entry' do
+
+    let(:title_field)  { instance_double('Field', name: :title, type: :string, is_relationship?: false) }
+    let(:fields)       { instance_double('Fields', json: [], selects: []) }
+    let(:content_type) do
+      instance_double('ContentType', slug: 'articles', fields: fields, label_field_name: :title,
+                                     fields_by_name: { title: title_field }.with_indifferent_access,
+                                     persisted_field_names: [:title])
+    end
+    let(:entry) do
+      Locomotive::Steam::ContentEntry.new(title: 'Old').tap do |_entry|
+        _entry.content_type         = content_type
+        _entry.localized_attributes = {}
+      end
+    end
+    let(:decorated) { Locomotive::Steam::Decorators::I18nDecorator.new(entry, locale) }
+
+    before do
+      allow(entry_repository).to receive(:content_type).and_return(content_type)
+      allow(entry_repository).to receive(:resolve_selects) { |attributes| attributes }
+    end
+
+    it 'keeps the decorator attached to the written entity' do
+      written = nil
+      allow(entry_repository).to receive(:update) { |entity| written = entity }
+
+      result = service.update_decorated_entry(decorated, 'title' => 'New')
+
+      expect(result).to be(decorated)
+      expect(result.__getobj__).to be(written)
+      expect(result.__getobj__).not_to be(entry)
+    end
+
+  end
+
   describe '#validate' do
 
     let(:attributes)        { { title: 'Hello world' } }

@@ -112,6 +112,15 @@ describe 'Adapter parity' do
           expect(stored_specimen(created._id).score).to eq 77
         end
 
+        it 'relinks the associations of a decorated update' do
+          created   = readable_specimen(maker_id: makers.by_slug('maker-one')._id)
+          decorated = service.find('specimens', created._id)
+
+          service.update_decorated_entry(decorated, 'maker_id' => makers.by_slug('maker-two')._id)
+
+          expect(decorated.maker.name).to eq 'Maker two'
+        end
+
         it 'keeps a later assignment on the entry out of the store' do
           created   = readable_specimen(score: 12)
           decorated = service.find('specimens', created._id)
