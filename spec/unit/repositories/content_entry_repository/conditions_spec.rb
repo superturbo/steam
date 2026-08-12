@@ -6,17 +6,89 @@ describe Locomotive::Steam::ContentEntryRepository do
 
   include_context 'content entry repository'
 
-  describe '#conditions_without_order_by' do
+  describe '#query_parts' do
 
     let(:conditions) { {} }
 
-    subject { repository.with(type).send(:conditions_without_order_by, conditions) }
+    subject { repository.with(type).send(:query_parts, conditions) }
 
-    def prepared_for(conditions)
-      repository.with(type).send(:conditions_without_order_by, conditions).first
+    let(:prepared) { combined_conditions(subject.first) }
+
+    def combined_conditions(clauses)
+      clauses.reduce({}, :merge)
     end
 
-    it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1 }, nil]) }
+    def prepared_for(conditions)
+      combined_conditions(repository.with(type).send(:query_parts, conditions).first)
+    end
+
+    describe 'clause composition' do
+
+      it 'starts from the scope clause and the default visibility clause' do
+        expect(subject.first).to eq [{ 'content_type_id' => 1 }, { '_visible' => true }]
+      end
+
+      it 'keeps a caller bound apart from the scope bound' do
+        clauses, _ = repository.with(type).send(:query_parts, 'content_type_id' => 99)
+
+        expect(clauses).to include({ 'content_type_id' => 99 }, { 'content_type_id' => 1 })
+      end
+
+      it 'keeps contradicting visibility criteria as two clauses' do
+        repo = repository.with(type)
+        repo.send(:association_conditions=, '_visible' => true)
+
+        clauses, _ = repo.send(:query_parts, '_visible' => false)
+
+        expect(clauses).to include({ '_visible' => false }, { '_visible' => true })
+      end
+
+      context 'a typed field in the association caller criteria' do
+
+        let(:field)   { instance_double('NumberField', name: 'score', persisted_name: 'score', type: :integer) }
+        let(:_fields) { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [field], booleans: []) }
+
+        it 'field-normalizes them like any caller input' do
+          repo = repository.with(type)
+          repo.send(:association_conditions=, 'score' => '12')
+
+          clauses, _ = repo.send(:query_parts, {})
+
+          expect(clauses).to include('score' => 12)
+        end
+
+      end
+
+      it 'keeps association caller criteria apart from the association bound' do
+        repo = repository.with(type)
+        repo.local_conditions['_id.in'] = %w(article-a)
+        repo.send(:association_conditions=, '_id.in' => %w(article-b))
+
+        clauses, _ = repo.send(:query_parts, {})
+
+        expect(clauses).to include({ '_id.in' => %w(article-b) })
+        expect(clauses).to include(a_hash_including('_id.in' => %w(article-a)))
+      end
+
+      context 'the local scope carries a default order' do
+
+        before { repository.local_conditions[:order_by] = 'name asc' }
+
+        it 'the caller order wins' do
+          _, order_by = repository.with(type).send(:query_parts, order_by: 'score desc')
+
+          expect(order_by).to eq 'score desc'
+        end
+
+        it 'the local order stands without a caller order' do
+          _, order_by = repository.with(type).send(:query_parts, {})
+
+          expect(order_by).to eq 'name asc'
+        end
+
+      end
+
+    end
 
     context 'the _visible condition' do
 
@@ -53,13 +125,13 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:_fields)     { instance_double('Fields', selects: [field], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
       let(:conditions)  { { 'category' => value } }
 
-      it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'category_id' => 42 }, nil]) }
+      it { expect(prepared).to eq({ '_visible' => true, 'content_type_id' => 1, 'category_id' => 42 }) }
 
       context 'an operator whose operand is not a field value' do
         let(:conditions) { { 'category.exists' => true } }
 
         it 'still maps the field to its persisted name' do
-          expect(subject.first).to include('category_id.exists' => true)
+          expect(prepared).to include('category_id.exists' => true)
         end
       end
 
@@ -147,13 +219,13 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [field], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
       let(:conditions)  { { 'person' => value } }
 
-      it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'person_id' => 42 }, nil]) }
+      it { expect(prepared).to eq({ '_visible' => true, 'content_type_id' => 1, 'person_id' => 42 }) }
 
       context 'the target value is a content entry' do
 
         let(:value) { instance_double('TargetContentEntry', _id: 1) }
 
-        it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'person_id' => 1 }, nil]) }
+        it { expect(prepared).to eq({ '_visible' => true, 'content_type_id' => 1, 'person_id' => 1 }) }
 
       end
 
@@ -161,7 +233,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
         let(:value) { { '_id' => 42 } }
 
-        it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'person_id' => 42 }, nil]) }
+        it { expect(prepared).to eq({ '_visible' => true, 'content_type_id' => 1, 'person_id' => 42 }) }
 
       end
 
@@ -170,21 +242,21 @@ describe Locomotive::Steam::ContentEntryRepository do
         let(:value) { [instance_double('TargetContentEntry', _id: 1), instance_double('TargetContentEntry', _id: 2)] }
         let(:conditions)  { { 'person.in' => value } }
 
-        it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'person_id.in' => [1, 2] }, nil]) }
+        it { expect(prepared).to eq({ '_visible' => true, 'content_type_id' => 1, 'person_id.in' => [1, 2] }) }
 
       end
 
       context 'testing a nil value (field => nil)' do
 
         let(:value) { nil }
-        it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'person_id' => nil }, nil]) }
+        it { expect(prepared).to eq({ '_visible' => true, 'content_type_id' => 1, 'person_id' => nil }) }
 
       end
 
       context 'testing a nil value (field.ne => nil)' do
 
         let(:conditions)  { { 'person.ne' => nil } }
-        it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'person_id.ne' => nil }, nil]) }
+        it { expect(prepared).to eq({ '_visible' => true, 'content_type_id' => 1, 'person_id.ne' => nil }) }
 
       end
 
@@ -197,7 +269,7 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [field], dates_and_date_times: [], numbers: [], booleans: []) }
       let(:conditions)  { { 'tags.in' => value } }
 
-      it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'tag_ids.in' => [42] }, nil]) }
+      it { expect(prepared).to eq({ '_visible' => true, 'content_type_id' => 1, 'tag_ids.in' => [42] }) }
 
       context 'the documented all form, once the parser has normalized it' do
 
@@ -218,7 +290,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
         # Filesystem entries use their slugs as IDs.
         it 'resolves every element as a slug under the persisted name' do
-          expect(subject.first).to include('tag_ids.all' => %w(A B))
+          expect(prepared).to include('tag_ids.all' => %w(A B))
         end
 
         context 'with an element no slug holds' do
@@ -226,7 +298,7 @@ describe Locomotive::Steam::ContentEntryRepository do
           let(:conditions) { { 'tags.all' => %w(A C) } }
 
           it 'marks the unresolved element as unmatchable' do
-            expect(subject.first['tag_ids.all'])
+            expect(prepared['tag_ids.all'])
               .to eq ['A', Locomotive::Steam::Adapters::Query::Values.unmatchable]
           end
 
@@ -245,7 +317,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
         let(:value) { [instance_double('TargetContentEntry', _id: 1), 42] }
 
-        it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'tag_ids.in' => [1, 42] }, nil]) }
+        it { expect(prepared).to eq({ '_visible' => true, 'content_type_id' => 1, 'tag_ids.in' => [1, 42] }) }
 
       end
 

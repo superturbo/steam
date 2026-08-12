@@ -24,6 +24,7 @@ module Locomotive
       def initialize_copy(source)
         super
         @memoized_mappers = {}
+        @association_conditions = source.association_conditions.dup
       end
 
       # Entity mapping
@@ -85,13 +86,13 @@ module Locomotive
       end
 
       def count(conditions = {})
-        conditions, _ = conditions_without_order_by(conditions)
-        super() { where(conditions) }
+        clauses, _ = query_parts(conditions)
+        super() { clauses.each { |clause| where(clause) } }
       end
 
       def find(id)
-        conditions, _ = conditions_without_order_by(_id: self.adapter.make_id(id))
-        first { where(conditions) }
+        clauses, _ = query_parts(_id: self.adapter.make_id(id))
+        first { clauses.each { |clause| where(clause) } }
       end
 
       def first(conditions = {}, &block)
@@ -103,14 +104,22 @@ module Locomotive
       end
 
       def exists?(conditions = {})
-        conditions, _ = conditions_without_order_by(conditions)
-        !query { where(conditions) }.empty?
+        clauses, _ = query_parts(conditions)
+        !query { clauses.each { |clause| where(clause) } }.empty?
       end
 
       def by_slug(slug)
-        conditions, _ = conditions_without_order_by(_slug: slug)
-        first { where(conditions) }
+        clauses, _ = query_parts(_slug: slug)
+        first { clauses.each { |clause| where(clause) } }
       end
+
+      def association_conditions
+        @association_conditions ||= {}
+      end
+
+      attr_writer :association_conditions
+
+      protected :association_conditions, :association_conditions=
 
       def value_for(entry, name, conditions = {})
         return nil if entry.nil?
@@ -122,8 +131,7 @@ module Locomotive
             # a safe copy of the proxy repository is needed here
             value = value.dup
 
-            # like this, we do not modify the original local conditions
-            value.local_conditions.merge!(conditions) if conditions
+            value.association_conditions = value.association_conditions.merge(conditions) if conditions
           end
 
           value
@@ -274,17 +282,17 @@ module Locomotive
       end
 
       def ordered_entries(conditions = {}, &block)
-        conditions, order_by = conditions_without_order_by(conditions)
+        clauses, order_by = query_parts(conditions)
 
         # priority:
         # 1/ order_by passed in the conditions parameter
         # 2/ the default order (_position) defined in the content type
-        order_by = order_sequence_for(order_by || content_type.order_by)
+        sequence = order_sequence_for(order_by || content_type.order_by)
 
         query {
-          (block_given? ? instance_eval(&block) : where).
-            where(conditions).
-              order_by(order_by)
+          instance_eval(&block) if block_given?
+          clauses.each { |clause| where(clause) }
+          order_by(sequence)
         }
       end
 
@@ -331,27 +339,47 @@ module Locomotive
         end
       end
 
-      def conditions_without_order_by(conditions = {})
-        _conditions = prepare_conditions(conditions)
-        order_by = _conditions.delete(:order_by) || _conditions.delete('order_by')
-        [_conditions, order_by]
+      def query_parts(conditions = {})
+        sources = normalized_condition_sources(conditions)
+        local   = local_conditions.with_indifferent_access
+
+        caller_order = sources.filter_map { |source| source.delete(:order_by) }.first
+        local_order  = local.delete(:order_by)
+
+        order_by = caller_order || local_order
+
+        clauses = sources.reject(&:blank?)
+        clauses << local if local.present?
+
+        [apply_visibility(clauses), order_by]
       end
 
-      def prepare_conditions(*conditions)
-        _conditions = Conditions.new(conditions.first, self.content_type.fields, simple_clone).prepare
+      def normalized_condition_sources(conditions)
+        [conditions, association_conditions].reject(&:blank?).map do |source|
+          HashWithIndifferentAccess.new(Conditions.new(source, self.content_type.fields, simple_clone).prepare)
+        end
+      end
 
-        super(_conditions).tap do |final_conditions|
-          visibility =
-            final_conditions.key?(:_visible) ? final_conditions.delete(:_visible) : true
+      def apply_visibility(clauses)
+        visibilities = []
+        clauses.each do |clause|
+          visibilities << clause.delete(:_visible) if clause.key?(:_visible)
+        end
 
+        # nil disables only the default visibility filter.
+        visibilities << true if visibilities.empty?
+
+        visibilities.each do |visibility|
           case visibility
-          when true, false then final_conditions[:_visible] = visibility
-          when nil # disable the default filter
+          when true, false then clauses << HashWithIndifferentAccess.new(_visible: visibility)
+          when nil
           else
             raise Locomotive::Steam::Adapters::Query::InvalidValue,
                   '_visible takes a boolean or nil'
           end
         end
+
+        clauses.reject(&:blank?)
       end
 
       def simple_clone

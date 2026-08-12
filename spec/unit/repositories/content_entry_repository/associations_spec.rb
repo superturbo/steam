@@ -25,20 +25,6 @@ describe Locomotive::Steam::ContentEntryRepository do
       end
     end
 
-    context 'with a has_many field' do
-      let(:type) { build_content_type('Articles', label_field_name: :title, localized_names: %w(title), fields: _fields, fields_by_name: { articles: instance_double('Field', type: :has_many) }, fields_with_default: []) }
-      let(:proxy_repository) { repository.dup }
-      let(:entry) { instance_double('Entry', articles: proxy_repository) }
-      let(:name) { :articles }
-      let(:conditions) { { published: true } }
-
-      it 'does not modify the local conditions of the initial proxy repository' do
-        expect(subject.local_conditions).to eq(content_type_id: 1, published: true)
-        expect(proxy_repository.local_conditions).to eq(content_type_id: 1)
-      end
-
-    end
-
   end
 
   describe 'belongs_to' do
@@ -188,6 +174,23 @@ describe Locomotive::Steam::ContentEntryRepository do
       articles = subject.articles
       allow(adapter).to receive(:collection).and_return(loaded(other_entries))
       expect(articles.all.map(&:title)).to eq ['Hello world', 'Lorem ipsum']
+    end
+
+    it 'combines a caller filter with the association bound' do
+      articles = repository.value_for(subject, :articles, '_id.in' => ['lost'])
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
+
+      expect(articles.all).to be_empty
+    end
+
+    it 'leaves the original association unfiltered after a filtered read' do
+      author   = subject
+      filtered = repository.value_for(author, :articles, '_id.in' => ['lost'])
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
+
+      filtered.all
+
+      expect(author.articles.all.map(&:title)).to eq ['Hello world', 'Lorem ipsum']
     end
 
     it 'applies a runtime order_by to the returned entries' do

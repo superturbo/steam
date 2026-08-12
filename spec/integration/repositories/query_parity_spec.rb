@@ -248,6 +248,9 @@ describe 'Query parity' do
       conditions: { 'labels.exists' => true },
       expected: %w(arrays embedded explicit-nils) },
 
+    { desc: 'a caller cannot widen the content type scope',
+      conditions: { content_type_id: 'somewhere-else' }, expected: [] },
+
     { desc: 'exists false on an array field',
       conditions: { 'labels.exists' => false },
       expected: %w(all-missing scalars zero) },
@@ -466,11 +469,14 @@ describe 'Query parity' do
     let(:site)            { Locomotive::Steam::SiteRepository.new(adapter).by_handle_or_domain('adapter-parity', nil) }
     let(:type_repository) { Locomotive::Steam::ContentTypeRepository.new(adapter, site, AdapterParityFixture::LOCALE) }
 
-    def slugs(conditions)
-      repository = Locomotive::Steam::ContentEntryRepository.new(
+    def specimens
+      Locomotive::Steam::ContentEntryRepository.new(
         adapter, site, AdapterParityFixture::LOCALE, type_repository)
+        .with(type_repository.by_slug('specimens'))
+    end
 
-      repository.with(type_repository.by_slug('specimens')).all(conditions).map do |entry|
+    def slugs(conditions)
+      specimens.all(conditions).map do |entry|
         entry._slug[AdapterParityFixture::LOCALE]
       end
     end
@@ -481,6 +487,11 @@ describe 'Query parity' do
 
     ERROR_CASES.each do |c|
       it("rejects #{c[:desc]}") { expect { slugs(c[:conditions]) }.to raise_error(c[:error]) }
+    end
+
+    it 'a contradicted scope answers count and exists the same way' do
+      expect(specimens.count(content_type_id: 'somewhere-else')).to eq 0
+      expect(specimens.exists?(content_type_id: 'somewhere-else')).to be(false)
     end
 
   end

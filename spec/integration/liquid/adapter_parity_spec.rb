@@ -144,6 +144,14 @@ describe 'Liquid adapter parity' do
         expect(render_liquid(source)).to eq ''
       end
 
+      it 'cannot widen the content type scope' do
+        source = "{% with_scope content_type_id: 'somewhere-else' %}" \
+                 '{% for entry in contents.specimens %}[{{ entry._slug }}]{% endfor %}' \
+                 '{% endwith_scope %}'
+
+        expect(render_liquid(source)).to eq ''
+      end
+
       it 'reverses the rows it took, not the ones it skipped' do
         expect(names('reversed limit: 2')).to eq '[Arrays][All missing]'
       end

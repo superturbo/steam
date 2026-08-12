@@ -91,17 +91,6 @@ module Locomotive::Steam
         adapter.base_url(mapper, scope, entity)
       end
 
-      def prepare_conditions(*conditions)
-        _local_conditions = @local_conditions.dup
-
-        first = { order_by: _local_conditions.delete(:order_by) }.delete_if { |_, v| v.blank? }
-
-        [first, *conditions.flatten].inject(HashWithIndifferentAccess.new) do |memo, hash|
-          memo.merge!(hash) unless hash.blank?
-          memo
-        end.merge(_local_conditions)
-      end
-
       # TODO: not sure about that. could it be used further in the dev
       # def collection_name
       #   mapper.name

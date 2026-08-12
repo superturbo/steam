@@ -6,14 +6,20 @@ describe Locomotive::Steam::ContentEntryRepository do
 
   include_context 'content entry repository'
 
-  describe '#conditions_without_order_by' do
+  describe '#query_parts' do
 
     let(:conditions) { {} }
 
-    subject { repository.with(type).send(:conditions_without_order_by, conditions) }
+    subject { repository.with(type).send(:query_parts, conditions) }
+
+    let(:prepared) { combined_conditions(subject.first) }
+
+    def combined_conditions(clauses)
+      clauses.reduce({}, :merge)
+    end
 
     def prepared_for(conditions)
-      repository.with(type).send(:conditions_without_order_by, conditions).first
+      combined_conditions(repository.with(type).send(:query_parts, conditions).first)
     end
 
     context 'date fields' do
@@ -23,13 +29,13 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: [], booleans: []) }
       let(:conditions)  { { 'launched_at' => value } }
 
-      it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'launched_at' => Date.parse('2009/09/10') }, nil]) }
+      it { expect(prepared).to eq({ '_visible' => true, 'content_type_id' => 1, 'launched_at' => Date.parse('2009/09/10') }) }
 
       # A day names no instant, so nothing asks for the zone.
       context 'without a site' do
         let(:site) { nil }
 
-        it { expect(subject.first['launched_at']).to eql Date.new(2009, 9, 10) }
+        it { expect(prepared['launched_at']).to eql Date.new(2009, 9, 10) }
       end
 
     end
@@ -45,21 +51,21 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       # Time.zone belongs to whatever request is running; the site decides.
       it 'reads an offset-less time in the site zone, not the process one' do
-        expect(subject.first['launched_at']).to eql Time.utc(2007, 6, 29, 21, 15)
+        expect(prepared['launched_at']).to eql Time.utc(2007, 6, 29, 21, 15)
       end
 
       context 'a to_s string' do
         let(:value) { '2007-06-29 23:15:00 +0200' }
 
         it 'reads as the instant it names' do
-          expect(subject.first['launched_at']).to eql Time.utc(2007, 6, 29, 21, 15)
+          expect(prepared['launched_at']).to eql Time.utc(2007, 6, 29, 21, 15)
         end
       end
 
       context 'a to_s string of a UTC site' do
         let(:value) { '2007-06-29 21:15:00 UTC' }
 
-        it { expect(subject.first['launched_at']).to eql Time.utc(2007, 6, 29, 21, 15) }
+        it { expect(prepared['launched_at']).to eql Time.utc(2007, 6, 29, 21, 15) }
       end
 
       context 'a site behind UTC' do
@@ -68,13 +74,13 @@ describe Locomotive::Steam::ContentEntryRepository do
                           timezone: ActiveSupport::TimeZone['America/New_York'])
         end
 
-        it { expect(subject.first['launched_at']).to eql Time.utc(2007, 6, 30, 1, 15) }
+        it { expect(prepared['launched_at']).to eql Time.utc(2007, 6, 30, 1, 15) }
 
         # A calendar date names a day; the site decides which instant it is.
         context 'given a Date' do
           let(:value) { Date.new(2013, 2, 11) }
 
-          it { expect(subject.first['launched_at']).to eql Time.utc(2013, 2, 11, 5) }
+          it { expect(prepared['launched_at']).to eql Time.utc(2013, 2, 11, 5) }
         end
       end
 
@@ -97,23 +103,24 @@ describe Locomotive::Steam::ContentEntryRepository do
       end
 
       it 'keeps the instant an operand spells its own offset for' do
-        expect(described_class.new(adapter, site, locale, content_type_repository)
-                 .with(type).send(:conditions_without_order_by, 'launched_at' => '2007-06-29T21:15:00Z')
-                 .first['launched_at'])
-          .to eql Time.utc(2007, 6, 29, 21, 15)
+        clauses = described_class.new(adapter, site, locale, content_type_repository)
+                    .with(type).send(:query_parts, 'launched_at' => '2007-06-29T21:15:00Z')
+                    .first
+
+        expect(combined_conditions(clauses)['launched_at']).to eql Time.utc(2007, 6, 29, 21, 15)
       end
 
       context 'surrounded by whitespace' do
         let(:value) { "\t2019-09-10T10:30:00Z\n" }
 
-        it { expect(subject.first['launched_at']).to eql Time.utc(2019, 9, 10, 10, 30) }
+        it { expect(prepared['launched_at']).to eql Time.utc(2019, 9, 10, 10, 30) }
       end
 
       # The slash form belongs to a date, and a date and time joins them with T.
       ['2007/06/29', '2007/06/29 21:15:00', '2007-06-29 21:15:00'].each do |rejected|
         context rejected.inspect do
           let(:value) { rejected }
-          it { expect(subject.first['launched_at']).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable }
+          it { expect(prepared['launched_at']).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable }
         end
       end
 
@@ -131,14 +138,14 @@ describe Locomotive::Steam::ContentEntryRepository do
       ['2012-01-02', '2012/01/02', ' 2012/01/02 '].each do |written|
         context written.inspect do
           let(:value) { written }
-          it { expect(subject.first['held_on']).to eq Date.new(2012, 1, 2) }
+          it { expect(prepared['held_on']).to eq Date.new(2012, 1, 2) }
         end
       end
 
       ['tomorrow', '2012-99-99', '2012-01-02 10:00:00', '2012-01-02 10:00:00 +03:00', ''].each do |bad|
         context bad.inspect do
           let(:value) { bad }
-          it { expect(subject.first['held_on']).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable }
+          it { expect(prepared['held_on']).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable }
         end
       end
 
@@ -151,20 +158,20 @@ describe Locomotive::Steam::ContentEntryRepository do
           'a to_s string'                       => '2012-01-02 23:30:00 +0300' }.each do |label, written|
           context label do
             let(:value) { written }
-            it { expect(subject.first['held_on']).to eq Date.new(2012, 1, 2) }
+            it { expect(prepared['held_on']).to eq Date.new(2012, 1, 2) }
           end
         end
 
         context 'an instant that is still the previous site day' do
           let(:value) { '2012-01-03T00:30:00+01:00' }
-          it { expect(subject.first['held_on']).to eq Date.new(2012, 1, 2) }
+          it { expect(prepared['held_on']).to eq Date.new(2012, 1, 2) }
         end
 
       end
 
       context 'a Date operand' do
         let(:value) { Date.new(2012, 1, 2) }
-        it { expect(subject.first['held_on']).to eq Date.new(2012, 1, 2) }
+        it { expect(prepared['held_on']).to eq Date.new(2012, 1, 2) }
       end
 
       context 'an object that merely answers to_date' do
@@ -180,12 +187,12 @@ describe Locomotive::Steam::ContentEntryRepository do
 
         context 'a zoned moment before the site midnight' do
           let(:value) { Time.utc(2020, 1, 1, 23, 30).in_time_zone('Paris') }
-          it { expect(subject.first['held_on']).to eq Date.new(2020, 1, 1) }
+          it { expect(prepared['held_on']).to eq Date.new(2020, 1, 1) }
         end
 
         context 'a DateTime before the site midnight' do
           let(:value) { DateTime.new(2020, 1, 2, 0, 30, 0, '+1') }
-          it { expect(subject.first['held_on']).to eq Date.new(2020, 1, 1) }
+          it { expect(prepared['held_on']).to eq Date.new(2020, 1, 1) }
         end
 
         context 'the site keeps its own day' do
@@ -195,7 +202,7 @@ describe Locomotive::Steam::ContentEntryRepository do
           end
           let(:value) { Time.utc(2020, 1, 1, 23, 30) }
 
-          it { expect(subject.first['held_on']).to eq Date.new(2020, 1, 2) }
+          it { expect(prepared['held_on']).to eq Date.new(2020, 1, 2) }
         end
 
       end
@@ -283,7 +290,7 @@ describe Locomotive::Steam::ContentEntryRepository do
         'false' => false, 'False' => false, '1' => true, '0' => false }.each do |written, expected|
         context written.inspect do
           let(:value) { written }
-          it { expect(subject.first['flag']).to eq expected }
+          it { expect(prepared['flag']).to eq expected }
         end
       end
 
@@ -294,7 +301,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
           it do
             if bad.is_a?(String)
-              expect(subject.first['flag']).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable
+              expect(prepared['flag']).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable
             else
               expect { subject }.to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
             end
@@ -306,7 +313,7 @@ describe Locomotive::Steam::ContentEntryRepository do
         let(:conditions) { { 'flag.in' => ['1', 'nope'] } }
 
         it 'reads every element' do
-          expect(subject.first['flag.in']).to eq [true, Locomotive::Steam::Adapters::Query::Values.unmatchable]
+          expect(prepared['flag.in']).to eq [true, Locomotive::Steam::Adapters::Query::Values.unmatchable]
         end
       end
 
@@ -363,7 +370,7 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: [], booleans: []) }
       let(:conditions)  { { 'launched_at' => value } }
 
-      it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'launched_at' => Date.new(2019, 9, 10) }, nil]) }
+      it { expect(prepared).to eq({ '_visible' => true, 'content_type_id' => 1, 'launched_at' => Date.new(2019, 9, 10) }) }
 
     end
 
@@ -374,7 +381,7 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: [], booleans: []) }
       let(:conditions)  { { 'launched_at' => value } }
 
-      it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'launched_at' => Time.utc(2007, 6, 29, 21, 15) }, nil]) }
+      it { expect(prepared).to eq({ '_visible' => true, 'content_type_id' => 1, 'launched_at' => Time.utc(2007, 6, 29, 21, 15) }) }
 
     end
 
@@ -387,7 +394,7 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [field], numbers: [], booleans: []) }
       let(:conditions)  { { 'launched_at' => value } }
 
-      it { is_expected.to eq([{ '_visible' => true, 'content_type_id' => 1, 'launched_at' => Time.utc(2019, 9, 10) }, nil]) }
+      it { expect(prepared).to eq({ '_visible' => true, 'content_type_id' => 1, 'launched_at' => Time.utc(2019, 9, 10) }) }
 
     end
 
@@ -400,7 +407,7 @@ describe Locomotive::Steam::ContentEntryRepository do
       ['tomorrow', '2025-99-99', ''].each do |bad|
         context bad.inspect do
           let(:value) { bad }
-          it { expect(subject.first['launched_at']).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable }
+          it { expect(prepared['launched_at']).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable }
         end
       end
 
@@ -413,49 +420,45 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [field], booleans: []) }
       let(:conditions)  { { 'price.lt' => value } }
 
-      def prepared
-        subject.first['price.lt']
-      end
-
       def subject_for(conditions)
-        repository.with(type).send(:conditions_without_order_by, conditions).first
+        combined_conditions(repository.with(type).send(:query_parts, conditions).first)
       end
 
       context 'a String from params' do
         let(:value) { '42.5' }
-        it { expect(prepared).to eq 42.5 }
+        it { expect(prepared['price.lt']).to eq 42.5 }
 
         context 'on an integer field' do
           let(:field_type) { :integer }
           let(:value)      { '42' }
-          it { expect(prepared).to eq 42 }
+          it { expect(prepared['price.lt']).to eq 42 }
         end
       end
 
       context 'a value that is already numeric' do
         let(:value) { 42.5 }
-        it { expect(prepared).to eq 42.5 }
+        it { expect(prepared['price.lt']).to eq 42.5 }
       end
 
       context 'a nil value' do
         let(:value) { nil }
-        it { expect(prepared).to be_nil }
+        it { expect(prepared['price.lt']).to be_nil }
       end
 
       context 'a list operand' do
         let(:conditions) { { 'price.in' => %w(1 2) } }
-        it { expect(subject.first['price.in']).to eq [1.0, 2.0] }
+        it { expect(prepared['price.in']).to eq [1.0, 2.0] }
 
         it 'does not mutate the given array' do
           source = %w(1 2)
-          repository.with(type).send(:conditions_without_order_by, 'price.in' => source)
+          repository.with(type).send(:query_parts, 'price.in' => source)
           expect(source).to eq %w(1 2)
         end
       end
 
       context 'a numeric Range' do
         let(:conditions) { { 'price' => (5..6) } }
-        it { expect(subject.first['price']).to eq(5..6) }
+        it { expect(prepared['price']).to eq(5..6) }
       end
 
       context 'a Range bound meets the same rules as a gt or lte operand' do
@@ -505,7 +508,7 @@ describe Locomotive::Steam::ContentEntryRepository do
       context 'two conditions bounding the same field' do
         let(:conditions) { { 'price.gte' => '5', 'price.lte' => '10' } }
         it 'converts both, not only the last one' do
-          expect(subject.first).to include('price.gte' => 5.0, 'price.lte' => 10.0)
+          expect(prepared).to include('price.gte' => 5.0, 'price.lte' => 10.0)
         end
       end
 
@@ -523,14 +526,14 @@ describe Locomotive::Steam::ContentEntryRepository do
         %w(abc 4.2.1).each do |bad|
           context bad.inspect do
             let(:value) { bad }
-            it('matches nothing, and is never turned into nil') { expect(prepared).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable }
+            it('matches nothing, and is never turned into nil') { expect(prepared['price.lt']).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable }
           end
         end
 
         context 'a fractional string on an integer field' do
           let(:field_type) { :integer }
           let(:value)      { '4.2' }
-          it { expect(prepared).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable }
+          it { expect(prepared['price.lt']).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable }
         end
 
         it 'reads only what is numeric inside a list' do
