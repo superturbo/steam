@@ -638,8 +638,9 @@ module Locomotive
 
         def value_to_date(value, field)
           case value
-          # a Range or Regexp is its own plain-field expression, not an operand
-          when nil, Range, Regexp then value
+          # a Regexp is its own plain-field expression, not an operand
+          when nil, Regexp then value
+          when Range  then date_range(value, field)
           when Array  then value.map { |element| value_to_date(element, field) }
           when Set    then value.map { |element| value_to_date(element, field) }
           when String then parse_date(value, field)
@@ -677,8 +678,31 @@ module Locomotive
           end
         end
 
-        # Bounds meet the same rules as gt/lte operands: text is read as a
-        # number or matches nothing, a wrong type raises.
+        # Bounds meet the same rules as comparison operands: text is read
+        # as a date or matches nothing, a wrong type raises.
+        def date_range(range, field)
+          low  = date_range_bound(range.begin, field)
+          high = date_range_bound(range.end, field)
+
+          if [low, high].any? { |bound| Locomotive::Steam::Adapters::Query::Values.unmatchable?(bound) }
+            return Locomotive::Steam::Adapters::Query::Values.unmatchable
+          end
+
+          Range.new(low, high, range.exclude_end?)
+        end
+
+        def date_range_bound(value, field)
+          case value
+          when nil then nil
+          when Array, Set, Hash, Range, Regexp
+            raise Locomotive::Steam::Adapters::Query::InvalidValue,
+                  "#{value.class} cannot bound a date range"
+          else value_to_date(value, field)
+          end
+        end
+
+        # Bounds meet the same rules as comparison operands: text is read
+        # as a number or matches nothing, a wrong type raises.
         def numeric_range(range, field)
           low  = numeric_range_bound(range.begin, field)
           high = numeric_range_bound(range.end, field)

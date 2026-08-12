@@ -273,6 +273,14 @@ describe 'Query parity' do
       conditions: { held_on: TRANSPORT_MOMENT.to_s },
       expected: %w(scalars) },
 
+    { desc: 'a text-bound range narrows a date field',
+      conditions: { held_on: '2013-01-01'..'2013-12-31' },
+      expected: %w(scalars) },
+
+    { desc: 'a text-bound range narrows a date_time field',
+      conditions: { at: '2012-06-06 00:00:00 UTC'..'2012-06-07T00:00:00Z' },
+      expected: %w(scalars) },
+
     { desc: 'a to_s moment bounds a date_time field',
       conditions: { 'at.lte' => '2012-06-06 15:00:00 +0300' },
       expected: %w(scalars) },

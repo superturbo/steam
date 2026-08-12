@@ -54,6 +54,15 @@ describe Locomotive::Steam::ContentEntryRepository do
         expect(prepared['launched_at']).to eql Time.utc(2007, 6, 29, 21, 15)
       end
 
+      context 'a Range with spelled-out bounds' do
+        let(:value) { '2007-06-29 23:15:00 +0200'..'2007-06-30T00:00:00Z' }
+
+        it 'reads each bound as the instant it names' do
+          expect(prepared['launched_at'])
+            .to eq(Time.utc(2007, 6, 29, 21, 15)..Time.utc(2007, 6, 30))
+        end
+      end
+
       context 'a to_s string' do
         let(:value) { '2007-06-29 23:15:00 +0200' }
 
@@ -147,6 +156,41 @@ describe Locomotive::Steam::ContentEntryRepository do
           let(:value) { bad }
           it { expect(prepared['held_on']).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable }
         end
+      end
+
+      context 'a Range bound meets the same rules as an operand' do
+
+        def range_for(range)
+          prepared_for('held_on' => range)['held_on']
+        end
+
+        it 'reads text bounds as dates' do
+          expect(range_for('2012-01-01'..'2012-03-01'))
+            .to eq(Date.new(2012, 1, 1)..Date.new(2012, 3, 1))
+        end
+
+        it 'keeps an excluded end, a beginless and an endless side' do
+          expect(range_for('2012-01-01'...'2012-03-01'))
+            .to eq(Date.new(2012, 1, 1)...Date.new(2012, 3, 1))
+          expect(range_for('2012-01-01'..)).to eq(Date.new(2012, 1, 1)..)
+          expect(range_for(..'2012-03-01')).to eq(..Date.new(2012, 3, 1))
+        end
+
+        it "reads a moment bound as the date in the site's timezone" do
+          expect(range_for(Time.utc(2012, 1, 1, 23, 30).in_time_zone('Paris')..'2012-03-01'))
+            .to eq(Date.new(2012, 1, 1)..Date.new(2012, 3, 1))
+        end
+
+        it 'matches nothing when a text bound reads as no date' do
+          expect(range_for('tomorrow'..'2012-03-01'))
+            .to eq Locomotive::Steam::Adapters::Query::Values.unmatchable
+        end
+
+        it 'rejects a structural bound' do
+          expect { prepared_for('held_on' => [1]..[2]) }
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+        end
+
       end
 
       # Liquid renders {{ now }} through to_s and the action bridge through
