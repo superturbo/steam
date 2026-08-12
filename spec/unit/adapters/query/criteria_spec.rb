@@ -1,6 +1,5 @@
 require 'spec_helper'
 
-require 'set'
 require_relative '../../../../lib/locomotive/steam/adapters/query'
 
 describe Locomotive::Steam::Adapters::Query::Criteria do
@@ -30,7 +29,6 @@ describe Locomotive::Steam::Adapters::Query::Criteria do
     [
       { 'price' => { '$gt' => 5 } },
       { 'price' => [{ '$gt' => 5 }] },
-      { 'price' => Set[{ '$gt' => 5 }] },
       { 'price' => { 'a' => [{ 'b' => { '$ne' => 1 } }] } }
     ].each do |criteria|
       expect { check(criteria) }.to raise_error(unsupported)
@@ -67,6 +65,16 @@ describe Locomotive::Steam::Adapters::Query::Criteria do
        { 'payload' => { 'name' => 1, 'name'.encode(Encoding::UTF_16LE) => 2 } }].each do |criteria|
         expect { described_class.normalize(criteria) }
           .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /duplicate query key/)
+      end
+    end
+
+    it 'rejects a collection that is not a Hash or an Array, top-level or nested' do
+      [{ 'labels' => %w(y x).each },
+       { 'labels.in' => [%w(y).each] },
+       { 'payload' => { 'a' => [1].each } }].each do |criteria|
+        expect { described_class.normalize(criteria) }
+          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue,
+                          /not a supported query collection/)
       end
     end
 

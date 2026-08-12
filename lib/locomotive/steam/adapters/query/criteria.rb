@@ -1,5 +1,3 @@
-require 'set'
-
 module Locomotive::Steam
   module Adapters
     module Query
@@ -29,8 +27,11 @@ module Locomotive::Steam
 
         def normalize_value(value)
           case value
-          when Hash       then normalize(value)
-          when Array, Set then value.map { |element| normalize_value(element) }
+          when Hash  then normalize(value)
+          when Array then value.map { |element| normalize_value(element) }
+          when Range, Regexp then value
+          when Enumerable
+            raise InvalidValue, "#{value.class} is not a supported query collection"
           else value
           end
         end
@@ -57,7 +58,7 @@ module Locomotive::Steam
               reject!('values', key)
               reject_values!(nested)
             end
-          when Array, Set
+          when Array
             value.each { |element| reject_values!(element) }
           end
         end

@@ -1,5 +1,3 @@
-require 'set'
-
 module Locomotive::Steam
   module Adapters
     module Query
@@ -25,19 +23,21 @@ module Locomotive::Steam
           public_send(kind, value)
         end
 
-        # A literal operand: scalars pass through, a Set becomes an Array and a
-        # Hash gets String keys, both recursively. Regexp and Range are rejected
-        # because they carry their own plain-field semantics. Containers are
-        # rebuilt rather than mutated — callers may reuse the criteria they
-        # passed in.
+        # A literal operand: scalars pass through and a Hash gets String keys,
+        # recursively. Regexp and Range are rejected because they carry their
+        # own plain-field semantics. Criteria are Hashes and lists are
+        # Arrays; any other collection is not part of the query language.
+        # Containers are rebuilt rather than mutated — callers may reuse the
+        # criteria they passed in.
         def literal(value)
           case value
           when Regexp, Range
             raise InvalidValue, "#{value.class} is only supported on a plain field: #{value.inspect}"
           when Array  then propagate_unmatchable(value.map { |element| literal(element) })
-          when Set    then propagate_unmatchable(value.map { |element| literal(element) })
           when Hash   then propagate_unmatchable(literal_hash(value))
           when String, Symbol then readable_operand(value.to_s)
+          when Enumerable
+            raise InvalidValue, "#{value.class} is not a supported query collection"
           else Comparison.normalize_scalar(value)
           end
         end
@@ -136,18 +136,21 @@ module Locomotive::Steam
 
           case value
           when nil                              then UNMATCHABLE
-          when Array, Hash, Set, Range, Regexp  then raise InvalidValue, "#{value.class} cannot be compared: #{value.inspect}"
-          when true, false                      then value
-          when String, Symbol                   then readable_operand(value.to_s)
-          when Comparable                       then Comparison.normalize_scalar(value)
+          when Array, Hash, Range, Regexp
+            raise InvalidValue, "#{value.class} cannot be compared: #{value.inspect}"
+          when Enumerable
+            raise InvalidValue, "#{value.class} is not a supported query collection"
+          when true, false    then value
+          when String, Symbol then readable_operand(value.to_s)
+          when Comparable     then Comparison.normalize_scalar(value)
           else raise InvalidValue, "value is not comparable: #{value.inspect}"
           end
         end
 
-        # in/nin/all take a list. A lone value becomes a one-element list and a
-        # Set becomes an Array; a Range is rejected rather than enumerated, so a
-        # wide range can't explode into a huge query. Elements are normalized as
-        # literals, which keeps nested arrays and embedded documents (both have
+        # in/nin/all take a list. A lone value becomes a one-element list.
+        # A Range is rejected rather than enumerated, so a wide range cannot
+        # expand into a large query. Elements are normalized as literals,
+        # which keeps nested arrays and embedded documents (both have
         # defined MongoDB semantics) and rejects Regexp and Range.
         def list(value)
           list_elements(value).reject { |element| unmatchable?(element) }
@@ -163,7 +166,7 @@ module Locomotive::Steam
         def list_elements(value)
           case value
           when Range then raise InvalidValue, "a Range is not allowed in a list operator: #{value.inspect}"
-          when Array, Set then value.map { |element| literal(element) }
+          when Array then value.map { |element| literal(element) }
           else [literal(value)]
           end
         end

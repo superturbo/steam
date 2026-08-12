@@ -76,7 +76,6 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
   describe '#compile filter — list operators normalise the value to an array' do
     it { expect(filter('tags.in'  => 'awesome')).to eq('tags' => { '$in'  => ['awesome'] }) }
     it { expect(filter('tags.in'  => [1, 2])).to    eq('tags' => { '$in'  => [1, 2] }) }
-    it { expect(filter('tags.in'  => Set[1, 2])).to eq('tags' => { '$in'  => [1, 2] }) }
     it { expect(filter('type.nin' => :x)).to        eq('type' => { '$nin' => ['x'] }) }
     it { expect(filter('tags.all' => %w(a b))).to   eq('tags' => { '$all' => %w(a b) }) }
     it { expect { filter('tags.in' => (1..3)) }.to raise_error(invalid) }
@@ -92,7 +91,6 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
     it { expect(filter(price: (..3))).to eq('price' => { '$lte' => 3 }) }
     it { expect(filter(price: (...3))).to eq('price' => { '$lt' => 3 }) }
     it { expect { filter(price: Range.new(nil, nil)) }.to raise_error(invalid) }
-    it { expect(filter(tags: Set[1, 2])).to eq('tags' => [1, 2]) }
   end
 
   describe '#compile filter — localisation aliases' do
@@ -123,7 +121,7 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
       expect(first['_id']['$in']).not_to be(second['_id']['$in'])
     end
     it 'rejects a structural comparison operand' do
-      [[1], { 'a' => 1 }, Set[1]].each do |value|
+      [[1], { 'a' => 1 }, [1].each].each do |value|
         expect { filter('price.gt' => value) }.to raise_error(invalid)
       end
     end
@@ -182,11 +180,10 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
       it { expect { filter('field.$gt' => 5) }.to raise_error(unsupported) }
     end
 
-    context 'in a Hash value (recursively, through Array and Set)' do
+    context 'in a Hash value, recursively through Arrays' do
       it { expect { filter(price: { '$gt' => 5 }) }.to raise_error(unsupported) }
       it { expect { filter(name: { '$not' => { '$regex' => 'bob' } }) }.to raise_error(unsupported) }
       it { expect { filter(tags: [{ '$where' => 'x' }]) }.to raise_error(unsupported) }
-      it { expect { filter('tags.in' => Set[{ '$gt' => 5 }]) }.to raise_error(unsupported) }
     end
 
     it 'still allows a legitimate sub-document equality match, with String keys' do

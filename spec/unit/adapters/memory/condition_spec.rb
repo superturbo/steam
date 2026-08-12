@@ -246,11 +246,6 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
       it('in matches a document') { expect(match?('f.in', [{ 'x' => 1 }], { 'x' => 1 })).to eq true }
       it('all matches a document') { expect(match?('f.all', [{ 'x' => 1 }], [{ 'x' => 1 }])).to eq true }
     end
-
-    context 'a Set operand' do
-      it('is normalized to an array') { expect(match?(:f, Set['a', 'b'], %w(a b))).to eq true }
-      it('is normalized when nested') { expect(match?(:f, Set[[1, 2]], [[1, 2]])).to eq true }
-    end
   end
 
   describe '#matches? comparison operands' do
@@ -289,7 +284,7 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
     end
 
     it 'rejects a structural operand' do
-      [[1], { 'a' => 1 }, Set[1]].each do |value|
+      [[1], { 'a' => 1 }, [1].each].each do |value|
         expect { described_class.new('f.gt', value, :en) }.to raise_error(invalid)
       end
     end

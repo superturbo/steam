@@ -130,11 +130,6 @@ describe 'Adapter parity' do
           expect(slugs(maker: :'maker-one')).to match_array %w(arrays scalars)
         end
 
-        it 'reads a set as a list of slugs' do
-          expect(slugs('maker.in' => Set['maker-one', 'maker-nobody']))
-            .to match_array %w(arrays scalars)
-        end
-
         it 'matches nothing through an entry the store never persisted' do
           expect(slugs(maker: makers.build(name: 'Ghost'))).to eq []
         end

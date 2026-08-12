@@ -382,10 +382,6 @@ describe Locomotive::Steam::ContentEntryRepository do
           .to include('launched_at.in' => [Date.new(2012, 6, 29)])
       end
 
-      it 'converts the elements of a Set operand' do
-        expect(prepared_for('launched_at.in' => Set['2012-06-29']))
-          .to include('launched_at.in' => [Date.new(2012, 6, 29)])
-      end
 
       it 'rejects an unsupported value kind' do
         [true, { 'a' => 1 }].each do |bad|

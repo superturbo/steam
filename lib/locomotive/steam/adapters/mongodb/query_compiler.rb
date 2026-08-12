@@ -1,5 +1,3 @@
-require 'set'
-
 require_relative '../query'
 
 module Locomotive::Steam

@@ -1,6 +1,5 @@
 require 'spec_helper'
 
-require 'set'
 require_relative '../../../../lib/locomotive/steam/adapters/query'
 
 describe Locomotive::Steam::Adapters::Query::Values do
@@ -87,7 +86,8 @@ describe Locomotive::Steam::Adapters::Query::Values do
     it { expect(described_class.list(nil)).to eq [nil] }
     it { expect(described_class.list(['a', 1, nil, :sym])).to eq ['a', 1, nil, 'sym'] }
     it { expect(described_class.list(['ok', %(caf\xFF)])).to eq ['ok'] }
-    it { expect(described_class.list(Set.new([1, 2]))).to match_array [1, 2] }
+    it { expect { described_class.list([1, 2].each) }.to raise_error(invalid, /not a supported query collection/) }
+    it { expect { described_class.list([[1, 2].each]) }.to raise_error(invalid, /not a supported query collection/) }
 
     it 'does not alias the caller array' do
       source = [1, 2]
@@ -105,10 +105,6 @@ describe Locomotive::Steam::Adapters::Query::Values do
 
     it 'accepts nested arrays — $all defines their semantics' do
       expect(described_class.list([[1, 2], 3])).to eq [[1, 2], 3]
-    end
-
-    it 'normalizes a nested Set element to an Array' do
-      expect(described_class.list([Set.new([1, 2])])).to eq [[1, 2]]
     end
 
     it 'rejects a Regexp or Range element — those are plain-field expressions' do
@@ -149,10 +145,11 @@ describe Locomotive::Steam::Adapters::Query::Values do
       expect(described_class.unmatchable?(described_class.literal(%(caf\xFF) => 1))).to be true
     end
 
-    it 'normalizes a Set to an Array, recursively' do
-      expect(described_class.literal(Set.new([1, 2]))).to eq [1, 2]
-      expect(described_class.literal([Set.new([1, 2])])).to eq [[1, 2]]
-      expect(described_class.literal('a' => Set.new([1]))).to eq('a' => [1])
+    it 'rejects a collection that is not a Hash or an Array, wherever it sits' do
+      [[1, 2].each, [[1, 2].each], { 'a' => [1].each }].each do |value|
+        expect { described_class.literal(value) }
+          .to raise_error(invalid, /not a supported query collection/)
+      end
     end
 
     it 'accepts nested arrays' do
@@ -178,7 +175,7 @@ describe Locomotive::Steam::Adapters::Query::Values do
     end
 
     it 'never mutates or aliases the input, however nested' do
-      source = { a: [1, Set.new([2])], b: { c: 3 } }
+      source = { a: [1, [2]], b: { c: 3 } }
       before = Marshal.dump(source)
 
       result = described_class.literal(source)
@@ -207,6 +204,11 @@ describe Locomotive::Steam::Adapters::Query::Values do
       expect(described_class.unmatchable?(described_class.scalar(%(caf\xFF)))).to be true
     end
 
+    it 'rejects a collection that is not part of the query language' do
+      expect { described_class.scalar([1].each) }
+        .to raise_error(invalid, /not a supported query collection/)
+    end
+
     it 'cannot compare a Symbol naming unreadable bytes' do
       expect(described_class.unmatchable?(described_class.scalar(%(caf\xFF).b.to_sym))).to be true
     end
@@ -221,7 +223,7 @@ describe Locomotive::Steam::Adapters::Query::Values do
     end
 
     it 'rejects structures — their ordering is not the same on both engines' do
-      [[1], { 'a' => 1 }, Set[1], (1..3), /x/].each do |value|
+      [[1], { 'a' => 1 }, (1..3), /x/].each do |value|
         expect { described_class.scalar(value) }.to raise_error(invalid)
       end
     end
@@ -243,7 +245,7 @@ describe Locomotive::Steam::Adapters::Query::Values do
   describe '.coerce' do
 
     it 'dispatches to the value kind' do
-      expect(described_class.coerce(:literal, Set.new([1]))).to eq [1]
+      expect(described_class.coerce(:literal, a: 1)).to eq('a' => 1)
       expect(described_class.coerce(:list, 5)).to eq [5]
       expect(described_class.coerce(:boolean, 'true')).to eq true
       expect(described_class.coerce(:size, '2')).to eq 2

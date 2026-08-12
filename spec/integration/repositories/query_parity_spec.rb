@@ -137,9 +137,6 @@ describe 'Query parity' do
     { desc: 'a reordered array value matches nothing',
       conditions: { labels: %w(x y z) }, expected: [] },
 
-    { desc: 'a Set value is normalized to an array',
-      conditions: { labels: Set['y', 'x', 'z'] }, expected: %w(arrays) },
-
     { desc: 'all with a nested array operand matches the whole array field',
       conditions: { 'labels.all' => [%w(y x z)] }, expected: %w(arrays) },
 
@@ -469,6 +466,18 @@ describe 'Query parity' do
 
     { desc: 'a field name in no readable encoding',
       conditions: { %(caf\xFF) => 'x' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a collection that is not a Hash or an Array',
+      conditions: { labels: %w(y x).each },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an unsupported collection inside a list operator',
+      conditions: { 'labels.in' => [%w(y).each] },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an unsupported collection inside an embedded document',
+      conditions: { payload: { 'a' => [1].each } },
       error: Locomotive::Steam::Adapters::Query::InvalidValue }
   ].freeze
 

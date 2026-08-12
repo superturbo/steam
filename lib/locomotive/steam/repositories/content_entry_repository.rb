@@ -551,7 +551,6 @@ module Locomotive
         def value_to_primary_key(value, field)
           case value
           when Array then value.map { |element| value_to_primary_key(element, field) }
-          when Set   then value.map { |element| value_to_primary_key(element, field) }
           else
             id = @target_repository.adapter.make_id(value)
 
@@ -581,7 +580,7 @@ module Locomotive
         def contains_range_or_pattern?(value)
           case value
           when Range, Regexp then true
-          when Array, Set    then value.any? { |element| contains_range_or_pattern?(element) }
+          when Array then value.any? { |element| contains_range_or_pattern?(element) }
           when Hash          then value.values.any? { |element| contains_range_or_pattern?(element) }
           else false
           end
@@ -593,7 +592,6 @@ module Locomotive
           case value
           when nil   then nil
           when Array then value.map { |element| value_to_option_id(field, element) }
-          when Set   then value.map { |element| value_to_option_id(field, element) }
           else field.select_options.by_name(value).try(:_id) ||
                unmatchable(field, :unknown_select_option)
           end
@@ -642,7 +640,6 @@ module Locomotive
           when nil, Regexp then value
           when Range  then date_range(value, field)
           when Array  then value.map { |element| value_to_date(element, field) }
-          when Set    then value.map { |element| value_to_date(element, field) }
           when String then parse_date(value, field)
           else typed_date_operand(value, field.type)
           end
@@ -653,7 +650,6 @@ module Locomotive
           # a Range or Regexp is its own plain-field expression, not an operand
           when nil, Range, Regexp then value
           when Array       then value.map { |element| value_to_boolean(element, field) }
-          when Set         then value.map { |element| value_to_boolean(element, field) }
           when true, false then value
           when String      then parse_boolean(value, field)
           else
@@ -670,7 +666,6 @@ module Locomotive
           when Range   then numeric_range(value, field)
           when Numeric then validate_numeric_bounds!(value)
           when Array  then value.map { |element| value_to_number(element, field) }
-          when Set    then value.map { |element| value_to_number(element, field) }
           when String then parse_number(value, field)
           else
             raise Locomotive::Steam::Adapters::Query::InvalidValue,
@@ -694,7 +689,7 @@ module Locomotive
         def date_range_bound(value, field)
           case value
           when nil then nil
-          when Array, Set, Hash, Range, Regexp
+          when Array, Hash, Range, Regexp
             raise Locomotive::Steam::Adapters::Query::InvalidValue,
                   "#{value.class} cannot bound a date range"
           else value_to_date(value, field)
@@ -717,7 +712,7 @@ module Locomotive
         def numeric_range_bound(value, field)
           case value
           when nil then nil
-          when Array, Set, Hash, Range, Regexp
+          when Array, Hash, Range, Regexp
             raise Locomotive::Steam::Adapters::Query::InvalidValue,
                   "#{value.class} cannot bound a numeric range"
           else value_to_number(value, field)

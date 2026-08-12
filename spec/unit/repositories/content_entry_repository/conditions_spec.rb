@@ -145,10 +145,6 @@ describe Locomotive::Steam::ContentEntryRepository do
         expect(prepared_for('_id.in' => %w(a b))).to include('_id.in' => %w(id-a id-b))
       end
 
-      it 'converts a Set the same way' do
-        expect(prepared_for('_id.in' => Set['a'])).to include('_id.in' => %w(id-a))
-      end
-
       context 'an id the adapter cannot read' do
 
         before { allow(adapter).to receive(:make_id) { false } }
@@ -177,11 +173,6 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       it 'converts the elements of a list operand' do
         expect(prepared_for('category.in' => %w(CMS)))
-          .to include('category_id.in' => [42])
-      end
-
-      it 'converts the elements of a Set operand' do
-        expect(prepared_for('category.in' => Set['CMS']))
           .to include('category_id.in' => [42])
       end
 
