@@ -15,8 +15,6 @@ module Locomotive::Steam
         alias :length :size
         alias :count :size
 
-        attr_reader :conditions
-
         def initialize(dataset, locale = nil, &block)
           @dataset    = dataset
           @conditions = []
@@ -31,11 +29,6 @@ module Locomotive::Steam
           Adapters::Query::Criteria.reject_raw_operators!(conditions)
 
           @conditions += conditions.map { |name, value| Condition.new(name, value, @locale) }
-          self
-        end
-
-        def +(query)
-          @conditions += query.conditions
           self
         end
 
@@ -56,14 +49,6 @@ module Locomotive::Steam
 
         def only(*fields)
           self
-        end
-
-        def ==(other)
-          if other.kind_of? Array
-            all == other
-          else
-            super
-          end
         end
 
         # Copy only rows returned by the query.
