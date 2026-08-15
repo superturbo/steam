@@ -33,7 +33,79 @@ module Locomotive
                 end
 
                 reject_repeated_slugs(list)
+                validate_position_groups!(list)
               end
+            end
+
+            # A group either states every position or falls back to _position.
+            def validate_position_groups!(list)
+              belongs_to_names = content_type.association_fields
+                                             .select { |field| field.type == :belongs_to }
+                                             .map { |field| field.name.to_s }
+
+              validate_position_names!(list, belongs_to_names)
+              belongs_to_names.each { |name| validate_position_groups_for!(list, name) }
+            end
+
+            def validate_position_names!(list, belongs_to_names)
+              list.each do |attributes|
+                attributes.each_key do |key|
+                  next unless (name = key.to_s[/\Aposition_in_(.+)\z/, 1])
+                  next if belongs_to_names.include?(name)
+
+                  entries_file_error!(:unknown_association, attributes,
+                                      "position_in_#{name} names no belongs_to field")
+                end
+              end
+            end
+
+            def validate_position_groups_for!(list, name)
+              position_key = :"position_in_#{name}"
+
+              list.each do |attributes|
+                next unless attributes.key?(position_key)
+
+                position = attributes[position_key]
+
+                if attributes[:"#{name}_id"].blank?
+                  entries_file_error!(:unlinked_position, attributes,
+                                      "position_in_#{name} without a linked #{name}")
+                end
+
+                unless position.is_a?(Integer) && position >= 0 && Adapters::NumericBounds.within?(position)
+                  entries_file_error!(:invalid_position, attributes,
+                                      "position_in_#{name} takes a non-negative 64-bit integer")
+                end
+              end
+
+              list.group_by { |attributes| attributes[:"#{name}_id"] }.each do |parent, entries|
+                next if parent.blank?
+
+                positioned_entries = entries.select { |attributes| attributes.key?(position_key) }
+
+                next if positioned_entries.empty?
+
+                if positioned_entries.size < entries.size
+                  group_error!(:partial_position_group, name, parent,
+                               "position_in_#{name} must be set for every entry in the group")
+                end
+
+                if positioned_entries.map { |attributes| attributes[position_key] }.uniq.size < positioned_entries.size
+                  group_error!(:duplicate_position, name, parent, "duplicate position_in_#{name}")
+                end
+              end
+            end
+
+            def entries_file_error!(reason, attributes, message)
+              raise Locomotive::Steam::InvalidEntriesFileError.new(
+                reason,
+                "#{File.join(path, "#{content_type_slug}.yml")}, entry #{attributes[:_label]}: #{message}")
+            end
+
+            def group_error!(reason, name, parent, message)
+              raise Locomotive::Steam::InvalidEntriesFileError.new(
+                reason,
+                "#{File.join(path, "#{content_type_slug}.yml")}, entries of #{name} #{parent}: #{message}")
             end
 
             def reject_repeated_slugs(list)
@@ -184,9 +256,6 @@ module Locomotive
 
               id = attributes.delete(field.name.to_sym)
               attributes[:"#{field.name}_id"] = id
-
-              # A blank slug links no entry.
-              attributes[:"position_in_#{field.name}"] ||= attributes[:_position] if id.present?
             end
 
             def modify_many_to_many_association(field, attributes)

@@ -20,6 +20,21 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
       expect(subject.first[:content_type]).to eq nil
     end
 
+    context 'the file order is the position' do
+
+      let(:entries) do
+        [{ 'First' => { 'name' => 'a' } }, { 'Second' => { 'name' => 'b' } }, { 'Third' => { 'name' => 'c' } }]
+      end
+
+      before { allow(loader).to receive(:_load).and_return(HashConverter.to_sym(entries)) }
+
+      it 'derives _position from the file index' do
+        expect(loader.load(scope).map { |e| [e[:_label], e[:_position]] })
+          .to eq [['First', 0], ['Second', 1], ['Third', 2]]
+      end
+
+    end
+
     context 'two entries spelling out the same slug' do
 
       let(:entries) do
@@ -100,35 +115,138 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
       let(:field)         { instance_double('Field', name: 'band', type: :belongs_to) }
       let(:content_type)  { instance_double('Songs', slug: 'songs', association_fields: [field], select_fields: [], file_fields: [], password_fields: [], fields_by_name: {}) }
 
-      it 'adds a new attribute for the foreign key' do
+      it 'adds a new attribute for the foreign key without inventing a position' do
         expect(subject.first[:band_id]).to eq 'pearl-jam'
         expect(subject.first[:band]).to eq nil
-        expect(subject.first[:position_in_band]).to eq 0
+        expect(subject.first.key?(:position_in_band)).to be false
       end
 
-      context 'the entry carries an explicit position' do
+      context 'a group spelling out its own order' do
 
         before do
-          allow(loader).to receive(:_load).and_return([{ 'One' => { band: 'pearl-jam', position_in_band: 5 } }])
+          allow(loader).to receive(:_load).and_return(HashConverter.to_sym([
+            { 'One' => { band: 'pearl-jam', position_in_band: 1 } },
+            { 'Two' => { band: 'pearl-jam', position_in_band: 0 } },
+            { 'Three' => { band: 'nirvana' } }
+          ]))
         end
 
-        it 'keeps the explicit position_in_<name> over the file order' do
-          expect(subject.first[:position_in_band]).to eq 5
+        it 'keeps the explicit positions and leaves the other group alone' do
+          by_label = subject.index_by { |entry| entry[:_label] }
+
+          expect(by_label['One'][:position_in_band]).to eq 1
+          expect(by_label['Two'][:position_in_band]).to eq 0
+          expect(by_label['Three'].key?(:position_in_band)).to be false
         end
 
       end
 
-      context 'the explicit position is zero' do
+      context 'a group spelling out only part of its order' do
 
         before do
-          allow(loader).to receive(:_load).and_return([
+          allow(loader).to receive(:_load).and_return(HashConverter.to_sym([
             { 'One' => { band: 'pearl-jam' } },
             { 'Two' => { band: 'pearl-jam', position_in_band: 0 } }
-          ])
+          ]))
         end
 
-        it 'keeps the explicit zero over the file order' do
-          expect(subject.last[:position_in_band]).to eq 0
+        it 'refuses the partial group' do
+          expect { subject }.to raise_error(
+            Locomotive::Steam::InvalidEntriesFileError,
+            %r{data/songs\.yml, entries of band pearl-jam: position_in_band must be set for every entry in the group}) do |error|
+            expect(error.reason).to eq :partial_position_group
+          end
+        end
+
+      end
+
+      context 'a group repeating a position' do
+
+        before do
+          allow(loader).to receive(:_load).and_return(HashConverter.to_sym([
+            { 'One' => { band: 'pearl-jam', position_in_band: 0 } },
+            { 'Two' => { band: 'pearl-jam', position_in_band: 0 } }
+          ]))
+        end
+
+        it 'refuses the duplicate' do
+          expect { subject }.to raise_error(
+            Locomotive::Steam::InvalidEntriesFileError,
+            %r{data/songs\.yml, entries of band pearl-jam: duplicate position_in_band}) do |error|
+            expect(error.reason).to eq :duplicate_position
+          end
+        end
+
+      end
+
+      context 'a position naming no belongs_to field' do
+
+        before do
+          allow(loader).to receive(:_load).and_return(HashConverter.to_sym([
+            { 'One' => { band: 'pearl-jam', position_in_venue: 0 } }
+          ]))
+        end
+
+        it 'refuses the unknown association' do
+          expect { subject }.to raise_error(
+            Locomotive::Steam::InvalidEntriesFileError,
+            %r{data/songs\.yml, entry One: position_in_venue names no belongs_to field}) do |error|
+            expect(error.reason).to eq :unknown_association
+          end
+        end
+
+      end
+
+      context 'a position on an entry that links nothing' do
+
+        [{}, { band: nil }, { band: '' }].each do |link|
+          it "refuses it when the association is #{link.inspect}" do
+            allow(loader).to receive(:_load).and_return(HashConverter.to_sym([
+              { 'One' => link.merge(position_in_band: 0) }
+            ]))
+
+            expect { subject }.to raise_error(
+              Locomotive::Steam::InvalidEntriesFileError,
+              %r{data/songs\.yml, entry One: position_in_band without a linked band}) do |error|
+              expect(error.reason).to eq :unlinked_position
+            end
+          end
+        end
+
+      end
+
+      context 'a group with unique non-contiguous positions' do
+
+        before do
+          allow(loader).to receive(:_load).and_return(HashConverter.to_sym([
+            { 'One' => { band: 'pearl-jam', position_in_band: 5 } },
+            { 'Two' => { band: 'pearl-jam', position_in_band: 2 } }
+          ]))
+        end
+
+        it 'accepts the gapped positions' do
+          by_label = subject.index_by { |entry| entry[:_label] }
+
+          expect(by_label['One'][:position_in_band]).to eq 5
+          expect(by_label['Two'][:position_in_band]).to eq 2
+        end
+
+      end
+
+      context 'a position no order can read' do
+
+        ['5', 5.5, -1, nil, 2**63].each do |bad|
+          it "refuses #{bad.inspect}" do
+            allow(loader).to receive(:_load).and_return(HashConverter.to_sym([
+              { 'One' => { band: 'pearl-jam', position_in_band: bad } }
+            ]))
+
+            expect { subject }.to raise_error(
+              Locomotive::Steam::InvalidEntriesFileError,
+              %r{data/songs\.yml, entry One: position_in_band takes a non-negative 64-bit integer}) do |error|
+              expect(error.reason).to eq :invalid_position
+            end
+          end
         end
 
       end

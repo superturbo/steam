@@ -9,3 +9,7 @@ fields:
     type: has_many
     class_name: specimens
     inverse_of: maker
+- badges:
+    type: has_many
+    class_name: badges
+    inverse_of: maker

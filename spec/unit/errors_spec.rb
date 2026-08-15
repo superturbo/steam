@@ -46,6 +46,22 @@ describe Locomotive::Steam::JsonParsingError do
 
 end
 
+describe Locomotive::Steam::InvalidEntriesFileError do
+
+  it 'carries a stable reason' do
+    message = 'data/songs.yml, entries of band pearl-jam: ' \
+              'position_in_band must be set for every entry in the group'
+    error   = described_class.new(:partial_position_group, message)
+
+    expect(error.reason).to eq :partial_position_group
+  end
+
+  it 'refuses a reason it does not know' do
+    expect { described_class.new(:made_up, 'x') }.to raise_error(ArgumentError)
+  end
+
+end
+
 describe Locomotive::Steam::UnsupportedSchemaError do
 
   it 'carries a stable reason' do

@@ -25,6 +25,24 @@ module Locomotive::Steam
   end
 
   # Reasons are stable identifiers.
+  class InvalidEntriesFileError < ::StandardError
+
+    REASONS = %i(duplicate_position invalid_position partial_position_group
+                 unknown_association unlinked_position).freeze
+
+    attr_reader :reason
+
+    def initialize(reason, message)
+      raise ArgumentError, "no such entries file error reason: #{reason.inspect}" unless REASONS.include?(reason)
+
+      @reason = reason
+
+      super(message)
+    end
+
+  end
+
+  # Reasons are stable identifiers.
   class UnsupportedSchemaError < ::StandardError
 
     REASONS = %i(unknown_field_type unsupported_localization unsupported_required).freeze

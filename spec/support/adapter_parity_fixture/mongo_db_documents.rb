@@ -176,15 +176,6 @@ module AdapterParityFixture
 
       entry[:attributes].each { |name, value| write_attribute(document, slug, name, value) }
 
-      # Match Wagon's inverse-association order derived from file position;
-      # like Filesystem, an unlinked entry carries no inverse position.
-      WagonSite.fields(slug).each do |field|
-        next unless field.fetch('type') == :belongs_to
-        next unless document["#{field.fetch('name')}_id"]
-
-        document["position_in_#{field.fetch('name')}"] = position
-      end
-
       document
     end
 
@@ -211,6 +202,7 @@ module AdapterParityFixture
 
     def write_attribute(document, slug, name, value)
       return document[name] = value if ENTRY_METADATA.include?(name)
+      return document[name] = value if association_position?(slug, name)
 
       field = WagonSite.field(slug, name)
 
@@ -242,6 +234,17 @@ module AdapterParityFixture
       else
         document[name] = value
       end
+    end
+
+    # Both fixture compilers reject invalid association position names.
+    def association_position?(slug, name)
+      return false unless (target = name[/\Aposition_in_(.+)\z/, 1])
+
+      field = WagonSite.fields(slug).detect { |declared| declared['name'] == target }
+
+      return true if field && field.fetch('type') == :belongs_to
+
+      raise Error, "position_in_#{target} names no belongs_to field on #{slug}"
     end
 
   end

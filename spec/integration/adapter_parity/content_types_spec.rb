@@ -17,7 +17,7 @@ describe 'Adapter parity' do
 
       it 'holds the same types under the same slugs' do
         expect(type_repository.all.map(&:slug))
-          .to match_array %w(chapters makers quoted reverse_chapters specimens submissions topics)
+          .to match_array %w(badges chapters makers quoted reverse_chapters specimens submissions topics)
       end
 
       it 'reads what the fixture says about a type and its fields' do

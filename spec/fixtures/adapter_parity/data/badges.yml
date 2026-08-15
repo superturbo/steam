@@ -1,0 +1,13 @@
+# The whole maker-one group states an order the file order contradicts.
+- Bronze:
+    _slug: bronze
+    maker: maker-one
+    position_in_maker: 2
+- Silver:
+    _slug: silver
+    maker: maker-one
+    position_in_maker: 1
+- Gold:
+    _slug: gold
+    maker: maker-one
+    position_in_maker: 0

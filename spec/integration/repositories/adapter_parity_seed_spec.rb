@@ -129,6 +129,28 @@ describe 'Adapter parity seed' do
     expect(document('zero')).not_to have_key('maker_id')
   end
 
+  it 'stores no inverse position the author never wrote' do
+    scalars = document('scalars')
+
+    expect(scalars).to have_key('maker_id')
+    expect(scalars).not_to have_key('position_in_maker')
+  end
+
+  it 'stores an explicit inverse position as spelled' do
+    expect(document('gold')['position_in_maker']).to eq 0
+    expect(document('bronze')['position_in_maker']).to eq 2
+  end
+
+  it 'refuses a position suffix that names no belongs_to field' do
+    expect {
+      AdapterParityFixture::MongoDBDocuments.write_attribute({}, 'badges', 'position_in_mkaer', 1)
+    }.to raise_error(AdapterParityFixture::Error, /position_in_mkaer/)
+
+    expect {
+      AdapterParityFixture::MongoDBDocuments.write_attribute({}, 'badges', 'position_in_name', 1)
+    }.to raise_error(AdapterParityFixture::Error, /position_in_name/)
+  end
+
   it 'writes a many_to_many as a list of target ids' do
     expect(document('scalars')['topic_ids']).to all(be_a(BSON::ObjectId))
   end

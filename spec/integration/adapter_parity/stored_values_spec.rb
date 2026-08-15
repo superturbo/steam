@@ -110,9 +110,13 @@ describe 'Adapter parity' do
         expect(entry('zero').maker._slug).to be_nil
       end
 
-      it 'reads the inverse has_many in the stated order' do
+      it 'reads the inverse has_many in the file order when no position is stated' do
         expect(slugs_of(maker('maker-one').specimens.all)).to eq %w(scalars arrays)
         expect(slugs_of(maker('maker-two').specimens.all)).to eq %w(embedded)
+      end
+
+      it 'reads the inverse has_many in the stated explicit order' do
+        expect(slugs_of(maker('maker-one').badges.all)).to eq %w(gold silver bronze)
       end
 
       it 'reads a many_to_many in the stated order, and empty when unlinked' do
