@@ -16,6 +16,12 @@ module Locomotive::Steam
         @preloader = preloader
       end
 
+      def with_conditions(conditions)
+        dup.tap do |scoped|
+          scoped.association_conditions = scoped.association_conditions.merge(conditions)
+        end
+      end
+
       def initialize(repository_klass, scope, adapter, options = {}, &block)
         @repository = repository_klass.new(adapter)
 

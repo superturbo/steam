@@ -127,11 +127,8 @@ module Locomotive
         if field = content_type.fields_by_name[name]
           value = entry.send(name)
 
-          if %i(has_many many_to_many).include?(field.type)
-            # a safe copy of the proxy repository is needed here
-            value = value.dup
-
-            value.association_conditions = value.association_conditions.merge(conditions) if conditions
+          if %i(has_many many_to_many).include?(field.type) && conditions.present?
+            value = value.with_conditions(conditions)
           end
 
           value

@@ -165,6 +165,25 @@ describe Locomotive::Steam::ContentEntryRepository do
       expect(content_type_repository).to have_received(:find).with(2).once
     end
 
+    it 'hands an unscoped read the association itself, not a copy' do
+      expect(repository.value_for(subject, :articles)).to equal subject.articles
+    end
+
+    it 'keeps scoped conditions out of an association loaded earlier' do
+      author = subject
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
+
+      expect(repository.value_for(author, :articles).all.map(&:title))
+        .to eq ['Lorem ipsum', 'Hello world']
+
+      expect(repository.value_for(author, :articles, order_by: 'title.asc').all.map(&:title))
+        .to eq ['Hello world', 'Lorem ipsum']
+
+      expect(repository.value_for(author, :articles).all.map(&:title))
+        .to eq ['Lorem ipsum', 'Hello world']
+      expect(content_type_repository).to have_received(:find).with(2).once
+    end
+
     context 'the owner has a composite [mongo_id, slug] id (synced entries)' do
 
       let(:entries) { [{ content_type_id: 1, _id: ['5baf7d38a953300567956448', 'john-doe'], name: 'John Doe' }] }
@@ -257,6 +276,24 @@ describe Locomotive::Steam::ContentEntryRepository do
       articles.all
       articles.all
 
+      expect(content_type_repository).to have_received(:find).with(2).once
+    end
+
+    it 'hands an unscoped read the association itself, not a copy' do
+      expect(repository.value_for(subject, :articles)).to equal subject.articles
+    end
+
+    it 'keeps scoped conditions out of an association loaded earlier' do
+      author = subject
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
+
+      expect(repository.value_for(author, :articles).all.map(&:title))
+        .to eq ['Hello world', 'Lorem ipsum']
+
+      expect(repository.value_for(author, :articles, '_id.in' => ['lost']).all).to be_empty
+
+      expect(repository.value_for(author, :articles).all.map(&:title))
+        .to eq ['Hello world', 'Lorem ipsum']
       expect(content_type_repository).to have_received(:find).with(2).once
     end
 
