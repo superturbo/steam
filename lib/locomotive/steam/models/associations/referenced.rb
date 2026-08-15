@@ -11,15 +11,12 @@ module Locomotive::Steam
       end
 
       def initialize(repository_klass, scope, adapter, options = {}, &block)
-        # build a new instance of the target repository
         @repository = repository_klass.new(adapter)
 
-        # Note: if we change the locale of the parent repository, that won't
-        # reflect in that repository
+        # A locale change on the parent repository does not reach this copy.
         @repository.scope = scope.dup
 
-        # the block will executed when a method of the target will be called
-        @block = block_given? ? block : nil
+        @configure_repository = block
 
         @options = options
       end
@@ -33,25 +30,21 @@ module Locomotive::Steam
       end
 
       def __load__
-        # needs implementation
       end
 
       def __serialize__(entity)
-        # needs implementation
       end
 
-      def __call_block_once__
-        # setup the repository if custom configuration from the
-        # repository for instance.
-        if @block
-          @block.call(@repository, @options)
-          @block = nil # trick to call it only once
+      def __configured_repository__
+        if @configure_repository
+          @configure_repository.call(@repository, @options)
+          @configure_repository = nil
         end
+
+        @repository
       end
 
       def method_missing(name, *args, &block)
-        __call_block_once__
-
         __load__.try(:send, name, *args, &block)
       end
 

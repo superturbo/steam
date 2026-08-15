@@ -8,10 +8,10 @@ module Locomotive::Steam
         return unless @entity.attributes.key?(__target_key__)
 
         target_id = @entity[__target_key__]
-        target    = @repository.find(target_id)
 
-        # replace the proxy class by the real target entity
-        @entity[__name__] = target
+        return @entity[__name__] = nil if target_id.nil?
+
+        @entity[__name__] = __configured_repository__.find(target_id)
       end
 
       # Keep the existing id until the association is materialized or reassigned.

@@ -4,15 +4,15 @@ module Locomotive::Steam
     class ManyToManyAssociation < ReferencedAssociation
 
       def __load__
-        key = @repository.k(:_id, :in)
+        repository = __configured_repository__
+        key        = repository.k(:_id, :in)
 
-        @repository.local_conditions[key] = @entity[__target_key__] || []
+        repository.local_conditions[key] = @entity[__target_key__] || []
 
         # Preserve a runtime order override.
-        @repository.local_conditions[:order_by] ||= @options[:order_by] unless @options[:order_by].blank?
+        repository.local_conditions[:order_by] ||= @options[:order_by] unless @options[:order_by].blank?
 
-        # all the further calls (method_missing) will be delegated to @repository
-        @repository
+        repository
       end
 
       # Keep the existing ids until the association is materialized or reassigned.

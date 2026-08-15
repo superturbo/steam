@@ -52,6 +52,38 @@ describe Locomotive::Steam::ContentEntryRepository do
       expect(author.name).to eq 'John Doe'
     end
 
+    it 'configures the target repository once per proxy' do
+      author = subject.author
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
+
+      author.name
+      author.name
+
+      expect(content_type_repository).to have_received(:find).with(2).once
+    end
+
+    context 'the entry never stored the link' do
+
+      let(:entries) { [{ content_type_id: 1, title: 'Hello world' }] }
+
+      it 'resolves nothing and never configures the target repository' do
+        expect(subject.author.name).to eq nil
+        expect(content_type_repository).not_to have_received(:find)
+      end
+
+    end
+
+    context 'the entry spells the link out as null' do
+
+      let(:entries) { [{ content_type_id: 1, title: 'Hello world', author_id: nil }] }
+
+      it 'resolves the null and never configures the target repository' do
+        expect(subject.author.name).to eq nil
+        expect(content_type_repository).not_to have_received(:find)
+      end
+
+    end
+
   end
 
   describe 'has_many' do
@@ -121,6 +153,16 @@ describe Locomotive::Steam::ContentEntryRepository do
       articles.all
 
       expect(repository.scope.context[:content_type]).to eq type
+    end
+
+    it 'configures the target repository once per proxy' do
+      articles = subject.articles
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
+
+      articles.all
+      articles.all
+
+      expect(content_type_repository).to have_received(:find).with(2).once
     end
 
     context 'the owner has a composite [mongo_id, slug] id (synced entries)' do
@@ -206,6 +248,16 @@ describe Locomotive::Steam::ContentEntryRepository do
       scoped.all
 
       expect(subject.articles.all.map(&:title)).to eq ['Hello world', 'Lorem ipsum']
+    end
+
+    it 'configures the target repository once per proxy' do
+      articles = subject.articles
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
+
+      articles.all
+      articles.all
+
+      expect(content_type_repository).to have_received(:find).with(2).once
     end
 
   end

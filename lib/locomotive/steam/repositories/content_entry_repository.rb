@@ -402,15 +402,11 @@ module Locomotive
         end
       end
 
-      # This code is executed once when the association proxy object receives a call to any method
+      # Runs once per proxy, when its load path first needs the repository.
       def prepare_repository_for_association(repository, options)
-        # load the target content type
-        _content_type = content_type_repository.find(options[:target_id])
+        content_type = content_type_repository.find(options[:target_id])
 
-        # the target repository uses this content type for all the other inner calls
-        repository.with(_content_type)
-
-        # the content type repository is also need by the target repository
+        repository.with(content_type)
         repository.content_type_repository = content_type_repository
       end
 
