@@ -141,6 +141,33 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
 
       end
 
+      context 'a full group on one of two belongs_to fields' do
+
+        let(:venue) { instance_double('Field', name: 'venue', type: :belongs_to) }
+
+        let(:content_type) do
+          instance_double('Songs', slug: 'songs', association_fields: [field, venue],
+                          select_fields: [], file_fields: [], password_fields: [], fields_by_name: {})
+        end
+
+        before do
+          allow(loader).to receive(:_load).and_return(HashConverter.to_sym([
+            { 'One' => { band: 'pearl-jam', position_in_band: 1, venue: 'roskilde' } },
+            { 'Two' => { band: 'pearl-jam', position_in_band: 0, venue: 'roskilde' } }
+          ]))
+        end
+
+        it 'keeps the groups of the two associations independent' do
+          by_label = subject.index_by { |entry| entry[:_label] }
+
+          expect(by_label['One'][:position_in_band]).to eq 1
+          expect(by_label['One'][:venue_id]).to eq 'roskilde'
+          expect(by_label['One'].key?(:position_in_venue)).to be false
+          expect(by_label['Two'].key?(:position_in_venue)).to be false
+        end
+
+      end
+
       context 'a group spelling out only part of its order' do
 
         before do
