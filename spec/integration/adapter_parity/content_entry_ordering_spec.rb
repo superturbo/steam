@@ -27,12 +27,12 @@ describe 'Adapter parity' do
           .to eq %w(arrays embedded scalars zero all-missing explicit-nils)
       end
 
-      # Embedded and Scalars both have score 5.
-      it 'breaks a tie by slug, ascending and descending alike' do
+      # Scalars and Embedded tie at score 5.
+      it 'breaks a tie by position, ascending and descending alike' do
         expect(slugs(order_by: 'score'))
-          .to eq %w(all-missing explicit-nils zero embedded scalars arrays)
+          .to eq %w(all-missing explicit-nils zero scalars embedded arrays)
         expect(slugs(order_by: 'score.desc'))
-          .to eq %w(arrays embedded scalars zero all-missing explicit-nils)
+          .to eq %w(arrays embedded scalars zero explicit-nils all-missing)
       end
 
       it 'preserves an explicit slug direction' do

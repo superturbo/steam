@@ -45,10 +45,10 @@ describe 'Adapter parity' do
           end
         end
 
-        it 'reads nulls first, then the key, then the slug' do
-          expect(order_of('chapters')).to eq %w(epilogue prologue finale middle opening)
-          expect(order_of('chapters', :fr)).to eq %w(epilogue prologue middle finale opening)
-          expect(order_of('reverse_chapters')).to eq %w(middle opening finale epilogue prologue)
+        it 'reads nulls first, then the key, then the position' do
+          expect(order_of('chapters')).to eq %w(prologue epilogue finale middle opening)
+          expect(order_of('chapters', :fr)).to eq %w(prologue epilogue middle finale opening)
+          expect(order_of('reverse_chapters')).to eq %w(opening middle finale epilogue prologue)
           expect(order_of('reverse_chapters', :fr)).to eq %w(opening finale middle epilogue prologue)
         end
 

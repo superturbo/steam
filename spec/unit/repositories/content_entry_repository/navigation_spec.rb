@@ -13,6 +13,31 @@ describe Locomotive::Steam::ContentEntryRepository do
       expect(repository.previous(nil)).to be_nil
     end
 
+    describe 'over a manually ordered type' do
+
+      let(:type) do
+        build_content_type('Articles', order_by: { _position: 'asc' }, label_field_name: :title,
+                           fields: _fields, fields_with_default: [],
+                           fields_by_name: { title: instance_double('Field', name: :title, type: :string) })
+      end
+
+      let(:entries) do
+        [{ content_type_id: 1, _position: 0, _label: 'Alpha' },
+         { content_type_id: 1, _position: 1, _label: 'Bravo' }]
+      end
+
+      before { repository.with(type) }
+
+      it 'queries once because a position identifies one entry' do
+        alpha = repository.by_slug('alpha')
+        allow(repository).to receive(:first).and_call_original
+
+        expect(repository.next(alpha)._slug[:en]).to eq 'bravo'
+        expect(repository).to have_received(:first).once
+      end
+
+    end
+
     describe 'over a type ordered by the slug itself' do
 
       let(:type) do
@@ -75,15 +100,14 @@ describe Locomotive::Steam::ContentEntryRepository do
                                            title: instance_double('Field', name: :title, type: :string) })
     end
 
-    # Input and slug order disagree within part "a"; Alpha sorts last by part.
     let(:entries) do
       [{ content_type_id: 1, _position: 0, _label: 'Alpha', part: 'b' },
        { content_type_id: 1, _position: 1, _label: 'Zulu',  part: 'a' },
        { content_type_id: 1, _position: 2, _label: 'Mike',  part: 'a' }]
     end
 
-    it 'follows the type default and breaks its tie by slug' do
-      expect(repository.with(type).all.map { |entry| entry._slug[:en] }).to eq %w(mike zulu alpha)
+    it 'follows the type default and breaks its tie by position' do
+      expect(repository.with(type).all.map { |entry| entry._slug[:en] }).to eq %w(zulu mike alpha)
     end
 
   end

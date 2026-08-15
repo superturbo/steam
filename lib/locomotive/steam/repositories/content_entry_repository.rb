@@ -309,9 +309,11 @@ module Locomotive
                 "#{name} cannot order entries of #{content_type.slug}"
         end
 
-        return criteria if criteria.any? { |name, _| name.to_s == '_slug' }
+        # _position and the current locale's _slug are already total.
+        return criteria if criteria.any? { |name, _| name == :_position || name == :_slug }
 
-        criteria + [[:_slug, :asc]]
+        # Match the primary direction so one compound index serves both directions.
+        criteria + [[:_position, criteria.first&.last || :asc]]
       end
 
       def orderable?(field, name)
@@ -435,29 +437,27 @@ module Locomotive
         sequence.map { |field, order| [field, order == :asc ? :desc : :asc] }
       end
 
-      # The next slug sharing the ordering key, then the first entry of the
-      # group the sequence reaches after it. Null sorts below every value, so
-      # an ascending key steps out of the null group and a descending one ends
-      # in it. A content type orders by one field, so _slug ends the sequence.
+      # Try the next total key in this group, then the next primary group.
+      # Null sorts below non-null values.
       def navigation_queries(entry, sequence)
+        step_name, step_direction = sequence.last
+        step_order = [[step_name, step_direction]]
+        step_key   = k(step_name, step_direction == :asc ? 'gt' : 'lt')
+        step_value = step_name == :_slug ? i18n_value_of(entry, :_slug) : entry[step_name]
+
+        # A total primary needs no group fallback.
+        return [[{ step_key => step_value }, step_order]] if sequence.size == 1
+
         name, key_direction = sequence.first
-        slug_direction      = sequence.last.last
-        by_slug             = [[:_slug, slug_direction]]
-        slug_step           = k(:_slug, slug_direction == :asc ? 'gt' : 'lt')
-        slug                = i18n_value_of(entry, :_slug)
-
-        # A type ordered by the slug puts one entry in every group.
-        return [[{ slug_step => slug }, by_slug]] if name == :_slug
-
         value   = i18n_value_of(entry, name)
-        queries = [[{ name => value, slug_step => slug }, by_slug]]
+        queries = [[{ name => value, step_key => step_value }, step_order]]
 
         if value.nil?
           queries << [{ k(name, 'ne') => nil }, sequence] if key_direction == :asc
         elsif key_direction == :asc
           queries << [{ k(name, 'gt') => value }, sequence]
         else
-          queries << [{ k(name, 'lt') => value }, sequence] << [{ name => nil }, by_slug]
+          queries << [{ k(name, 'lt') => value }, sequence] << [{ name => nil }, step_order]
         end
 
         queries
