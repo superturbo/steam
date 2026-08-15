@@ -3,16 +3,6 @@ module Locomotive::Steam
 
     class BelongsToAssociation < ReferencedAssociation
 
-      # Copies do not inherit the window preloader.
-      def initialize_copy(source)
-        super
-        @preloader = nil
-      end
-
-      def __preload_from__(preloader)
-        @preloader = preloader
-      end
-
       def __load__
         # Resolving a key the store never held must not materialize either side.
         return unless @entity.attributes.key?(__target_key__)

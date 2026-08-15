@@ -5,9 +5,15 @@ module Locomotive::Steam
 
       attr_reader :repository
 
+      # Copies do not inherit the window preloader.
       def initialize_copy(source)
         super
         @repository = source.repository.dup
+        @preloader  = nil
+      end
+
+      def __preload_from__(preloader)
+        @preloader = preloader
       end
 
       def initialize(repository_klass, scope, adapter, options = {}, &block)
