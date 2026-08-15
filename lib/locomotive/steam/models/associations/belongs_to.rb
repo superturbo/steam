@@ -3,6 +3,16 @@ module Locomotive::Steam
 
     class BelongsToAssociation < ReferencedAssociation
 
+      # Copies do not inherit the window preloader.
+      def initialize_copy(source)
+        super
+        @preloader = nil
+      end
+
+      def __preload_from__(preloader)
+        @preloader = preloader
+      end
+
       def __load__
         # Resolving a key the store never held must not materialize either side.
         return unless @entity.attributes.key?(__target_key__)
@@ -11,7 +21,8 @@ module Locomotive::Steam
 
         return @entity[__name__] = nil if target_id.nil?
 
-        @entity[__name__] = __configured_repository__.find(target_id)
+        @entity[__name__] =
+          @preloader ? @preloader.target_for(self, target_id) : __configured_repository__.find(target_id)
       end
 
       # Keep the existing id until the association is materialized or reassigned.

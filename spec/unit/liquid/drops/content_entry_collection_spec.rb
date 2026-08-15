@@ -98,6 +98,19 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntryCollection do
         expect(window.window).to eq(offset: 0, limit: 1)
       end
 
+      it 'attaches a preloader to a bounded window' do
+        expect(Locomotive::Steam::Models::AssociationPreloader)
+          .to receive(:attach).with(['a', 'b'])
+
+        drop.load_slice(0, 2)
+      end
+
+      it 'does not attach one to an offset-only remainder' do
+        expect(Locomotive::Steam::Models::AssociationPreloader).not_to receive(:attach)
+
+        drop.load_slice(5, nil)
+      end
+
       it 'asks for nothing when the end index is the beginning' do
         drop.load_slice(-1, 0)
         expect(window.window).to eq(offset: 0, limit: 0)
@@ -128,6 +141,19 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntryCollection do
           expect(drop.load_slice(-1, nil)).to eq(%w(a b c d))
           expect(drop.load_slice(-1, 1)).to eq(%w(a))
           expect(drop.load_slice(-1, 0)).to eq([])
+        end
+
+        it 'still attaches a preloader to a bounded window' do
+          expect(Locomotive::Steam::Models::AssociationPreloader)
+            .to receive(:attach).with(%w(b c))
+
+          drop.load_slice(1, 3)
+        end
+
+        it 'still does not attach one to an offset-only remainder' do
+          expect(Locomotive::Steam::Models::AssociationPreloader).not_to receive(:attach)
+
+          drop.load_slice(2, nil)
         end
 
       end

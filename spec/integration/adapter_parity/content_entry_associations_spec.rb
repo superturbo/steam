@@ -136,6 +136,27 @@ describe 'Adapter parity' do
 
       end
 
+      describe 'reading belongs_to through a window preloader' do
+
+        def specimen_window
+          repository = Locomotive::Steam::ContentEntryRepository.new(
+            adapter, site, AdapterParityFixture::LOCALE, type_repository)
+
+          repository.with(type_repository.by_slug('specimens')).all
+        end
+
+        it 'resolves the same targets as one-by-one reads' do
+          window = specimen_window
+          Locomotive::Steam::Models::AssociationPreloader.attach(window)
+
+          expect(window.map { |entry| entry.maker&.name })
+            .to eq [nil, 'Maker one', 'Maker two', nil, 'Maker one', nil]
+          expect(specimen_window.map { |entry| entry.maker&.name })
+            .to eq [nil, 'Maker one', 'Maker two', nil, 'Maker one', nil]
+        end
+
+      end
+
     end
 
   end
