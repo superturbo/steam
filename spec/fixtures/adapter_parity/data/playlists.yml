@@ -1,0 +1,6 @@
+# The association order contradicts the target type order.
+- Reversed:
+    _slug: reversed
+    topics:
+      - topic-b
+      - topic-a

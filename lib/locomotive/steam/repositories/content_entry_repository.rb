@@ -13,6 +13,9 @@ module Locomotive
 
       attr_accessor :content_type_repository, :content_type
 
+      # Association enumeration falls back to the owner's ID sequence.
+      attr_writer :id_order
+
       def initialize(adapter, site = nil, locale = nil, content_type_repository = nil)
         @adapter  = adapter
         @scope    = Locomotive::Steam::Models::Scope.new(site, locale)
@@ -278,12 +281,25 @@ module Locomotive
         amount
       end
 
+      attr_reader :id_order
+
       def ordered_entries(conditions = {}, &block)
         clauses, order_by = query_parts(conditions)
 
         # priority:
         # 1/ order_by passed in the conditions parameter
-        # 2/ the default order (_position) defined in the content type
+        # 2/ the order the association or the content type declares
+        # 3/ the owner's ID sequence
+        if order_by.nil? && id_order
+          ids = id_order
+
+          return query {
+            instance_eval(&block) if block_given?
+            clauses.each { |clause| where(clause) }
+            in_id_order(ids)
+          }
+        end
+
         sequence = order_sequence_for(order_by || content_type.order_by)
 
         query {

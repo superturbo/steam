@@ -283,6 +283,78 @@ describe Locomotive::Steam::ContentEntryRepository do
       expect(repository.value_for(subject, :articles)).to equal subject.articles
     end
 
+    context 'the owner spells its own ID sequence' do
+
+      let(:entries) { [{ content_type_id: 1, _id: 1, name: 'John Doe', article_ids: ['lorem-ipsum', 'ghost', 'hello-world'] }] }
+
+      it 'follows the sequence and skips the missing ID' do
+        articles = subject.articles
+        allow(adapter).to receive(:collection).and_return(loaded(other_entries))
+
+        expect(articles.all.map(&:title)).to eq ['Lorem ipsum', 'Hello world']
+      end
+
+      it 'reads the first target by the sequence' do
+        articles = subject.articles
+        allow(adapter).to receive(:collection).and_return(loaded(other_entries))
+
+        expect(articles.first.title).to eq 'Lorem ipsum'
+      end
+
+      it 'keeps the sequence through a scoped filter' do
+        author = subject
+        allow(adapter).to receive(:collection).and_return(loaded(other_entries))
+
+        articles = repository.value_for(author, :articles, '_id.in' => %w(hello-world lorem-ipsum))
+
+        expect(articles.all.map(&:title)).to eq ['Lorem ipsum', 'Hello world']
+      end
+
+      it 'windows after the sequence, the way load_slice slices' do
+        articles = subject.articles
+        allow(adapter).to receive(:collection).and_return(loaded(other_entries))
+
+        expect(articles.all { offset(1).limit(1) }.map(&:title)).to eq ['Hello world']
+      end
+
+    end
+
+    context 'the field declares its own order' do
+
+      let(:field)   { instance_double('Field', name: :articles, type: :many_to_many, association_options: { target_id: 2, inverse_of: :authors, order_by: 'title.asc' }) }
+      let(:entries) { [{ content_type_id: 1, _id: 1, name: 'John Doe', article_ids: ['lorem-ipsum', 'hello-world'] }] }
+
+      it 'overrides the ID sequence' do
+        articles = subject.articles
+        allow(adapter).to receive(:collection).and_return(loaded(other_entries))
+
+        expect(articles.all.map(&:title)).to eq ['Hello world', 'Lorem ipsum']
+      end
+
+      it 'yields to a runtime order' do
+        author = subject
+        allow(adapter).to receive(:collection).and_return(loaded(other_entries))
+
+        articles = repository.value_for(author, :articles, order_by: 'title.desc')
+
+        expect(articles.all.map(&:title)).to eq ['Lorem ipsum', 'Hello world']
+      end
+
+    end
+
+    context 'a legacy scalar ID list' do
+
+      let(:entries) { [{ content_type_id: 1, _id: 1, name: 'John Doe', article_ids: 'hello-world' }] }
+
+      it 'still reads the one target' do
+        articles = subject.articles
+        allow(adapter).to receive(:collection).and_return(loaded(other_entries))
+
+        expect(articles.all.map(&:title)).to eq ['Hello world']
+      end
+
+    end
+
     it 'keeps scoped conditions out of an association loaded earlier' do
       author = subject
       allow(adapter).to receive(:collection).and_return(loaded(other_entries))

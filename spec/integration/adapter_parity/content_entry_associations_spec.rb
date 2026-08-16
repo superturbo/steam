@@ -136,6 +136,27 @@ describe 'Adapter parity' do
 
       end
 
+      describe 'reading a many_to_many in the owner sequence' do
+
+        def playlist(slug)
+          repository = Locomotive::Steam::ContentEntryRepository.new(
+            adapter, site, AdapterParityFixture::LOCALE, type_repository)
+
+          repository.with(type_repository.by_slug('playlists')).all.detect do |candidate|
+            candidate._slug[AdapterParityFixture::LOCALE] == slug
+          end
+        end
+
+        it 'reads it even against the target order' do
+          topics = playlist('reversed').topics
+
+          expect(topics.all.map { |topic| topic._slug[AdapterParityFixture::LOCALE] })
+            .to eq %w(topic-b topic-a)
+          expect(topics.first._slug[AdapterParityFixture::LOCALE]).to eq 'topic-b'
+        end
+
+      end
+
       describe 'reading belongs_to through a window preloader' do
 
         def specimen_window

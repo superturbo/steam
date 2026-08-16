@@ -1,0 +1,10 @@
+name: Playlists
+slug: playlists
+label_field_name: name
+order_by: name
+fields:
+- name:
+    type: string
+- topics:
+    type: many_to_many
+    class_name: topics

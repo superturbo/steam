@@ -5,12 +5,16 @@ module Locomotive::Steam
 
       def __load__
         repository = __configured_repository__
-        key        = repository.k(:_id, :in)
+        ids        = Array(@entity[__target_key__])
 
-        repository.local_conditions[key] = @entity[__target_key__] || []
+        # The ID filter serves every operation; enumeration also preserves its order.
+        repository.local_conditions[repository.k(:_id, :in)] = ids
 
-        # Preserve a runtime order override.
-        repository.local_conditions[:order_by] ||= @options[:order_by] unless @options[:order_by].blank?
+        if @options[:order_by].blank?
+          repository.id_order = ids
+        else
+          repository.local_conditions[:order_by] ||= @options[:order_by]
+        end
 
         repository
       end
