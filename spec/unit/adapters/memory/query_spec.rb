@@ -38,6 +38,97 @@ describe Locomotive::Steam::Adapters::Memory::Query do
     end
   end
 
+  describe '#in_id_order' do
+
+    def names(&block)
+      query.new(dataset, locale, &block).all.map(&:name)
+    end
+
+    it 'restricts to the given IDs and preserves their order' do
+      expect(names { in_id_order([3, 1]) }).to eq(['zone', 'foo'])
+    end
+
+    it 'skips a missing ID' do
+      expect(names { in_id_order([3, 99, 1]) }).to eq(['zone', 'foo'])
+    end
+
+    it 'keeps a duplicate ID at its first position' do
+      expect(names { in_id_order([3, 1, 3]) }).to eq(['zone', 'foo'])
+    end
+
+    it 'applies the window after the sequence' do
+      expect(names { in_id_order([3, 1, 2]).offset(1).limit(1) }).to eq(['foo'])
+    end
+
+    it 'still applies the other conditions' do
+      expect(names { where(name: 'foo').in_id_order([3, 1]) }).to eq(['foo'])
+    end
+
+    it 'refuses anything but a list' do
+      expect { query.new(dataset, locale) { in_id_order(3) } }
+        .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+    end
+
+    it 'refuses a structural ID inside the list' do
+      expect { query.new(dataset, locale) { in_id_order([[3, 1]]) } }
+        .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+    end
+
+    it 'answers an empty list without touching the dataset' do
+      empty = query.new(dataset, locale) { in_id_order([]) }
+
+      expect(empty.all).to eq []
+      expect(empty.count).to eq 0
+      expect(dataset).not_to have_received(:records)
+    end
+
+    context 'records stored under string identities' do
+
+      let(:records) { { 'zone' => entry_3, 'foo' => entry_1 } }
+      let(:entry_1) { OpenStruct.new(name: 'foo', _id: 'foo', attributes: { name: 'foo', _id: 'foo' }) }
+      let(:entry_3) { OpenStruct.new(name: 'zone', _id: 'zone', attributes: { name: 'zone', _id: 'zone' }) }
+
+      it 'reads a Symbol through the shared scalar grammar' do
+        expect(names { in_id_order([:zone, :foo]) }).to eq(['zone', 'foo'])
+      end
+
+    end
+
+    it 'refuses to combine with order_by, in either direction' do
+      expect { query.new(dataset, locale) { order_by('name asc').in_id_order([3]) } }
+        .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+      expect { query.new(dataset, locale) { in_id_order([3]).order_by('name asc') } }
+        .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+    end
+
+    it 'keeps its own copy of the list' do
+      ids     = [3, 1]
+      ordered = query.new(dataset, locale) { in_id_order(ids) }
+      ids.clear
+
+      expect(ordered.all.map(&:name)).to eq(['zone', 'foo'])
+    end
+
+    context 'a record with a composite [mongo_id, slug] identity' do
+
+      let(:entry_3) do
+        OpenStruct.new(name: 'zone', _id: ['5baf7d38a953300567956448', 'zone'],
+                       attributes: { name: 'zone', _id: ['5baf7d38a953300567956448', 'zone'] })
+      end
+      let(:records) { { '5baf7d38a953300567956448' => entry_3, 2 => entry_2 } }
+
+      it 'takes the position of any identity component' do
+        expect(names { in_id_order([2, 'zone']) }).to eq(['bar', 'zone'])
+      end
+
+      it 'answers a component once even when both are given' do
+        expect(names { in_id_order(['zone', 2, '5baf7d38a953300567956448']) }).to eq(['zone', 'bar'])
+      end
+
+    end
+
+  end
+
   describe '#offset' do
     specify do
       expect(

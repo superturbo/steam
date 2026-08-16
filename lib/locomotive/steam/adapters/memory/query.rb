@@ -33,7 +33,16 @@ module Locomotive::Steam
         end
 
         def order_by(*args)
+          raise Adapters::Query::InvalidValue, 'in_id_order and order_by cannot be combined' if @id_order
+
           @sorting = Order.new(*args)
+          self
+        end
+
+        def in_id_order(ids)
+          raise Adapters::Query::InvalidValue, 'in_id_order and order_by cannot be combined' if @sorting
+
+          @id_order = Adapters::Query::IdOrder.normalize(ids)
           self
         end
 
@@ -59,9 +68,23 @@ module Locomotive::Steam
         private
 
         def selected
-          return [] if @limit == 0
+          return [] if @limit == 0 || @id_order&.empty?
 
-          limited sorted(filtered)
+          limited(@id_order ? apply_id_order(filtered) : sorted(filtered))
+        end
+
+        # A missing ID is skipped; a composite identity answers by any
+        # component.
+        def apply_id_order(entries)
+          positions = {}
+          @id_order.each_with_index { |id, index| positions[id] = index }
+
+          entries.filter_map do |entry|
+            position = Array(entry[:_id] || entry[:id]).compact
+                                                       .filter_map { |component| positions[component] }.min
+
+            [position, entry] if position
+          end.sort_by(&:first).map(&:last)
         end
 
         def sorted(entries)

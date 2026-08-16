@@ -128,6 +128,184 @@ describe Locomotive::Steam::Adapters::MongoDB::Query do
 
   end
 
+  describe '#in_id_order' do
+
+    let(:finds)   { [] }
+    let(:counted) { [] }
+    let(:responses) { [] }
+
+    let(:collection) do
+      double('Collection').tap do |collection|
+        allow(collection).to receive(:find) do |filter, options = {}|
+          finds << [filter, options]
+          responses.shift || []
+        end
+        allow(collection).to receive(:count_documents) do |filter|
+          counted << filter
+          0
+        end
+      end
+    end
+
+    def doc(id, name = id.upcase)
+      { '_id' => id, 'name' => name }
+    end
+
+    # Outermost first; a windowed fetch adds its narrower bound last.
+    def id_bounds(filter)
+      return [filter.dig('_id', '$in')] if filter.key?('_id')
+
+      (filter['$and'] || []).flat_map { |clause| id_bounds(clause) }
+    end
+
+    it 'sends nothing to the store until the result is consumed' do
+      query.in_id_order(%w(a b)).against(collection)
+
+      expect(finds).to be_empty
+      expect(counted).to be_empty
+    end
+
+    it 'reads an unbounded list once and follows the given order' do
+      responses << [doc('a'), doc('b')]
+
+      view = query.where(published: true).in_id_order(%w(b a x b)).against(collection)
+
+      expect(view.map { |document| document['_id'] }).to eq %w(b a)
+      expect(finds.length).to eq 1
+      expect(id_bounds(finds[0].first)).to eq [%w(b a x)]
+      expect(finds[0].first.to_s).to include('published')
+      expect(finds[0].first.to_s).to include('site_id')
+      expect(finds[0].last).not_to include(:sort, :skip, :limit)
+    end
+
+    it 'projects the IDs first and fetches only the window through the whole filter' do
+      responses << [doc('a'), doc('b'), doc('c')]
+      responses << [doc('a')]
+
+      view = query.where(published: true).in_id_order(%w(c a b)).offset(1).limit(1).against(collection)
+
+      expect(view.map { |document| document['_id'] }).to eq %w(a)
+      expect(finds.length).to eq 2
+      expect(finds[0].last[:projection]).to eq('_id' => 1)
+      expect(id_bounds(finds[1].first)).to eq [%w(c a b), %w(a)]
+      expect(finds[1].first.to_s).to include('published')
+      expect(finds[1].first.to_s).to include('site_id')
+    end
+
+    it 'reads the first target without materializing the list' do
+      responses << [doc('a'), doc('b'), doc('c')]
+      responses << [doc('c')]
+
+      view = query.in_id_order(%w(c a b)).against(collection)
+
+      expect(view.limit(1).first['_id']).to eq 'c'
+      expect(id_bounds(finds[1].first).last).to eq %w(c)
+    end
+
+    it 'puts an arbitrary store order back into the window sequence' do
+      responses << [doc('a'), doc('b'), doc('c')]
+      responses << [doc('b'), doc('a')]
+
+      view = query.in_id_order(%w(a b c)).limit(2).against(collection)
+
+      expect(view.map { |document| document['_id'] }).to eq %w(a b)
+    end
+
+    def matching(count)
+      allow(collection).to receive(:count_documents) { |filter| counted << filter; count }
+    end
+
+    it 'counts matching documents without loading them' do
+      matching(1)
+      view = query.where(published: true).in_id_order(%w(b a)).against(collection)
+
+      expect(view.count_documents).to eq 1
+      expect(finds).to be_empty
+      expect(id_bounds(counted.first)).to eq [%w(b a)]
+      expect(counted.first.to_s).to include('published')
+    end
+
+    it 'fills the window from the next candidates when a document vanishes' do
+      responses << [doc('a'), doc('b'), doc('c')]
+      responses << [doc('b')]
+      responses << [doc('c')]
+
+      view = query.in_id_order(%w(a b c)).limit(2).against(collection)
+
+      expect(view.map { |document| document['_id'] }).to eq %w(b c)
+      expect(finds.length).to eq 3
+    end
+
+    it 'narrows an existing window instead of replacing it' do
+      view = query.in_id_order(%w(a b)).limit(0).against(collection)
+
+      expect(view.limit(1).first).to eq nil
+      expect(finds).to be_empty
+    end
+
+    it 'counts inside the window' do
+      matching(4)
+      view = query.in_id_order(%w(a b c d)).offset(1).limit(2).against(collection)
+
+      expect(view.count_documents).to eq 2
+      expect(finds).to be_empty
+    end
+
+    it 'counts nothing past the end of the list' do
+      matching(4)
+      view = query.in_id_order(%w(a b c d)).offset(5).against(collection)
+
+      expect(view.count_documents).to eq 0
+    end
+
+    it 'counts nothing through an empty window without asking the store' do
+      view = query.in_id_order(%w(a b)).limit(0).against(collection)
+
+      expect(view.count_documents).to eq 0
+      expect(counted).to be_empty
+    end
+
+    it 'refuses anything but a list' do
+      expect { query.in_id_order('a') }
+        .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+    end
+
+    it 'reads a Symbol through the shared scalar grammar' do
+      responses << [doc('a'), doc('b')]
+
+      view = query.in_id_order([:b, :a]).against(collection)
+
+      expect(view.map { |document| document['_id'] }).to eq %w(b a)
+      expect(id_bounds(finds[0].first)).to eq [%w(b a)]
+    end
+
+    it 'answers an empty list without touching the store' do
+      view = query.in_id_order([]).against(collection)
+
+      expect(view.to_a).to eq []
+      expect(view.count_documents).to eq 0
+      expect(finds).to be_empty
+      expect(counted).to be_empty
+    end
+
+    it 'refuses to combine with order_by, in either direction' do
+      expect { query.order_by(:name).in_id_order(%w(a)) }
+        .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+      expect { query.in_id_order(%w(a)).order_by(:name) }
+        .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+    end
+
+    it 'returns what is left when every candidate vanishes' do
+      responses << [doc('a')]
+      responses << []
+
+      view = query.in_id_order(%w(a)).limit(1).against(collection)
+
+      expect(view.to_a).to eq []
+    end
+
+  end
+
   describe '#k' do
 
     subject { query.k(:title, :in) }

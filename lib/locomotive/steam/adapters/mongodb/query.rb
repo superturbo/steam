@@ -1,4 +1,5 @@
 require_relative 'query_compiler'
+require_relative 'id_order_view'
 
 module Locomotive::Steam
   module Adapters
@@ -25,6 +26,8 @@ module Locomotive::Steam
 
         def order_by(*args)
           self.tap do
+            raise Adapters::Query::InvalidValue, 'in_id_order and order_by cannot be combined' if @id_order
+
             @sort = Adapters::Query::OrderBy.decode(*args)
           end
         end
@@ -43,7 +46,17 @@ module Locomotive::Steam
           self.tap { @limit = Adapters::Query::Window.normalize(limit, :limit) }
         end
 
+        def in_id_order(ids)
+          self.tap do
+            raise Adapters::Query::InvalidValue, 'in_id_order and order_by cannot be combined' if @sort
+
+            @id_order = Adapters::Query::IdOrder.normalize(ids)
+          end
+        end
+
         def against(collection)
+          return id_order_view(collection) if @id_order
+
           compiled = QueryCompiler.new(build_aliases(@localized_attributes, @scope.locale)).compile(
             @criteria, sort: @sort, fields: @fields, skip: @skip, limit: @limit
           )
@@ -58,6 +71,15 @@ module Locomotive::Steam
         alias :k :key
 
         private
+
+        def id_order_view(collection)
+          compiled = QueryCompiler.new(build_aliases(@localized_attributes, @scope.locale)).compile(
+            @criteria + [[key(:_id, :in), @id_order]], sort: nil, fields: @fields, skip: nil, limit: nil
+          )
+
+          IdOrderView.new(collection, apply_tenant_scope(compiled.filter), compiled.options,
+                            ids: @id_order, skip: @skip, limit: @limit)
+        end
 
         def build_aliases(localized_attributes, locale)
           localized_attributes.inject({}) do |aliases, name|

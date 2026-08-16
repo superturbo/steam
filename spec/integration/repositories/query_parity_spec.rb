@@ -511,6 +511,28 @@ describe 'Query parity' do
       expect(specimens.exists?(content_type_id: 'somewhere-else')).to be(false)
     end
 
+    describe 'an explicit ID order' do
+
+      def sequence_of(query)
+        query.map { |entry| entry._slug[AdapterParityFixture::LOCALE] }
+      end
+
+      it 'follows the sequence, skips the missing ID, and windows after it' do
+        repository = specimens
+        ids        = [repository.by_slug('embedded')._id, 'no-such-id',
+                      repository.by_slug('scalars')._id, repository.by_slug('arrays')._id]
+
+        expect(sequence_of(repository.query { in_id_order(ids) }.all))
+          .to eq %w(embedded scalars arrays)
+        expect(sequence_of(repository.query { in_id_order(ids).offset(1).limit(1) }.all))
+          .to eq %w(scalars)
+        expect(repository.query { in_id_order(ids).offset(1).limit(1) }.size).to eq 1
+        expect(repository.query { in_id_order(ids) }.first._slug[AdapterParityFixture::LOCALE])
+          .to eq 'embedded'
+      end
+
+    end
+
   end
 
   context 'MongoDB' do
