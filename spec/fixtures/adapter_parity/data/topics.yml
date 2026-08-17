@@ -2,3 +2,6 @@
     _slug: topic-a
 - Topic b:
     _slug: topic-b
+- Topic hidden:
+    _slug: topic-hidden
+    _visible: false

@@ -1,6 +1,23 @@
+- Alpha:
+    _slug: alpha
+    topics:
+      - topic-a
+
+- Beta:
+    _slug: beta
+    topics:
+      - topic-b
+
 # The association order contradicts the target type order.
 - Reversed:
     _slug: reversed
     topics:
       - topic-b
+      - topic-a
+
+# A hidden head yields its place.
+- Zapped:
+    _slug: zapped
+    topics:
+      - topic-hidden
       - topic-a

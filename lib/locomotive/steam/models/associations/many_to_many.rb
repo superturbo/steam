@@ -4,8 +4,10 @@ module Locomotive::Steam
     class ManyToManyAssociation < ReferencedAssociation
 
       def __load__
+        return @preloader.source_for(self) if @preloader && @options[:order_by].blank?
+
         repository = __configured_repository__
-        ids        = Array(@entity[__target_key__])
+        ids        = __owner_ids__
 
         # The ID filter serves every operation; enumeration also preserves its order.
         repository.local_conditions[repository.k(:_id, :in)] = ids
@@ -17,6 +19,14 @@ module Locomotive::Steam
         end
 
         repository
+      end
+
+      def __owner_ids__
+        Array(@entity[__target_key__])
+      end
+
+      def __owner__
+        @entity
       end
 
       # Keep the existing ids until the association is materialized or reassigned.

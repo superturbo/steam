@@ -86,9 +86,16 @@ module Locomotive
 
           # Do not retain an unbounded remainder in a window preloader.
           def slice(index, length)
-            repository.all(conditions) { offset(index).limit(length) }.tap do |entries|
-              Locomotive::Steam::Models::AssociationPreloader.attach(entries) if length
-            end
+            entries =
+              if repository.respond_to?(:load_window)
+                repository.load_window(conditions, index, length)
+              else
+                repository.all(conditions) { offset(index).limit(length) }
+              end
+
+            Locomotive::Steam::Models::AssociationPreloader.attach(entries) if length
+
+            entries
           end
 
           def slice_loaded_collection(from, length)
@@ -98,7 +105,12 @@ module Locomotive
           end
 
           def collection
-            @collection ||= repository.all(conditions)
+            @collection ||=
+              if repository.respond_to?(:load_window)
+                repository.load_window(conditions, 0, nil)
+              else
+                repository.all(conditions)
+              end
           end
 
           def conditions

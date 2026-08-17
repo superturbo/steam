@@ -155,6 +155,11 @@ describe 'Adapter parity seed' do
     expect(document('scalars')['topic_ids']).to all(be_a(BSON::ObjectId))
   end
 
+  it 'keeps the stated many_to_many sequence in the ids' do
+    expect(document('reversed')['topic_ids'])
+      .to eq [document('topic-b')['_id'], document('topic-a')['_id']]
+  end
+
   # MongoDB distinguishes a missing key from an empty stored list.
   it 'keeps each declared many-to-many state' do
     expect(document('all-missing')).not_to have_key('topic_ids')

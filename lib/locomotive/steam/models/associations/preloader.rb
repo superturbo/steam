@@ -5,7 +5,8 @@ module Locomotive::Steam
     class AssociationPreloader
 
       PRELOADERS = {
-        BelongsToAssociation => BelongsToPreloader
+        BelongsToAssociation  => BelongsToPreloader,
+        ManyToManyAssociation => ManyToManyPreloader
       }.freeze
 
       private_constant :PRELOADERS
@@ -29,6 +30,10 @@ module Locomotive::Steam
 
       def target_for(association, id)
         preloader_for(association).target_for(association, id)
+      end
+
+      def source_for(association)
+        preloader_for(association).source_for(association)
       end
 
       def handles?(association)

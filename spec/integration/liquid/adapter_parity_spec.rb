@@ -76,6 +76,40 @@ describe 'Liquid adapter parity' do
       expect(render_liquid(source)).to eq '[All missing][Arrays][Embedded][Explicit nils][Scalars][Zero]'
     end
 
+    describe 'a window of many_to_many owners' do
+
+      it 'renders every list in its owner sequence' do
+        source = '{% for playlist in contents.playlists limit: 3 %}' \
+                 '[{{ playlist._slug }}:' \
+                 '{% for topic in playlist.topics %}{{ topic._slug }},{% endfor %}]' \
+                 '{% endfor %}'
+
+        expect(render_liquid(source))
+          .to eq '[alpha:topic-a,][beta:topic-b,][reversed:topic-b,topic-a,]'
+      end
+
+      it 'renders an inner window from the head of each sequence' do
+        source = '{% for playlist in contents.playlists limit: 3 %}' \
+                 '[{{ playlist._slug }}:' \
+                 '{% for topic in playlist.topics limit: 1 %}{{ topic._slug }}{% endfor %}]' \
+                 '{% endfor %}'
+
+        expect(render_liquid(source))
+          .to eq '[alpha:topic-a][beta:topic-b][reversed:topic-b]'
+      end
+
+      it 'lets a hidden head yield inside the window' do
+        source = '{% for playlist in contents.playlists limit: 4 %}' \
+                 '[{{ playlist._slug }}:' \
+                 '{% for topic in playlist.topics limit: 1 %}{{ topic._slug }}{% endfor %}]' \
+                 '{% endfor %}'
+
+        expect(render_liquid(source))
+          .to eq '[alpha:topic-a][beta:topic-b][reversed:topic-b][zapped:topic-a]'
+      end
+
+    end
+
     describe 'paginating' do
 
       let(:source) do

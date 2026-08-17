@@ -193,6 +193,65 @@ describe 'Adapter parity' do
       def filesystem?; false; end
     end
 
+    describe 'the physical cost of a preloaded window' do
+
+      let(:adapter) { AdapterParityFixture.mongodb_adapter }
+
+      include_context 'adapter parity dataset access'
+
+      class FindCounter
+        def finds = @finds ||= []
+
+        def started(event)
+          finds << event.command['find'] if event.command_name == 'find'
+        end
+        def succeeded(_); end
+        def failed(_); end
+      end
+
+      it 'reads the topics of every playlist through two content-entry find commands' do
+        repository = Locomotive::Steam::ContentEntryRepository.new(
+          adapter, site, AdapterParityFixture::LOCALE, type_repository)
+        window = repository.with(type_repository.by_slug('playlists')).all
+        Locomotive::Steam::Models::AssociationPreloader.attach(window)
+
+        # The adapter session predates any global subscription.
+        client  = Locomotive::Steam::MongoDBAdapter.session
+        counter = FindCounter.new
+        client.subscribe(Mongo::Monitoring::COMMAND, counter)
+
+        begin
+          lists = window.map { |playlist| playlist.topics.all.map { |topic| topic._slug[AdapterParityFixture::LOCALE] } }
+        ensure
+          client.unsubscribe(Mongo::Monitoring::COMMAND, counter)
+        end
+
+        expect(lists).to eq [%w(topic-a), %w(topic-b), %w(topic-b topic-a), %w(topic-a)]
+        expect(counter.finds.count('locomotive_content_entries')).to eq 2
+      end
+
+      it 'reads the heads of every playlist through two content-entry find commands' do
+        repository = Locomotive::Steam::ContentEntryRepository.new(
+          adapter, site, AdapterParityFixture::LOCALE, type_repository)
+        window = repository.with(type_repository.by_slug('playlists')).all
+        Locomotive::Steam::Models::AssociationPreloader.attach(window)
+
+        client  = Locomotive::Steam::MongoDBAdapter.session
+        counter = FindCounter.new
+        client.subscribe(Mongo::Monitoring::COMMAND, counter)
+
+        begin
+          heads = window.map { |playlist| playlist.topics.load_window(nil, 0, 1).map { |topic| topic._slug[AdapterParityFixture::LOCALE] } }
+        ensure
+          client.unsubscribe(Mongo::Monitoring::COMMAND, counter)
+        end
+
+        expect(heads).to eq [%w(topic-a), %w(topic-b), %w(topic-b), %w(topic-a)]
+        expect(counter.finds.count('locomotive_content_entries')).to eq 2
+      end
+
+    end
+
   end
 
   context 'Filesystem' do

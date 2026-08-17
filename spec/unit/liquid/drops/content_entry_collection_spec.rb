@@ -111,6 +111,15 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntryCollection do
         drop.load_slice(5, nil)
       end
 
+      it 'asks a lazy source to load the window' do
+        source = double('LazySource')
+        allow(services.repositories).to receive(:content_entry).and_return(double(with: source))
+        allow(source).to receive(:respond_to?).with(:load_window).and_return(true)
+        allow(source).to receive(:load_window).with(nil, 0, 2).and_return(['a'])
+
+        expect(drop.load_slice(0, 2)).to eq(['a'])
+      end
+
       it 'asks for nothing when the end index is the beginning' do
         drop.load_slice(-1, 0)
         expect(window.window).to eq(offset: 0, limit: 0)
