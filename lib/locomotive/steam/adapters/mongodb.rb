@@ -26,6 +26,11 @@ module Locomotive::Steam
       query.against(collection(mapper)).count_documents
     end
 
+    def count_up_to(mapper, scope, maximum, &block)
+      query = query_klass.new(scope, mapper.localized_attributes, &block)
+      query.against(collection(mapper)).count_documents(limit: maximum)
+    end
+
     def find(mapper, scope, id)
       _id = make_id(id)
       query(mapper, scope) { where(_id: _id) }.first

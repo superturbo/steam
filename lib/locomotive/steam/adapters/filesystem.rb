@@ -93,6 +93,10 @@ module Locomotive::Steam
       query(mapper, scope, &block).count
     end
 
+    def count_up_to(mapper, scope, maximum, &block)
+      query(mapper, scope, &block).limit(maximum).count
+    end
+
     private
 
     # Missing fields start at zero; stored values must keep the amount's type.

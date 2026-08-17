@@ -93,6 +93,11 @@ module Locomotive
         super() { clauses.each { |clause| where(clause) } }
       end
 
+      def count_up_to(maximum, conditions = {})
+        clauses, _ = query_parts(conditions)
+        super(maximum) { clauses.each { |clause| where(clause) } }
+      end
+
       def find(id)
         clauses, _ = query_parts(_id: self.adapter.make_id(id))
         first { clauses.each { |clause| where(clause) } }

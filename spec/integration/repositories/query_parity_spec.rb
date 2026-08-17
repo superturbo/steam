@@ -511,6 +511,26 @@ describe 'Query parity' do
       expect(specimens.exists?(content_type_id: 'somewhere-else')).to be(false)
     end
 
+    it 'caps the count at its bound' do
+      expect(specimens.count_up_to(0)).to eq 0
+      expect(specimens.count_up_to(2)).to eq 2
+      expect(specimens.count_up_to(6)).to eq 6
+      expect(specimens.count_up_to(10)).to eq 6
+      expect(specimens.count_up_to(1, flag: false)).to eq 1
+      expect(specimens.count_up_to(10, flag: false)).to eq 3
+    end
+
+    it 'a capped count refuses anything but a non-negative integer' do
+      expect { specimens.count_up_to(nil) }
+        .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+      expect { specimens.count_up_to('6') }
+        .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+      expect { specimens.count_up_to(-1) }
+        .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+      expect { specimens.count_up_to(2**63) }
+        .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+    end
+
     describe 'an explicit ID order' do
 
       def sequence_of(query)

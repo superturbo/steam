@@ -58,6 +58,17 @@ module Locomotive::Steam
         adapter.count(mapper, scope, &block)
       end
 
+      def count_up_to(maximum, &block)
+        maximum = Adapters::Query::Window.normalize(maximum, :count_up_to)
+
+        raise Adapters::Query::InvalidValue, 'count_up_to takes a non-negative integer' if maximum.nil?
+
+        # MongoDB treats a zero limit as unbounded.
+        return 0 if maximum.zero?
+
+        adapter.count_up_to(mapper, scope, maximum, &block)
+      end
+
       def first(&block)
         adapter.query(mapper, scope, &block).first
       end

@@ -29,6 +29,10 @@ module Locomotive::Steam
       query(mapper, scope, &block).count
     end
 
+    def count_up_to(mapper, scope, maximum, &block)
+      query(mapper, scope, &block).limit(maximum).count
+    end
+
     def find(mapper, scope, id)
       _query(mapper, scope) { where(_id: id) }.first
     end
