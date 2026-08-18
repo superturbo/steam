@@ -280,6 +280,12 @@ module Locomotive::Steam
           load_window(conditions, 0, nil)
         end
 
+        def first(conditions = {}, &block)
+          return __getobj__.first(conditions || {}, &block) if block || conditions.present?
+
+          load_window(nil, 0, 1).first
+        end
+
         def each(&block)
           all.each(&block)
         end

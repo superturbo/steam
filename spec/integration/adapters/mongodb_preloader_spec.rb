@@ -158,7 +158,7 @@ describe 'MongoDB window preloader cost' do
     client.subscribe(Mongo::Monitoring::COMMAND, counter)
 
     begin
-      heads = window.map { |post| post.topics.load_window(nil, 0, 1).map(&:name) }
+      heads = window.map { |post| [post.topics.first.name] }
     ensure
       client.unsubscribe(Mongo::Monitoring::COMMAND, counter)
     end

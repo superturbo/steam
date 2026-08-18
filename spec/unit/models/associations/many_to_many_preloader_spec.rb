@@ -542,15 +542,36 @@ describe Locomotive::Steam::Models::AssociationPreloader do
       expect(target_queries).to eq 2
     end
 
-    it 'leaves count, exists and first on the repository path' do
+    it 'serves first from the window without reading past the heads' do
+      window = preloaded_window
+
+      expect(window[0].articles.first.title).to eq 'B'
+      expect(window[1].articles.first.title).to eq 'A'
+      expect(window[2].articles.first.title).to eq 'D'
+      expect(target_queries).to eq 2
+
+      expect(window[1].articles.all.map(&:title)).to eq %w(A C)
+      expect(target_queries).to eq 3
+    end
+
+    it 'leaves first with conditions or a block on the repository path' do
+      window = preloaded_window
+
+      expect(window[0].articles.first(title: 'A').title).to eq 'A'
+      expect(target_queries).to eq 1
+
+      expect(window[0].articles.first { offset(1) }.title).to eq 'A'
+      expect(target_queries).to eq 2
+    end
+
+    it 'leaves count and exists on the repository path' do
       window = preloaded_window
 
       expect(window[0].articles.count).to eq 2
       expect(window[0].articles.exists?).to be true
-      expect(window[0].articles.first.title).to eq 'B'
 
       window[0].articles.all
-      expect(target_queries).to eq 4
+      expect(target_queries).to eq 3
     end
 
     context 'the field declares its own order' do

@@ -108,6 +108,15 @@ describe 'Liquid adapter parity' do
           .to eq '[alpha:topic-a][beta:topic-b][reversed:topic-b][zapped:topic-a]'
       end
 
+      it 'answers first with the head of each sequence' do
+        source = '{% for playlist in contents.playlists limit: 4 %}' \
+                 '[{{ playlist._slug }}:{{ playlist.topics.first._slug }}]' \
+                 '{% endfor %}'
+
+        expect(render_liquid(source))
+          .to eq '[alpha:topic-a][beta:topic-b][reversed:topic-b][zapped:topic-a]'
+      end
+
     end
 
     describe 'a window of has_many owners' do
