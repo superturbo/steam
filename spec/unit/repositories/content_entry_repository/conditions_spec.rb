@@ -302,6 +302,97 @@ describe Locomotive::Steam::ContentEntryRepository do
 
         end
 
+        describe 'resolution within one render' do
+
+          def counted_lookups
+            lookups = 0
+            allow(adapter).to receive(:collection) { lookups += 1; loaded(entries) }
+
+            yield
+
+            lookups
+          end
+
+          it 'answers a repeated slug operand from its first lookup' do
+            lookups = counted_lookups do
+              2.times { expect(prepared_for('tags.all' => %w(A))).to include('tag_ids.all' => %w(A)) }
+            end
+
+            expect(lookups).to eq 1
+            expect(content_type_repository).to have_received(:find).with('42').once
+          end
+
+          it 'answers a repeated unknown slug from its first lookup and still reports it' do
+            allow(Locomotive::Steam.configuration).to receive(:mode).and_return(:test)
+            expect(Locomotive::Common::Logger).to receive(:warn).with(/"tags".*unknown_slug/).twice
+
+            lookups = counted_lookups do
+              2.times do
+                expect(prepared_for('tags.all' => %w(C)).fetch('tag_ids.all'))
+                  .to eq [Locomotive::Steam::Adapters::Query::Values.unmatchable]
+              end
+            end
+
+            expect(lookups).to eq 1
+          end
+
+          it 'looks every distinct slug up on its own' do
+            lookups = counted_lookups do
+              prepared_for('tags.all' => %w(A))
+              prepared_for('tags.all' => %w(B))
+            end
+
+            expect(lookups).to eq 2
+          end
+
+          context 'across locales' do
+
+            let(:entries) do
+              [{ content_type_id: 9, _position: 0, _slug: { en: 'A', fr: 'A' } },
+               { content_type_id: 9, _position: 1, _slug: { en: 'B', fr: 'B' } }]
+            end
+
+            it 'looks the same slug up once per locale' do
+              lookups = counted_lookups do
+                prepared_for('tags.all' => %w(A))
+                repository.locale = :fr
+                prepared_for('tags.all' => %w(A))
+              end
+
+              expect(lookups).to eq 2
+            end
+
+          end
+
+          context 'a second association aiming at another target' do
+
+            let(:other_field) do
+              instance_double('OtherManyToManyField', name: 'labels', persisted_name: 'label_ids',
+                              type: :many_to_many, target_id: '43')
+            end
+            let(:_fields) do
+              instance_double('Fields', selects: [], belongs_to: [], many_to_many: [field, other_field],
+                                        dates_and_date_times: [], numbers: [], booleans: [])
+            end
+            let(:other_target_type) do
+              build_content_type('Labels', _id: 10, order_by: '_position', fields: target_fields, label_field_name: :name)
+            end
+
+            before { allow(content_type_repository).to receive(:find).with('43').and_return(other_target_type) }
+
+            it 'keeps the resolutions of the two targets apart' do
+              lookups = counted_lookups do
+                prepared_for('tags.all' => %w(A))
+                prepared_for('labels.all' => %w(A))
+              end
+
+              expect(lookups).to eq 2
+            end
+
+          end
+
+        end
+
       end
 
       context 'the target value is a content entry' do

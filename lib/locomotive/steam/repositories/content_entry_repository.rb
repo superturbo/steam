@@ -16,6 +16,10 @@ module Locomotive
       # Association enumeration falls back to the owner's ID sequence.
       attr_writer :id_order
 
+      attr_writer :slug_resolutions
+
+      protected :slug_resolutions=
+
       def initialize(adapter, site = nil, locale = nil, content_type_repository = nil)
         @adapter  = adapter
         @scope    = Locomotive::Steam::Models::Scope.new(site, locale)
@@ -157,7 +161,7 @@ module Locomotive
           end
         end
 
-        super
+        super.tap { slug_resolutions.clear }
       end
 
       def update(entity)
@@ -166,11 +170,23 @@ module Locomotive
         # Steam owns updated_at; whatever the caller put there loses.
         entity[:updated_at] = Adapters::TimePrecision.utc_ms
 
-        super
+        super.tap { slug_resolutions.clear }
       end
 
       def inc(entity, attribute, amount = 1)
         super(entity, attribute, increment_amount(attribute, amount))
+      end
+
+      def delete(entity)
+        super.tap { slug_resolutions.clear }
+      end
+
+      def resolve_slug(target_id, slug)
+        key = [target_id, locale, slug]
+
+        return slug_resolutions[key] if slug_resolutions.key?(key)
+
+        slug_resolutions[key] = with(target_id).first { where(_slug: slug).only(:_id) }.try(:_id)
       end
 
       def next(entry)
@@ -402,8 +418,14 @@ module Locomotive
         clauses.reject(&:blank?)
       end
 
+      def slug_resolutions
+        @slug_resolutions ||= {}
+      end
+
       def simple_clone
-        self.class.new(self.adapter, self.site, self.locale, self.content_type_repository)
+        self.class.new(self.adapter, self.site, self.locale, self.content_type_repository).tap do |repository|
+          repository.slug_resolutions = slug_resolutions
+        end
       end
 
       def add_localized_fields_to_mapper(mapper)
@@ -643,9 +665,8 @@ module Locomotive
         def slug_to_id(slug, field)
           return nil if slug.nil?
 
-          _entry = @target_repository.with(field.target_id).first { where(_slug: slug).only(:_id) }
-
-          _entry.try(:_id) || unmatchable(field, :unknown_slug)
+          @target_repository.resolve_slug(field.target_id, slug) ||
+            unmatchable(field, :unknown_slug)
         end
 
         def value_to_date(value, field)

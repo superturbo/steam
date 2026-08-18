@@ -88,6 +88,80 @@ describe 'Adapter parity' do
 
       end
 
+      describe 'resolving a slug operand across a write' do
+
+        let(:render_repository) do
+          Locomotive::Steam::ContentEntryRepository.new(
+            adapter, site, AdapterParityFixture::LOCALE, type_repository)
+        end
+
+        let(:written) { [] }
+
+        after do
+          written.reverse_each do |type_slug, entry|
+            render_repository.with(type_repository.by_slug(type_slug)).delete(entry)
+          end
+        end
+
+        def create_in(type_slug, attributes)
+          slug   = attributes.delete(:slug)
+          scoped = render_repository.with(type_repository.by_slug(type_slug))
+          entry  = scoped.build(attributes)
+
+          entry[:_slug] = Locomotive::Steam::Models::I18nField.new(
+            :_slug, AdapterParityFixture::LOCALE => slug)
+
+          scoped.create(entry).tap { written << [type_slug, entry] }
+        end
+
+        def late_specimens
+          render_repository.with(type_repository.by_slug('specimens'))
+                           .all(topics: 'topic-late')
+                           .map { |entry| entry._slug[AdapterParityFixture::LOCALE] }
+        end
+
+        it 'answers with the topic written after a missed resolution' do
+          expect(late_specimens).to eq []
+
+          topic = create_in('topics', name: 'Topic late', slug: 'topic-late')
+          create_in('specimens', name: 'Late', score: 1, topic_ids: [topic._id],
+                                 category_id: option_id(:category, 'alpha'),
+                                 slug: 'late-specimen')
+
+          expect(late_specimens).to eq %w(late-specimen)
+        end
+
+        it 'stops answering with a slug an update moved away' do
+          topic = create_in('topics', name: 'Topic late', slug: 'topic-late')
+          create_in('specimens', name: 'Late', score: 1, topic_ids: [topic._id],
+                                 category_id: option_id(:category, 'alpha'),
+                                 slug: 'late-specimen')
+
+          expect(late_specimens).to eq %w(late-specimen)
+
+          topic[:_slug] = Locomotive::Steam::Models::I18nField.new(
+            :_slug, AdapterParityFixture::LOCALE => 'topic-moved')
+          render_repository.with(type_repository.by_slug('topics')).update(topic)
+
+          expect(late_specimens).to eq []
+        end
+
+        it 'stops answering with a deleted slug' do
+          topic = create_in('topics', name: 'Topic late', slug: 'topic-late')
+          create_in('specimens', name: 'Late', score: 1, topic_ids: [topic._id],
+                                 category_id: option_id(:category, 'alpha'),
+                                 slug: 'late-specimen')
+
+          expect(late_specimens).to eq %w(late-specimen)
+
+          written.delete(['topics', topic])
+          render_repository.with(type_repository.by_slug('topics')).delete(topic)
+
+          expect(late_specimens).to eq []
+        end
+
+      end
+
       describe 'querying association operands by form' do
 
         def quoted(conditions)
