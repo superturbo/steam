@@ -1,12 +1,15 @@
 module Locomotive::Steam
   module Models
 
-    # Coordinates association preloaders within one bounded window.
+    # Coordinates association preloaders within one bounded window. One
+    # window holds entries of one site, content type and locale; every
+    # strategy relies on that.
     class AssociationPreloader
 
       PRELOADERS = {
         BelongsToAssociation  => BelongsToPreloader,
-        ManyToManyAssociation => ManyToManyPreloader
+        ManyToManyAssociation => ManyToManyPreloader,
+        HasManyAssociation    => HasManyPreloader
       }.freeze
 
       private_constant :PRELOADERS

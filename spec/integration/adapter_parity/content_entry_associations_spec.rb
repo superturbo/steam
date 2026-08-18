@@ -157,6 +157,48 @@ describe 'Adapter parity' do
 
       end
 
+      describe 'reading has_many through a window preloader' do
+
+        it 'resolves the same groups in the same orders' do
+          repository = Locomotive::Steam::ContentEntryRepository.new(
+            adapter, site, AdapterParityFixture::LOCALE, type_repository)
+          window = repository.with(type_repository.by_slug('makers')).all
+
+          Locomotive::Steam::Models::AssociationPreloader.attach(window)
+
+          specimens = window.to_h do |maker|
+            [maker._slug[AdapterParityFixture::LOCALE],
+             maker.specimens.all.map { |specimen| specimen._slug[AdapterParityFixture::LOCALE] }]
+          end
+
+          expect(specimens).to eq(
+            'maker-one'                => %w(scalars arrays),
+            'maker-two'                => %w(embedded),
+            'maker-three'              => [],
+            '0123456789abcdef01234567' => [])
+        end
+
+        it 'keeps an explicit position order through the batch' do
+          repository = Locomotive::Steam::ContentEntryRepository.new(
+            adapter, site, AdapterParityFixture::LOCALE, type_repository)
+          window = repository.with(type_repository.by_slug('makers')).all
+
+          Locomotive::Steam::Models::AssociationPreloader.attach(window)
+
+          badges = window.to_h do |maker|
+            [maker._slug[AdapterParityFixture::LOCALE],
+             maker.badges.all.map { |badge| badge._slug[AdapterParityFixture::LOCALE] }]
+          end
+
+          expect(badges).to eq(
+            '0123456789abcdef01234567' => [],
+            'maker-one'                => %w(gold silver bronze),
+            'maker-three'              => [],
+            'maker-two'                => [])
+        end
+
+      end
+
       describe 'reading belongs_to through a window preloader' do
 
         def specimen_window

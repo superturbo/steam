@@ -110,6 +110,21 @@ describe 'Liquid adapter parity' do
 
     end
 
+    describe 'a window of has_many owners' do
+
+      it 'renders every group in its own order' do
+        source = '{% for maker in contents.makers limit: 4 %}' \
+                 '[{{ maker._slug }}:' \
+                 '{% for specimen in maker.specimens %}{{ specimen._slug }},{% endfor %}]' \
+                 '{% endfor %}'
+
+        expect(render_liquid(source)).to eq(
+          '[0123456789abcdef01234567:][maker-one:scalars,arrays,]' \
+          '[maker-three:][maker-two:embedded,]')
+      end
+
+    end
+
     describe 'paginating' do
 
       let(:source) do

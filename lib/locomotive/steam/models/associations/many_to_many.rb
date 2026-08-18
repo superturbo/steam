@@ -25,10 +25,6 @@ module Locomotive::Steam
         Array(@entity[__target_key__])
       end
 
-      def __owner__
-        @entity
-      end
-
       # Keep the existing ids until the association is materialized or reassigned.
       def __serialize__(attributes)
         return unless attributes.key?(__name__)

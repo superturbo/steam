@@ -3,14 +3,16 @@ require 'spec_helper'
 require_relative '../../../lib/locomotive/steam/adapters/mongodb.rb'
 require_relative '../../support/adapter_parity_fixture'
 
-# Find-command ceilings on real MongoDB: hidden-headed windows must not
-# grow per owner.
+# Command ceilings for bounded preloaders on real MongoDB.
 describe 'MongoDB window preloader cost' do
 
-  SITE_ID   = BSON::ObjectId.from_string('bbbbbbbbbbbbbbbbbbbbbbbb')
-  TOPICS_ID = BSON::ObjectId.from_string('bbbbbbbbbbbbbbbbbbbbbbb1')
-  POSTS_ID  = BSON::ObjectId.from_string('bbbbbbbbbbbbbbbbbbbbbbb2')
-  OWNERS    = 20
+  SITE_ID         = BSON::ObjectId.from_string('bbbbbbbbbbbbbbbbbbbbbbbb')
+  FOREIGN_SITE_ID = BSON::ObjectId.from_string('bbbbbbbbbbbbbbbbbbbbbbbe')
+  TOPICS_ID  = BSON::ObjectId.from_string('bbbbbbbbbbbbbbbbbbbbbbb1')
+  POSTS_ID   = BSON::ObjectId.from_string('bbbbbbbbbbbbbbbbbbbbbbb2')
+  AUTHORS_ID = BSON::ObjectId.from_string('bbbbbbbbbbbbbbbbbbbbbbb3')
+  OWNERS     = 20
+  AUTHORS    = 5
 
   def self.field(position, name, type, extra = {})
     { '_id' => BSON::ObjectId.new, 'position' => position, 'name' => name, 'type' => type,
@@ -21,7 +23,7 @@ describe 'MongoDB window preloader cost' do
     client = AdapterParityFixture.mongodb_client
 
     %w(locomotive_sites locomotive_content_types locomotive_content_entries).each do |collection|
-      client[collection].delete_many({ 'site_id' => SITE_ID })
+      client[collection].delete_many({ 'site_id' => { '$in' => [SITE_ID, FOREIGN_SITE_ID] } })
     end
     client['locomotive_sites'].delete_many({ '_id' => SITE_ID })
 
@@ -40,8 +42,36 @@ describe 'MongoDB window preloader cost' do
       'entries_custom_fields' => [
         self.class.field(0, 'title', 'string'),
         self.class.field(1, 'topics', 'many_to_many',
-                         'class_name' => "Locomotive::ContentEntry#{TOPICS_ID}")
+                         'class_name' => "Locomotive::ContentEntry#{TOPICS_ID}"),
+        self.class.field(2, 'author', 'belongs_to',
+                         'class_name' => "Locomotive::ContentEntry#{AUTHORS_ID}")
       ])
+
+    client['locomotive_content_types'].insert_one(
+      '_id' => AUTHORS_ID, 'site_id' => SITE_ID, 'name' => 'Probe authors', 'slug' => 'probe_authors',
+      'label_field_name' => 'name', 'order_by' => 'manually', 'order_direction' => 'asc',
+      'entries_custom_fields' => [
+        self.class.field(0, 'name', 'string'),
+        self.class.field(1, 'posts', 'has_many',
+                         'class_name' => "Locomotive::ContentEntry#{POSTS_ID}", 'inverse_of' => 'author')
+      ])
+
+    AUTHORS.times do |index|
+      client['locomotive_content_entries'].insert_one(
+        '_id' => author_id(index), 'site_id' => SITE_ID, 'content_type_id' => AUTHORS_ID,
+        '_slug' => { 'en' => "author-#{index}" }, '_position' => index, '_visible' => true,
+        'name' => "Author #{index}")
+    end
+
+    # Decoys naming a real author: a stranger tenant and a stranger type.
+    client['locomotive_content_entries'].insert_one(
+      '_id' => BSON::ObjectId.new, 'site_id' => FOREIGN_SITE_ID, 'content_type_id' => POSTS_ID,
+      '_slug' => { 'en' => 'decoy-tenant' }, '_position' => 900, '_visible' => true,
+      'title' => 'Decoy tenant', 'author_id' => author_id(0))
+    client['locomotive_content_entries'].insert_one(
+      '_id' => BSON::ObjectId.new, 'site_id' => SITE_ID, 'content_type_id' => TOPICS_ID,
+      '_slug' => { 'en' => 'decoy-type' }, '_position' => 901, '_visible' => true,
+      'name' => 'Decoy type', 'author_id' => author_id(0))
 
     shared_hidden = topic_id(:shared, 0)
 
@@ -63,7 +93,8 @@ describe 'MongoDB window preloader cost' do
       client['locomotive_content_entries'].insert_one(
         '_id' => BSON::ObjectId.new, 'site_id' => SITE_ID, 'content_type_id' => POSTS_ID,
         '_slug' => { 'en' => "unique-#{index}" }, '_position' => index, '_visible' => true,
-        'title' => "Unique #{index}", 'topic_ids' => [topic_id(:hidden, index), topic_id(:visible, index)])
+        'title' => "Unique #{index}", 'author_id' => author_id(index % AUTHORS),
+        'topic_ids' => [topic_id(:hidden, index), topic_id(:visible, index)])
       client['locomotive_content_entries'].insert_one(
         '_id' => BSON::ObjectId.new, 'site_id' => SITE_ID, 'content_type_id' => POSTS_ID,
         '_slug' => { 'en' => "shared-#{index}" }, '_position' => 100 + index, '_visible' => true,
@@ -75,7 +106,7 @@ describe 'MongoDB window preloader cost' do
     client = AdapterParityFixture.mongodb_client
 
     %w(locomotive_sites locomotive_content_types locomotive_content_entries).each do |collection|
-      client[collection].delete_many({ 'site_id' => SITE_ID })
+      client[collection].delete_many({ 'site_id' => { '$in' => [SITE_ID, FOREIGN_SITE_ID] } })
     end
     client['locomotive_sites'].delete_many({ '_id' => SITE_ID })
   end
@@ -90,11 +121,22 @@ describe 'MongoDB window preloader cost' do
     self.class.topic_id(kind, index)
   end
 
-  class FindCounter
-    def finds = @finds ||= []
+  def self.author_id(index)
+    BSON::ObjectId.from_string("ddddddddddddddddddddde#{index.to_s(16).rjust(2, '0')}")
+  end
+
+  def author_id(index)
+    self.class.author_id(index)
+  end
+
+  class CommandCounter
+    def commands = @commands ||= []
 
     def started(event)
-      finds << event.command['find'] if event.command_name == 'find'
+      name = event.command_name
+      return unless %w(find aggregate getMore).include?(name)
+
+      commands << [name, event.command[name] || event.command['collection']]
     end
     def succeeded(_); end
     def failed(_); end
@@ -112,7 +154,7 @@ describe 'MongoDB window preloader cost' do
     Locomotive::Steam::Models::AssociationPreloader.attach(window)
 
     client  = Locomotive::Steam::MongoDBAdapter.session
-    counter = FindCounter.new
+    counter = CommandCounter.new
     client.subscribe(Mongo::Monitoring::COMMAND, counter)
 
     begin
@@ -128,15 +170,41 @@ describe 'MongoDB window preloader cost' do
     heads, counter = counted_window_heads('unique')
 
     expect(heads).to eq OWNERS.times.map { |index| ["Visible #{index}"] }
-    expect(counter.finds.count('locomotive_content_entries')).to be <= 7
-    expect(counter.finds.count('locomotive_content_types')).to eq 1
+    expect(counter.commands.count(['find', 'locomotive_content_entries'])).to be <= 7
+    expect(counter.commands.count(['find', 'locomotive_content_types'])).to eq 1
+  end
+
+  it 'reads the posts of every author through two entry finds and one bounded count' do
+    repository = Locomotive::Steam::ContentEntryRepository.new(
+      adapter, site, :en, type_repository)
+    window = repository.with(type_repository.by_slug('probe_authors')).all
+
+    Locomotive::Steam::Models::AssociationPreloader.attach(window)
+
+    client  = Locomotive::Steam::MongoDBAdapter.session
+    counter = CommandCounter.new
+    client.subscribe(Mongo::Monitoring::COMMAND, counter)
+
+    begin
+      groups = window.map { |author| author.posts.all.map { |post| post._slug[:en] } }
+    ensure
+      client.unsubscribe(Mongo::Monitoring::COMMAND, counter)
+    end
+
+    expect(groups).to eq AUTHORS.times.map { |index|
+      [index, index + 5, index + 10, index + 15].map { |i| "unique-#{i}" }
+    }
+    expect(counter.commands.count(['find', 'locomotive_content_entries'])).to eq 2
+    expect(counter.commands.count(['find', 'locomotive_content_types'])).to eq 1
+    expect(counter.commands.count(['aggregate', 'locomotive_content_entries'])).to eq 1
+    expect(counter.commands.count { |name, _| name == 'getMore' }).to eq 0
   end
 
   it 'answers a shared hidden head from the negative cache' do
     heads, counter = counted_window_heads('shared')
 
     expect(heads).to eq OWNERS.times.map { |index| ["Visible #{index}"] }
-    expect(counter.finds.count('locomotive_content_entries')).to be <= 4
+    expect(counter.commands.count(['find', 'locomotive_content_entries'])).to be <= 4
   end
 
 end

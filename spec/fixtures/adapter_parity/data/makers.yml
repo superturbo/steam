@@ -6,3 +6,6 @@
 # A slug that spells a legal ObjectId.
 - Hex slug:
     _slug: 0123456789abcdef01234567
+
+- Maker three:
+    _slug: maker-three

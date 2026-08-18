@@ -16,6 +16,10 @@ module Locomotive::Steam
         @preloader = preloader
       end
 
+      def __owner__
+        @entity
+      end
+
       def with_conditions(conditions)
         dup.tap do |scoped|
           scoped.association_conditions = scoped.association_conditions.merge(conditions)
