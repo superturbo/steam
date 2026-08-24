@@ -45,6 +45,8 @@ module Locomotive
           end
 
           def count
+            return @collection.size if defined?(@collection)
+
             repository.count(conditions)
           end
 

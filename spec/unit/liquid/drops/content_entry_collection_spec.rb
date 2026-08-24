@@ -213,6 +213,23 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntryCollection do
         expect(drop.empty?).to eq false
         expect(drop.any?).to eq true
       end
+
+      it 'count reads the loaded collection without re-querying' do
+        allow(repo).to receive(:all).with(nil).and_return(['a', 'b'])
+        drop.map { |e| e }
+
+        expect(repo).not_to receive(:count)
+        expect(drop.count).to eq 2
+        expect(drop.size).to eq 2
+      end
+
+      it 'count still asks the store after a window slice' do
+        allow(repo).to receive(:all).and_return(['a'])
+        drop.load_slice(0, 1)
+
+        expect(repo).to receive(:count).with(nil).and_return(9)
+        expect(drop.count).to eq 9
+      end
     end
 
     context 'with a scope' do
