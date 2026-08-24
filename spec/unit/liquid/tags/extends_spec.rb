@@ -4,12 +4,12 @@ describe Locomotive::Steam::Liquid::Tags::Extends do
 
   describe 'unit bevahiors' do
 
-    before { Liquid::Template.file_system = ::Liquid::LayoutFileSystem.new }
+    before { ::Liquid::Environment.default.file_system = ::Liquid::LayoutFileSystem.new }
 
     before do
       allow_any_instance_of(described_class).to receive(:parse_parent_template) do |instance|
         ::Liquid::Template.parse(
-          ::Liquid::Template.file_system.read_template_file(
+          ::Liquid::Environment.default.file_system.read_template_file(
             instance.instance_variable_get(:@template_name), {}
           ),
           instance.parse_context
@@ -31,7 +31,7 @@ describe Locomotive::Steam::Liquid::Tags::Extends do
     end
 
     context 'the template has a block' do
-      let(:source) { Liquid::Template.file_system.read_template_file('page_with_title', nil) }
+      let(:source) { ::Liquid::Environment.default.file_system.read_template_file('page_with_title', nil) }
       it { is_expected.to eq '<body><h1>Hello</h1><p>Lorem ipsum</p></body>' }
     end
 

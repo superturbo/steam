@@ -15,11 +15,9 @@ module Locomotive
           module AttributesParser
             extend ActiveSupport::Concern
 
-            included do
-              OPERATORS = Locomotive::Steam::Adapters::Query::Operators::PUBLIC.map(&:to_s).freeze
+            OPERATORS = Locomotive::Steam::Adapters::Query::Operators::PUBLIC.map(&:to_s).freeze
 
-              SYMBOL_OPERATORS_REGEXP = /(\w+\.(#{OPERATORS.join('|')})){1}\s*\:/o
-            end
+            SYMBOL_OPERATORS_REGEXP = /(\w+\.(#{OPERATORS.join('|')})){1}\s*\:/o
 
             def parse_markup(markup)
               body = ::Prism.parse("{#{clean_markup(markup)}}").then do |r|

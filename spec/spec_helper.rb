@@ -32,8 +32,6 @@ require 'timecop'
 require_relative '../lib/locomotive/steam'
 require_relative 'support'
 
-ActiveSupport.to_time_preserves_timezone = true
-
 Locomotive::Steam.configure do |config|
   config.mode = :test
 end
