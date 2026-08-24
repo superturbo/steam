@@ -117,6 +117,16 @@ describe 'Liquid adapter parity' do
           .to eq '[alpha:topic-a][beta:topic-b][reversed:topic-b][zapped:topic-a]'
       end
 
+      it 'answers emptiness behind a hidden head' do
+        source = '{% for playlist in contents.playlists limit: 4 %}' \
+                 '[{{ playlist._slug }}:' \
+                 '{% if playlist.topics == empty %}-{% else %}+{% endif %}]' \
+                 '{% endfor %}'
+
+        expect(render_liquid(source))
+          .to eq '[alpha:+][beta:+][reversed:+][zapped:+]'
+      end
+
     end
 
     describe 'a window of has_many owners' do

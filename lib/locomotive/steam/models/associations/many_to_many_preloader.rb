@@ -286,6 +286,12 @@ module Locomotive::Steam
           load_window(nil, 0, 1).first
         end
 
+        def exists?(conditions = {})
+          return __getobj__.exists?(conditions || {}) if conditions.present?
+
+          !load_window(nil, 0, 1).empty?
+        end
+
         def each(&block)
           all.each(&block)
         end
