@@ -509,7 +509,8 @@ module Locomotive
       class Conditions
 
         def initialize(conditions = {}, fields, target_repository)
-          @conditions = Adapters::Query::Criteria.normalize(conditions)
+          normalized  = Adapters::Query::Criteria.normalize(conditions)
+          @conditions = Adapters::Query::Criteria.reject_raw_operators!(normalized)
           @fields = fields
           @target_repository = target_repository
           @locale = target_repository.locale

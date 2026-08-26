@@ -22,6 +22,18 @@ describe Locomotive::Steam::ContentEntryRepository do
       combined_conditions(repository.with(type).send(:query_parts, conditions).first)
     end
 
+    describe 'a raw Mongo operator' do
+
+      let(:field)   { instance_double('NumberField', name: 'score', persisted_name: 'score', type: :integer) }
+      let(:_fields) { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [field], booleans: []) }
+
+      it 'is rejected before the field grammar reads the operand' do
+        expect { prepared_for('score' => { '$gt' => 5 }) }
+          .to raise_error(Locomotive::Steam::Adapters::Query::UnsupportedOperator)
+      end
+
+    end
+
     describe 'clause composition' do
 
       it 'starts from the scope clause and the default visibility clause' do

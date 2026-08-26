@@ -363,6 +363,18 @@ describe 'Query parity' do
       conditions: { 'name' => [{ '$ne' => 'Scalars' }] },
       error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
 
+    { desc: 'a raw Mongo operator on a numeric field',
+      conditions: { 'price' => { '$gt' => 5 } },
+      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
+
+    { desc: 'a raw Mongo operator on an association',
+      conditions: { 'maker' => { '$where' => 'sleep(1000)' } },
+      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
+
+    { desc: 'a raw Mongo operator inside an association list',
+      conditions: { 'topics.in' => [{ '$ne' => 'topic-a' }] },
+      error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
+
     { desc: 'a structural comparison operand',
       conditions: { 'score.gt' => [1] },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
