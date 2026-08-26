@@ -128,6 +128,18 @@ describe Locomotive::Steam::Liquid::Tags::WithScope do
 
   end
 
+  describe 'a Range handed over at render time' do
+
+    let(:assigns) { { 'my_filters' => { 'price' => (1..3) } } }
+    let(:source)  { '{% with_scope my_filters %}{% assign conditions = with_scope %}{% endwith_scope %}' }
+
+    it 'passes as a typed value' do
+      output
+      expect(conditions['price']).to eq(1..3)
+    end
+
+  end
+
   describe 'a quoted string shaped like a regexp' do
 
     let(:source) { "{% with_scope title: '/foo/i' %}42{% endwith_scope %}" }

@@ -125,6 +125,22 @@ describe 'Query parity' do
     { desc: 'all against an array field',
       conditions: { 'labels.all' => %w(x y) }, expected: %w(arrays) },
 
+    { desc: 'a repeated all operand does not narrow the match',
+      conditions: { 'labels.all' => %w(x x) }, expected: %w(arrays embedded) },
+
+    { desc: 'all takes the whole array field as one candidate',
+      conditions: { 'labels.all' => [%w(y x z)] }, expected: %w(arrays) },
+
+    { desc: 'all matches a scalar field however often the value repeats',
+      conditions: { 'status.all' => %w(published published) }, expected: %w(scalars) },
+
+    { desc: 'all nil reaches a missing field, a null and a list holding null',
+      conditions: { 'topics.all' => [nil] },
+      expected: %w(all-missing arrays embedded explicit-nils) },
+
+    { desc: 'a many_to_many array operand is the exact stored list',
+      conditions: { topics: %w(topic-a topic-b) }, expected: %w(scalars) },
+
     { desc: 'an empty all matches nothing',
       conditions: { 'labels.all' => [] }, expected: [] },
 

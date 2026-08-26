@@ -154,6 +154,23 @@ describe Locomotive::Steam::Liquid::Tags::Concerns::AttributesParser do
       expect { parse('title: /[z-a]/') }.to raise_error(::Liquid::SyntaxError)
     end
 
+    it 'raises on every range literal' do
+      ['price: 1..3', 'price: 1...3', 'price: (1..3)', "price: 'a'..'c'",
+       'price: 1..', 'price: ..3'].each do |markup|
+        expect { parse(markup) }.to raise_error(::Liquid::SyntaxError)
+      end
+    end
+
+    it 'raises on a quoted pattern wherever it sits' do
+      ["url: '/about/'", "path.in: ['/about/']", "maker: { _id: '/about/' }"].each do |markup|
+        expect { parse(markup) }.to raise_error(::Liquid::SyntaxError)
+      end
+    end
+
+    it 'reads a path without a trailing slash as text' do
+      expect(parse("url: '/about'")).to eq(url: '/about')
+    end
+
     it 'validates the right operand of a + operation' do
       expect { parse('price: 1 + Kernel.exit') }.to raise_error(::Liquid::SyntaxError)
     end

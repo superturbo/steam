@@ -210,6 +210,23 @@ describe 'Adapter parity' do
 
       end
 
+      describe 'querying a many_to_many by equality' do
+
+        def playlist_slugs(conditions)
+          repository = Locomotive::Steam::ContentEntryRepository.new(
+            adapter, site, AdapterParityFixture::LOCALE, type_repository)
+
+          repository.with(type_repository.by_slug('playlists')).all(conditions).map do |entry|
+            entry._slug[AdapterParityFixture::LOCALE]
+          end
+        end
+
+        it 'reads a lone operand as the exact one-element list' do
+          expect(playlist_slugs(topics: 'topic-a')).to eq %w(alpha)
+        end
+
+      end
+
       describe 'reading a many_to_many in the owner sequence' do
 
         def playlist(slug)
