@@ -36,7 +36,7 @@ describe Locomotive::Steam::Models::AssociationPreloader do
     end
     let(:other_type) do
       build_content_type('Articles', _id: 2, label_field_name: :title, fields: _fields,
-                         fields_by_name: { title: instance_double('Field', name: :title, type: :string) },
+                         fields_by_name: { title: instance_double('Field', name: :title, type: :string, persisted_name: 'title') },
                          fields_with_default: [])
     end
     let(:other_entries) do

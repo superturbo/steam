@@ -22,6 +22,54 @@ describe Locomotive::Steam::ContentEntryRepository do
       combined_conditions(repository.with(type).send(:query_parts, conditions).first)
     end
 
+    describe 'a field and its persisted name' do
+
+      let(:field) do
+        instance_double('BelongsToField', name: 'maker', persisted_name: 'maker_id',
+                        type: :belongs_to, target_id: '42')
+      end
+      let(:type) do
+        build_content_type('Articles', label_field_name: :title,
+                           fields_by_name: { maker: field }, fields_with_default: [])
+      end
+
+      it 'refuses both names in one source, whatever the order' do
+        [{ 'maker' => 'maker-one', 'maker_id' => 'zzz' },
+         { 'maker_id' => 'zzz', 'maker' => 'maker-one' }].each do |conditions|
+          expect { prepared_for(conditions) }
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /maker/)
+        end
+      end
+
+      it 'keeps an equality and a suffixed operator apart' do
+        expect { prepared_for('maker' => nil, 'maker_id.eq' => 'zzz') }
+          .not_to raise_error
+      end
+
+      it 'keeps different operators on one persisted name apart' do
+        clauses, _ = repository.with(type).send(:query_parts, 'maker.ne' => nil, 'maker_id.eq' => 'zzz')
+
+        expect(combined_conditions(clauses)).to include('maker_id.ne' => nil, 'maker_id.eq' => 'zzz')
+      end
+
+    end
+
+    describe 'two bounds on one field' do
+
+      let(:field)   { instance_double('NumberField', name: 'price', persisted_name: 'price', type: :float) }
+      let(:type) do
+        build_content_type('Articles', label_field_name: :title,
+                           fields_by_name: { price: field }, fields_with_default: [])
+      end
+
+      it 'reach the store as two separate clauses' do
+        clauses, _ = repository.with(type).send(:query_parts, 'price.gte' => 1, 'price.lte' => 9)
+
+        expect(clauses).to include({ 'price.gte' => 1.0 }, { 'price.lte' => 9.0 })
+      end
+
+    end
+
     describe 'a raw Mongo operator' do
 
       let(:field)   { instance_double('NumberField', name: 'score', persisted_name: 'score', type: :integer) }
@@ -133,7 +181,7 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:value)       { 'CMS' }
       let(:option)      { instance_double('Option', _id: 42)}
       let(:options)     { instance_double('OptionRepository', by_name: option, :'locale=' => nil) }
-      let(:field)       { instance_double('SelectField', name: 'category', persisted_name: 'category_id', select_options: options) }
+      let(:field)       { instance_double('SelectField', name: 'category', persisted_name: 'category_id', type: :select, select_options: options) }
       let(:_fields)     { instance_double('Fields', selects: [field], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
       let(:conditions)  { { 'category' => value } }
 
@@ -218,7 +266,7 @@ describe Locomotive::Steam::ContentEntryRepository do
     context 'belongs_to fields' do
 
       let(:value)       { 42 }
-      let(:field)       { instance_double('BelongsToField', name: 'person', persisted_name: 'person_id', target_id: '42') }
+      let(:field)       { instance_double('BelongsToField', name: 'person', persisted_name: 'person_id', type: :belongs_to, target_id: '42') }
       let(:_fields)     { instance_double('Fields', selects: [], belongs_to: [field], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
       let(:conditions)  { { 'person' => value } }
 

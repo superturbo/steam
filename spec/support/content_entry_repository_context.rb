@@ -3,7 +3,18 @@ require_relative '../../lib/locomotive/steam/adapters/filesystem.rb'
 RSpec.shared_context 'content entry repository' do
 
   let(:_fields) { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
-  let(:type)    { build_content_type('Articles', label_field_name: :title, localized_names: %w(title), fields: _fields, fields_by_name: { title: instance_double('Field', name: :title, type: :string) }, fields_with_default: []) }
+  let(:typed_fields) do
+    _fields.selects + _fields.belongs_to + _fields.many_to_many +
+      _fields.dates_and_date_times + _fields.numbers + _fields.booleans
+  end
+  let(:type) do
+    named = typed_fields.to_h { |field| [field.name.to_s, field] }
+
+    build_content_type('Articles', label_field_name: :title, localized_names: %w(title),
+                       fields: _fields,
+                       fields_by_name: { title: instance_double('Field', name: :title, type: :string) }.merge(named),
+                       fields_with_default: [])
+  end
   let(:entries) { [{ content_type_id: 1, _position: 0, _label: 'Update #1', title: { fr: 'Mise a jour #1' }, text: { en: 'added some free stuff', fr: 'phrase FR' }, date: '2009/05/12', category: 'General' }] }
   let(:locale)  { :en }
   let(:site)    { instance_double('Site', _id: 1, default_locale: :en, locales: %i(en fr), timezone: ActiveSupport::TimeZone['UTC']) }

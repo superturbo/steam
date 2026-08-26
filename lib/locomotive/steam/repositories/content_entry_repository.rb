@@ -391,8 +391,10 @@ module Locomotive
       end
 
       def normalized_condition_sources(conditions)
-        [conditions, association_conditions].reject(&:blank?).map do |source|
-          HashWithIndifferentAccess.new(Conditions.new(source, self.content_type.fields, simple_clone).prepare)
+        [conditions, association_conditions].reject(&:blank?).flat_map do |source|
+          Conditions.new(source, self.content_type, simple_clone).prepare.map do |criterion|
+            HashWithIndifferentAccess.new(criterion.key => criterion.value)
+          end
         end
       end
 
@@ -508,45 +510,37 @@ module Locomotive
 
       class Conditions
 
-        def initialize(conditions = {}, fields, target_repository)
+        Criterion = Data.define(:persisted_name, :operator, :value) do
+          def key
+            operator ? "#{persisted_name}.#{operator.name}" : persisted_name
+          end
+        end
+
+        ResolvedCriterion = Data.define(:key, :name, :field, :operator, :value)
+
+        ID_FIELD = Locomotive::Steam::ContentTypeField.new(name: '_id', type: 'id')
+
+        private_constant :Criterion, :ResolvedCriterion, :ID_FIELD
+
+        def initialize(conditions = {}, content_type, target_repository)
           normalized  = Adapters::Query::Criteria.normalize(conditions)
           @conditions = Adapters::Query::Criteria.reject_raw_operators!(normalized)
-          @fields = fields
+          @content_type = content_type
           @target_repository = target_repository
           @locale = target_repository.locale
         end
 
         def prepare
-          # _id (primary key)
-          _prepare([Locomotive::Steam::ContentTypeField.new(name: '_id', type: 'id')], id_backed: true) do |field, value|
-            value_to_primary_key(value, field)
+          resolved = @conditions.map do |key, value|
+            name, operator = Adapters::Query::Operators.decode(key)
+
+            ResolvedCriterion.new(key: key, name: name, field: field_for(name),
+                                  operator: operator, value: value)
           end
 
-          # select
-          _prepare(@fields.selects, id_backed: true) do |field, value|
-            # FIXME: [only in Wagon], if the user changes the locale, since all content is stored in memory,
-            # we have to change the locale in the repository used to fetch the select options.
-            field.select_options.locale = @locale
+          reject_field_collisions!(resolved)
 
-            value_to_option_id(field, value)
-          end
-
-          # date
-          _prepare(@fields.dates_and_date_times) { |field, value| value_to_date(value, field) }
-
-          # integer / float
-          _prepare(@fields.numbers) { |field, value| value_to_number(value, field) }
-
-          # boolean
-          _prepare(@fields.booleans) { |field, value| value_to_boolean(value, field) }
-
-          # belongs_to
-          _prepare(@fields.belongs_to, id_backed: true) { |field, value| value_to_id(value, field) }
-
-          # many_to_many
-          _prepare(@fields.many_to_many, id_backed: true) { |field, value| values_to_ids(value, field) }
-
-          @conditions
+          resolved.map { |criterion| coerce_criterion(criterion) }
         end
 
         protected
@@ -555,33 +549,74 @@ module Locomotive
         # a field value the repository should convert — the registry owns them.
         NON_FIELD_VALUE_KINDS = %i(boolean size).freeze
 
-        private_constant :NON_FIELD_VALUE_KINDS
+        COERCED_TYPES   = %i(id select date date_time integer float boolean belongs_to many_to_many).freeze
+        ID_BACKED_TYPES = %i(id select belongs_to many_to_many).freeze
 
-        # Prepare every criterion independently; a field may have multiple bounds.
-        def _prepare(fields, id_backed: false, &block)
-          by_name = fields.index_by { |field| field.name.to_s }
+        private_constant :NON_FIELD_VALUE_KINDS, :COERCED_TYPES, :ID_BACKED_TYPES
 
-          return if by_name.empty?
+        def field_for(name)
+          return ID_FIELD if name == '_id'
 
-          @conditions.keys.each do |key|
-            name, operator = Adapters::Query::Operators.decode(key)
-            field = by_name[name]
+          @content_type.fields_by_name[name]
+        end
 
-            next if field.nil?
+        def id_backed?(field)
+          ID_BACKED_TYPES.include?(field.type)
+        end
 
-            value       = @conditions.delete(key)
-            field_value = operator.nil? || !NON_FIELD_VALUE_KINDS.include?(operator.value_kind)
+        def coerced?(field)
+          COERCED_TYPES.include?(field.type)
+        end
 
-            validate_id_query!(name, operator, value) if id_backed && field_value
+        def field_value?(operator)
+          operator.nil? || !NON_FIELD_VALUE_KINDS.include?(operator.value_kind)
+        end
 
-            new_name = field.persisted_name + (operator ? ".#{operator.name}" : '')
+        # A field and its persisted name are one criterion; only the operator
+        # sets two apart.
+        def reject_field_collisions!(resolved)
+          seen = {}
 
-            @conditions[new_name] =
-              if operator && NON_FIELD_VALUE_KINDS.include?(operator.value_kind)
-                value
-              else
-                yield(field, value)
-              end
+          resolved.each do |criterion|
+            persisted_name = criterion.field&.persisted_name || criterion.name
+            identity       = [persisted_name, criterion.operator&.name]
+
+            if (other = seen[identity])
+              raise Adapters::Query::InvalidValue, "#{other} and #{criterion.key} name the same field"
+            end
+
+            seen[identity] = criterion.key
+          end
+        end
+
+        def coerce_criterion(resolved)
+          field, operator, value = resolved.field, resolved.operator, resolved.value
+
+          unless field && coerced?(field)
+            return Criterion.new(persisted_name: resolved.name, operator: operator, value: value)
+          end
+
+          if id_backed?(field) && field_value?(operator)
+            validate_id_query!(resolved.name, operator, value)
+          end
+
+          Criterion.new(persisted_name: field.persisted_name, operator: operator,
+                        value: field_value?(operator) ? coerce(field, value) : value)
+        end
+
+        def coerce(field, value)
+          case field.type
+          when :id then value_to_primary_key(value, field)
+          when :select
+            # Wagon reuses the option repository across locale changes.
+            field.select_options.locale = @locale
+
+            value_to_option_id(field, value)
+          when :date, :date_time then value_to_date(value, field)
+          when :integer, :float  then value_to_number(value, field)
+          when :boolean          then value_to_boolean(value, field)
+          when :belongs_to       then value_to_id(value, field)
+          when :many_to_many     then values_to_ids(value, field)
           end
         end
 

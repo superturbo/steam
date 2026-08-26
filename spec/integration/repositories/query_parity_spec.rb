@@ -363,6 +363,18 @@ describe 'Query parity' do
       conditions: { 'name' => [{ '$ne' => 'Scalars' }] },
       error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
 
+    { desc: 'a field and its persisted name in one criteria set',
+      conditions: { 'maker' => 'maker-one', 'maker_id' => 'zzz' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a select and its persisted name in one criteria set',
+      conditions: { 'category' => 'alpha', 'category_id' => 0 },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an association list and its persisted name in one criteria set',
+      conditions: { 'topics' => nil, 'topic_ids' => [] },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
     { desc: 'a raw Mongo operator on a numeric field',
       conditions: { 'price' => { '$gt' => 5 } },
       error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },
