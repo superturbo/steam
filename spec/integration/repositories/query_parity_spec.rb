@@ -375,6 +375,10 @@ describe 'Query parity' do
       conditions: { 'topics' => nil, 'topic_ids' => [] },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
 
+    { desc: 'an operator on the visibility flag',
+      conditions: { '_visible.ne' => true },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
     { desc: 'a raw Mongo operator on a numeric field',
       conditions: { 'price' => { '$gt' => 5 } },
       error: Locomotive::Steam::Adapters::Query::UnsupportedOperator },

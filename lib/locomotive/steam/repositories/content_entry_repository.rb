@@ -401,6 +401,8 @@ module Locomotive
       def apply_visibility(clauses)
         visibilities = []
         clauses.each do |clause|
+          reject_visibility_operators!(clause)
+
           visibilities << clause.delete(:_visible) if clause.key?(:_visible)
         end
 
@@ -418,6 +420,17 @@ module Locomotive
         end
 
         clauses.reject(&:blank?)
+      end
+
+      def reject_visibility_operators!(clause)
+        clause.each_key do |key|
+          name, operator = Locomotive::Steam::Adapters::Query::Operators.decode(key)
+
+          next unless name == '_visible' && operator
+
+          raise Locomotive::Steam::Adapters::Query::InvalidValue,
+                '_visible takes a boolean or nil, never an operator'
+        end
       end
 
       def slug_resolutions

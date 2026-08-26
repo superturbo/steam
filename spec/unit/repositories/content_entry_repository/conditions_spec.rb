@@ -174,6 +174,42 @@ describe Locomotive::Steam::ContentEntryRepository do
         end
       end
 
+      { '_visible.eq' => true, '_visible.ne' => true,
+        '_visible.exists' => true, '_visible.in' => [true] }.each do |key, operand|
+        it "rejects the #{key} criterion" do
+          expect { prepared_for(key => operand) }
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /operator/)
+        end
+      end
+
+      it 'rejects an operator without echoing the operand' do
+        expect { prepared_for('_visible.ne' => 'junk') }
+          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue) do |error|
+            expect(error.message).not_to include('junk')
+          end
+      end
+
+      it 'rejects an operator in the scope clause' do
+        repo = repository.with(type)
+        repo.local_conditions['_visible.ne'] = true
+
+        expect { repo.send(:query_parts, {}) }
+          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /operator/)
+      end
+
+      it 'rejects an operator in the association criteria' do
+        repo = repository.with(type)
+        repo.send(:association_conditions=, '_visible.ne' => true)
+
+        expect { repo.send(:query_parts, {}) }
+          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /operator/)
+      end
+
+      it 'keeps an operator on a name that only shares the prefix' do
+        expect(prepared_for('_visible_state.ne' => true))
+          .to include('_visible_state.ne' => true)
+      end
+
     end
 
     context 'select fields' do
