@@ -625,6 +625,10 @@ module Locomotive
             validate_id_query!(resolved.name, operator, value)
           end
 
+          if field.type == :many_to_many && field_value?(operator)
+            return many_to_many_criterion(operator, value, field)
+          end
+
           Criterion.new(persisted_name: field.persisted_name, operator: operator,
                         value: field_value?(operator) ? coerce(field, value) : value)
         end
@@ -641,8 +645,69 @@ module Locomotive
           when :integer, :float  then value_to_number(value, field)
           when :boolean          then value_to_boolean(value, field)
           when :belongs_to       then value_to_id(value, field)
-          when :many_to_many     then values_to_ids(value, field)
           end
+        end
+
+        LIST_VALUE_KINDS = %i(list all_list).freeze
+
+        COMPOSITE_MEMBERSHIP_OPERATORS = { nil => Adapters::Query::Operators[:in],
+                                           :eq => Adapters::Query::Operators[:in],
+                                           :ne => Adapters::Query::Operators[:nin] }.freeze
+
+        private_constant :LIST_VALUE_KINDS, :COMPOSITE_MEMBERSHIP_OPERATORS
+
+        # A composite identity matches any component; Arrays otherwise belong
+        # to list operators.
+        def many_to_many_criterion(operator, value, field)
+          if operator && LIST_VALUE_KINDS.include?(operator.value_kind)
+            return Criterion.new(persisted_name: field.persisted_name, operator: operator,
+                                 value: membership_list(operator, value, field))
+          end
+
+          if value.is_a?(Array)
+            raise Locomotive::Steam::Adapters::Query::InvalidValue,
+                  "#{field.name} takes one value with eq or ne"
+          end
+
+          if (composite = composite_id_of(value))
+            membership = COMPOSITE_MEMBERSHIP_OPERATORS.fetch(operator&.name)
+
+            return Criterion.new(persisted_name: field.persisted_name, operator: membership,
+                                 value: composite.map { |component| explicit_id(component, field) })
+          end
+
+          Criterion.new(persisted_name: field.persisted_name, operator: operator,
+                        value: value_to_id(value, field))
+        end
+
+        # nil keeps nil semantics; a lone operand is a one-element list.
+        def membership_list(operator, value, field)
+          return nil if value.nil?
+
+          elements = value.is_a?(Array) ? value : [value]
+
+          if operator.value_kind == :all_list && elements.any? { |element| composite_id_of(element) }
+            raise Locomotive::Steam::Adapters::Query::InvalidValue,
+                  "#{field.name} does not accept a composite identity with all"
+          end
+
+          elements.flat_map do |element|
+            if (composite = composite_id_of(element))
+              composite.map { |component| explicit_id(component, field) }
+            else
+              [value_to_id(element, field)]
+            end
+          end
+        end
+
+        def composite_id_of(value)
+          id = if value.is_a?(Hash)
+                 value['_id'] || value[:_id]
+               elsif value.respond_to?(:_id)
+                 value._id
+               end
+
+          id.is_a?(Array) ? id : nil
         end
 
         def value_to_primary_key(value, field)
@@ -694,19 +759,12 @@ module Locomotive
           end
         end
 
-        # A lone nil keeps nil semantics; only a real list maps element-wise.
-        def values_to_ids(value, field)
-          return nil if value.nil?
-
-          [*value].map { |_value| value_to_id(_value, field) }
-        end
-
         # Strings are slugs; IDs must be explicit. Inferring from string shape
         # gives the same operand different meanings across adapters.
         def value_to_id(value, field)
           case value
           when nil            then nil
-          when Array          then values_to_ids(value, field)
+          when Array          then value.map { |element| value_to_id(element, field) }
           when String, Symbol then slug_to_id(value.to_s, field)
           when Hash           then explicit_id(value['_id'] || value[:_id], field)
           else value.respond_to?(:_id) ? explicit_id(value._id, field) : explicit_id(value, field)

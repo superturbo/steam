@@ -439,7 +439,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       it { expect(prepared).to eq({ '_visible' => true, 'content_type_id' => 1, 'tag_ids.in' => [42] }) }
 
-      context 'the documented all form, once the parser has normalized it' do
+      context 'the operand forms' do
 
         let(:target_fields) do
           instance_double('Fields', selects: [], belongs_to: [], many_to_many: [],
@@ -452,118 +452,230 @@ describe Locomotive::Steam::ContentEntryRepository do
           [{ content_type_id: 9, _position: 0, _slug: { en: 'A' } },
            { content_type_id: 9, _position: 1, _slug: { en: 'B' } }]
         end
-        let(:conditions) { { 'tags.all' => %w(A B) } }
 
         before { allow(content_type_repository).to receive(:find).with('42').and_return(target_type) }
 
-        # Filesystem entries use their slugs as IDs.
-        it 'resolves every element as a slug under the persisted name' do
-          expect(prepared).to include('tag_ids.all' => %w(A B))
+        context 'eq and ne' do
+
+          it 'reads a lone slug as the element the list must hold' do
+            expect(prepared_for('tags' => 'A')).to include('tag_ids' => 'A')
+          end
+
+          it 'reads a lone slug under ne as the element the list must lack' do
+            expect(prepared_for('tags.ne' => 'A')).to include('tag_ids.ne' => 'A')
+          end
+
+          it 'reads eq like the bare equality' do
+            expect(prepared_for('tags.eq' => 'A')).to include('tag_ids.eq' => 'A')
+          end
+
+          it 'reads an id document as the same membership element' do
+            expect(prepared_for('tags' => { '_id' => 42 })).to include('tag_ids' => 42)
+          end
+
+          it 'reads an entry as the same membership element' do
+            entry = instance_double('TagEntry', _id: 42)
+
+            expect(prepared_for('tags' => entry)).to include('tag_ids' => 42)
+          end
+
+          it 'keeps nil untouched' do
+            expect(prepared_for('tags' => nil)).to include('tag_ids' => nil)
+          end
+
+          it 'reads a composite id entry as a membership list over its components' do
+            entry = instance_double('TagEntry', _id: [42, 'comp'])
+
+            expect(prepared_for('tags' => entry)).to include('tag_ids.in' => [42, 'comp'])
+          end
+
+          it 'reads a composite id under eq like the bare equality' do
+            entry = instance_double('TagEntry', _id: [42, 'comp'])
+
+            expect(prepared_for('tags.eq' => entry)).to include('tag_ids.in' => [42, 'comp'])
+          end
+
+          it 'reads a composite id under ne as the components the list must lack' do
+            entry = instance_double('TagEntry', _id: [42, 'comp'])
+
+            expect(prepared_for('tags.ne' => entry)).to include('tag_ids.nin' => [42, 'comp'])
+          end
+
+          it 'reads a composite id document the same way' do
+            expect(prepared_for('tags' => { '_id' => [42, 'comp'] }))
+              .to include('tag_ids.in' => [42, 'comp'])
+          end
+
+          it 'refuses an array operand' do
+            [{ 'tags' => %w(A) }, { 'tags.eq' => %w(A) }, { 'tags.ne' => %w(A) }].each do |conditions|
+              expect { prepared_for(conditions) }
+                .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue,
+                                /tags takes one value with eq or ne/)
+            end
+          end
+
         end
 
-        context 'with an element no slug holds' do
+        context 'list operators' do
 
-          let(:conditions) { { 'tags.all' => %w(A C) } }
-
-          it 'marks the unresolved element as unmatchable' do
-            expect(prepared['tag_ids.all'])
-              .to eq ['A', Locomotive::Steam::Adapters::Query::Values.unmatchable]
+          it 'reads an id document as one element of the list' do
+            expect(prepared_for('tags.in' => { '_id' => 42 })).to include('tag_ids.in' => [42])
           end
 
-          it 'reports the unresolved slug' do
-            allow(Locomotive::Steam.configuration).to receive(:mode).and_return(:test)
-            expect(Locomotive::Common::Logger).to receive(:warn).with(/"tags".*unknown_slug/)
+          it 'reads an id document under nin the same way' do
+            expect(prepared_for('tags.nin' => { '_id' => 42 })).to include('tag_ids.nin' => [42])
+          end
 
-            subject
+          it 'reads an id document under all the same way' do
+            expect(prepared_for('tags.all' => { '_id' => 42 })).to include('tag_ids.all' => [42])
+          end
+
+          it 'expands a composite id entry into its components under in' do
+            entry = instance_double('TagEntry', _id: [42, 'comp'])
+
+            expect(prepared_for('tags.in' => ['A', entry]))
+              .to include('tag_ids.in' => ['A', 42, 'comp'])
+          end
+
+          it 'expands a composite id entry into its components under nin' do
+            entry = instance_double('TagEntry', _id: [42, 'comp'])
+
+            expect(prepared_for('tags.nin' => entry)).to include('tag_ids.nin' => [42, 'comp'])
+          end
+
+          it 'refuses a composite id entry under all' do
+            entry = instance_double('TagEntry', _id: [42, 'comp'])
+
+            expect { prepared_for('tags.all' => [entry]) }
+              .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue,
+                              /tags does not accept a composite identity with all/)
+          end
+
+          it 'rejects the form before resolving any slug' do
+            entry = instance_double('TagEntry', _id: [42, 'comp'])
+
+            expect { prepared_for('tags.all' => ['A', entry]) }
+              .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+
+            expect(content_type_repository).not_to have_received(:find)
           end
 
         end
 
-        describe 'resolution within one render' do
+        context 'all' do
 
-          def counted_lookups
-            lookups = 0
-            allow(adapter).to receive(:collection) { lookups += 1; loaded(entries) }
+          let(:conditions) { { 'tags.all' => %w(A B) } }
 
-            yield
-
-            lookups
+          # Filesystem entries use their slugs as IDs.
+          it 'resolves every element as a slug under the persisted name' do
+            expect(prepared).to include('tag_ids.all' => %w(A B))
           end
 
-          it 'answers a repeated slug operand from its first lookup' do
-            lookups = counted_lookups do
-              2.times { expect(prepared_for('tags.all' => %w(A))).to include('tag_ids.all' => %w(A)) }
+          context 'with an element no slug holds' do
+
+            let(:conditions) { { 'tags.all' => %w(A C) } }
+
+            it 'marks the unresolved element as unmatchable' do
+              expect(prepared['tag_ids.all'])
+                .to eq ['A', Locomotive::Steam::Adapters::Query::Values.unmatchable]
             end
 
-            expect(lookups).to eq 1
-            expect(content_type_repository).to have_received(:find).with('42').once
+            it 'reports the unresolved slug' do
+              allow(Locomotive::Steam.configuration).to receive(:mode).and_return(:test)
+              expect(Locomotive::Common::Logger).to receive(:warn).with(/"tags".*unknown_slug/)
+
+              subject
+            end
+
           end
 
-          it 'answers a repeated unknown slug from its first lookup and still reports it' do
-            allow(Locomotive::Steam.configuration).to receive(:mode).and_return(:test)
-            expect(Locomotive::Common::Logger).to receive(:warn).with(/"tags".*unknown_slug/).twice
+          describe 'resolution within one render' do
 
-            lookups = counted_lookups do
-              2.times do
-                expect(prepared_for('tags.all' => %w(C)).fetch('tag_ids.all'))
-                  .to eq [Locomotive::Steam::Adapters::Query::Values.unmatchable]
+            def counted_lookups
+              lookups = 0
+              allow(adapter).to receive(:collection) { lookups += 1; loaded(entries) }
+
+              yield
+
+              lookups
+            end
+
+            it 'answers a repeated slug operand from its first lookup' do
+              lookups = counted_lookups do
+                2.times { expect(prepared_for('tags.all' => %w(A))).to include('tag_ids.all' => %w(A)) }
               end
+
+              expect(lookups).to eq 1
+              expect(content_type_repository).to have_received(:find).with('42').once
             end
 
-            expect(lookups).to eq 1
-          end
+            it 'answers a repeated unknown slug from its first lookup and still reports it' do
+              allow(Locomotive::Steam.configuration).to receive(:mode).and_return(:test)
+              expect(Locomotive::Common::Logger).to receive(:warn).with(/"tags".*unknown_slug/).twice
 
-          it 'looks every distinct slug up on its own' do
-            lookups = counted_lookups do
-              prepared_for('tags.all' => %w(A))
-              prepared_for('tags.all' => %w(B))
+              lookups = counted_lookups do
+                2.times do
+                  expect(prepared_for('tags.all' => %w(C)).fetch('tag_ids.all'))
+                    .to eq [Locomotive::Steam::Adapters::Query::Values.unmatchable]
+                end
+              end
+
+              expect(lookups).to eq 1
             end
 
-            expect(lookups).to eq 2
-          end
-
-          context 'across locales' do
-
-            let(:entries) do
-              [{ content_type_id: 9, _position: 0, _slug: { en: 'A', fr: 'A' } },
-               { content_type_id: 9, _position: 1, _slug: { en: 'B', fr: 'B' } }]
-            end
-
-            it 'looks the same slug up once per locale' do
+            it 'looks every distinct slug up on its own' do
               lookups = counted_lookups do
                 prepared_for('tags.all' => %w(A))
-                repository.locale = :fr
-                prepared_for('tags.all' => %w(A))
+                prepared_for('tags.all' => %w(B))
               end
 
               expect(lookups).to eq 2
             end
 
-          end
+            context 'across locales' do
 
-          context 'a second association aiming at another target' do
-
-            let(:other_field) do
-              instance_double('OtherManyToManyField', name: 'labels', persisted_name: 'label_ids',
-                              type: :many_to_many, target_id: '43')
-            end
-            let(:_fields) do
-              instance_double('Fields', selects: [], belongs_to: [], many_to_many: [field, other_field],
-                                        dates_and_date_times: [], numbers: [], booleans: [])
-            end
-            let(:other_target_type) do
-              build_content_type('Labels', _id: 10, order_by: '_position', fields: target_fields, label_field_name: :name)
-            end
-
-            before { allow(content_type_repository).to receive(:find).with('43').and_return(other_target_type) }
-
-            it 'keeps the resolutions of the two targets apart' do
-              lookups = counted_lookups do
-                prepared_for('tags.all' => %w(A))
-                prepared_for('labels.all' => %w(A))
+              let(:entries) do
+                [{ content_type_id: 9, _position: 0, _slug: { en: 'A', fr: 'A' } },
+                 { content_type_id: 9, _position: 1, _slug: { en: 'B', fr: 'B' } }]
               end
 
-              expect(lookups).to eq 2
+              it 'looks the same slug up once per locale' do
+                lookups = counted_lookups do
+                  prepared_for('tags.all' => %w(A))
+                  repository.locale = :fr
+                  prepared_for('tags.all' => %w(A))
+                end
+
+                expect(lookups).to eq 2
+              end
+
+            end
+
+            context 'a second association aiming at another target' do
+
+              let(:other_field) do
+                instance_double('OtherManyToManyField', name: 'labels', persisted_name: 'label_ids',
+                                type: :many_to_many, target_id: '43')
+              end
+              let(:_fields) do
+                instance_double('Fields', selects: [], belongs_to: [], many_to_many: [field, other_field],
+                                          dates_and_date_times: [], numbers: [], booleans: [])
+              end
+              let(:other_target_type) do
+                build_content_type('Labels', _id: 10, order_by: '_position', fields: target_fields, label_field_name: :name)
+              end
+
+              before { allow(content_type_repository).to receive(:find).with('43').and_return(other_target_type) }
+
+              it 'keeps the resolutions of the two targets apart' do
+                lookups = counted_lookups do
+                  prepared_for('tags.all' => %w(A))
+                  prepared_for('labels.all' => %w(A))
+                end
+
+                expect(lookups).to eq 2
+              end
+
             end
 
           end

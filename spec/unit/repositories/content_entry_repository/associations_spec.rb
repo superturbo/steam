@@ -244,6 +244,31 @@ describe Locomotive::Steam::ContentEntryRepository do
       expect(articles.all).to be_empty
     end
 
+    context 'querying by a composite-id [mongo_id, slug] target entry' do
+
+      let(:field) do
+        instance_double('Field', name: :articles, type: :many_to_many, persisted_name: 'article_ids',
+                        association_options: { target_id: 2, inverse_of: :authors })
+      end
+      let(:entries) do
+        [{ content_type_id: 1, _id: 1, name: 'Mongo side', article_ids: ['5baf7d38a953300567956448'] },
+         { content_type_id: 1, _id: 2, name: 'Slug side',  article_ids: ['hello-world'] },
+         { content_type_id: 1, _id: 3, name: 'Bystander',  article_ids: ['lorem-ipsum'] }]
+      end
+      let(:target) { instance_double('Article', _id: ['5baf7d38a953300567956448', 'hello-world']) }
+
+      it 'matches owners storing either component' do
+        expect(repository.with(type).all(articles: target).map(&:name))
+          .to match_array ['Mongo side', 'Slug side']
+      end
+
+      it 'leaves only owners storing neither component under ne' do
+        expect(repository.with(type).all('articles.ne' => target).map(&:name))
+          .to eq ['Bystander']
+      end
+
+    end
+
     it 'leaves the original association unfiltered after a filtered read' do
       author   = subject
       filtered = repository.value_for(author, :articles, '_id.in' => ['lost'])

@@ -138,8 +138,15 @@ describe 'Query parity' do
       conditions: { 'topics.all' => [nil] },
       expected: %w(all-missing arrays embedded explicit-nils) },
 
-    { desc: 'a many_to_many array operand is the exact stored list',
-      conditions: { topics: %w(topic-a topic-b) }, expected: %w(scalars) },
+    { desc: 'a lone many_to_many operand is a membership test',
+      conditions: { topics: 'topic-b' }, expected: %w(arrays scalars) },
+
+    { desc: 'ne on a many_to_many is a lacks-element test',
+      conditions: { 'topics.ne' => 'topic-b' },
+      expected: %w(all-missing embedded explicit-nils zero) },
+
+    { desc: 'size zero reads the emptied list alone',
+      conditions: { 'topics.size' => 0 }, expected: %w(zero) },
 
     { desc: 'an empty all matches nothing',
       conditions: { 'labels.all' => [] }, expected: [] },
@@ -450,6 +457,22 @@ describe 'Query parity' do
 
     { desc: 'a Regexp on a many_to_many field',
       conditions: { topics: /topic/ },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an array equality operand on a many_to_many',
+      conditions: { topics: %w(topic-a topic-b) },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an empty array equality operand on a many_to_many',
+      conditions: { topics: [] },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a null-holding array equality operand on a many_to_many',
+      conditions: { topics: [nil] },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an array operand under ne on a many_to_many',
+      conditions: { 'topics.ne' => %w(topic-a) },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
 
     { desc: 'a Regexp inside a select list',

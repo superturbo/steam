@@ -41,17 +41,15 @@ describe 'Adapter parity' do
             .to match_array %w(all-missing arrays embedded explicit-nils)
         end
 
-        # Explicit lists keep exact-list equality.
-        it 'matches the emptied list through an explicit empty list' do
-          expect(slugs(topics: [])).to eq %w(zero)
+        it 'refuses an explicit list as an equality operand' do
+          [[], [nil], ['topic-b', nil]].each do |list|
+            expect { slugs(topics: list) }
+              .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+          end
         end
 
-        it 'matches the null element through an explicit null list' do
-          expect(slugs(topics: [nil])).to eq %w(embedded)
-        end
-
-        it 'matches the mixed list through the same explicit list' do
-          expect(slugs(topics: ['topic-b', nil])).to eq %w(arrays)
+        it 'reads the emptied list through its size' do
+          expect(slugs('topics.size' => 0)).to eq %w(zero)
         end
 
       end
@@ -221,8 +219,34 @@ describe 'Adapter parity' do
           end
         end
 
-        it 'reads a lone operand as the exact one-element list' do
-          expect(playlist_slugs(topics: 'topic-a')).to eq %w(alpha)
+        def topic(slug)
+          repository = Locomotive::Steam::ContentEntryRepository.new(
+            adapter, site, AdapterParityFixture::LOCALE, type_repository)
+
+          repository.with(type_repository.by_slug('topics')).by_slug(slug)
+        end
+
+        it 'reads a lone operand as the element the list must hold' do
+          expect(playlist_slugs(topics: 'topic-a')).to match_array %w(alpha reversed zapped)
+        end
+
+        it 'reads ne as the element the list must lack' do
+          expect(playlist_slugs('topics.ne' => 'topic-a')).to eq %w(beta)
+        end
+
+        it 'reads an entry operand as the same membership element' do
+          expect(playlist_slugs(topics: topic('topic-a')))
+            .to match_array %w(alpha reversed zapped)
+        end
+
+        it 'reads an id document operand as the same membership element' do
+          expect(playlist_slugs(topics: { _id: topic('topic-a')._id }))
+            .to match_array %w(alpha reversed zapped)
+        end
+
+        it 'reads an id document inside in as one element' do
+          expect(playlist_slugs('topics.in' => { _id: topic('topic-a')._id }))
+            .to match_array %w(alpha reversed zapped)
         end
 
       end
