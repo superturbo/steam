@@ -47,6 +47,12 @@ module Locomotive::Steam
       end
     end
 
+    def fields_by_persisted_name
+      @fields_by_persisted_name ||= fields_by_name.values
+        .select { |field| field.persisted_name && field.persisted_name != field.name.to_s }
+        .to_h { |field| [field.persisted_name, field] }
+    end
+
     def unqueryable_field_names
       @unqueryable_field_names ||= fields.all
         .select { |field| field.persisted_name.nil? }

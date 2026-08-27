@@ -100,6 +100,9 @@ describe 'Query parity' do
     { desc: 'an id absent from both stores matches nothing',
       conditions: { _id: 'not-an-objectid' }, expected: [] },
 
+    { desc: 'a symbol id absent from both stores matches nothing',
+      conditions: { _id: :ffffffffffffffffffffffff }, expected: [] },
+
     { desc: 'scalar equality on a string field',
       conditions: { name: 'Scalars' }, expected: %w(scalars) },
 

@@ -45,6 +45,22 @@ describe Locomotive::Steam::MongoDBAdapter do
 
     end
 
+    context 'passing a symbol spelling an id' do
+
+      let(:id) { :'56fd9f48a2f42217744a85d7' }
+
+      it { is_expected.to eq(BSON::ObjectId.from_string('56fd9f48a2f42217744a85d7')) }
+
+    end
+
+    context 'passing an object whose text form spells an id' do
+
+      let(:id) { double(to_s: '56fd9f48a2f42217744a85d7') }
+
+      it { is_expected.to eq false }
+
+    end
+
   end
 
   describe '#count' do

@@ -58,7 +58,10 @@ module Locomotive::Steam
 
     def make_id(id)
       return id if id.is_a?(BSON::ObjectId)
-      return false unless BSON::ObjectId.legal?(id)
+
+      id = id.to_s if id.is_a?(Symbol)
+
+      return false unless id.is_a?(String) && BSON::ObjectId.legal?(id)
 
       BSON::ObjectId.from_string(id)
     end

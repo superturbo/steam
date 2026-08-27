@@ -190,6 +190,11 @@ describe 'Adapter parity' do
             .to match_array %w(arrays scalars)
         end
 
+        it 'finds them through a hash naming a symbol id' do
+          expect(slugs(maker: { _id: makers.by_slug('maker-one')._id.to_s.to_sym }))
+            .to match_array %w(arrays scalars)
+        end
+
         it 'matches nothing through an id no store issued' do
           expect(slugs(maker: { _id: 'ffffffffffffffffffffffff' })).to eq []
         end
@@ -204,6 +209,80 @@ describe 'Adapter parity' do
 
         it 'matches nothing through an entry the store never persisted' do
           expect(slugs(maker: makers.build(name: 'Ghost'))).to eq []
+        end
+
+      end
+
+      describe 'querying through the persisted name' do
+
+        it 'reads the id the store issued' do
+          expect(slugs(maker_id: makers.by_slug('maker-one')._id))
+            .to match_array %w(arrays scalars)
+        end
+
+        it 'reads a stringified id' do
+          expect(slugs(maker_id: makers.by_slug('maker-one')._id.to_s))
+            .to match_array %w(arrays scalars)
+        end
+
+        it 'reads a symbol as the text form of an id' do
+          expect(slugs(maker_id: makers.by_slug('maker-one')._id.to_s.to_sym))
+            .to match_array %w(arrays scalars)
+        end
+
+        it 'reads a select option id' do
+          reference = slugs(category: 'alpha')
+
+          expect(reference).not_to be_empty
+          expect(slugs(category_id: option_id(:category, 'alpha'))).to eq reference
+        end
+
+        def topic_id(slug)
+          Locomotive::Steam::ContentEntryRepository.new(
+            adapter, site, AdapterParityFixture::LOCALE, type_repository)
+            .with(type_repository.by_slug('topics')).by_slug(slug)._id
+        end
+
+        it 'reads a lone id on a list name as membership' do
+          expect(slugs(topic_ids: topic_id('topic-b'))).to match_array %w(arrays scalars)
+        end
+
+        it 'refuses an Array with equality' do
+          expect { slugs(topic_ids: [topic_id('topic-a')]) }
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+        end
+
+        it 'reads a flat all list element-wise' do
+          expect(slugs('topic_ids.all' => [topic_id('topic-a'), topic_id('topic-b')]))
+            .to eq %w(scalars)
+        end
+
+        it 'refuses a nested list element' do
+          [{ 'topic_ids.in' => [[topic_id('topic-a')]] },
+           { 'topic_ids.all' => [[topic_id('topic-a')]] }].each do |conditions|
+            expect { slugs(conditions) }
+              .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+          end
+        end
+
+        it 'keeps nil semantics equal to the declared name' do
+          expect(slugs(maker_id: nil)).to eq slugs(maker: nil)
+        end
+
+        it 'matches nothing through text no store reads as an id' do
+          expect(slugs(maker_id: 'zzz')).to eq []
+        end
+
+        it 'reads list elements as ids, a null element included' do
+          expect(slugs('topic_ids.in' => [nil]))
+            .to match_array %w(all-missing arrays embedded explicit-nils)
+        end
+
+        it 'refuses an ordering comparison, a Range and a Regexp' do
+          [{ 'maker_id.gt' => '' }, { maker_id: 1..10 }, { maker_id: /abc/ }].each do |conditions|
+            expect { slugs(conditions) }
+              .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+          end
         end
 
       end

@@ -618,6 +618,10 @@ module Locomotive
           field, operator, value = resolved.field, resolved.operator, resolved.value
 
           unless field && coerced?(field)
+            if field.nil? && (field = @content_type.fields_by_persisted_name[resolved.name])
+              return persisted_name_criterion(resolved, field)
+            end
+
             return Criterion.new(persisted_name: resolved.name, operator: operator, value: value)
           end
 
@@ -678,6 +682,43 @@ module Locomotive
 
           Criterion.new(persisted_name: field.persisted_name, operator: operator,
                         value: value_to_id(value, field))
+        end
+
+        # Persisted names take IDs; declared names resolve option names or slugs.
+        def persisted_name_criterion(resolved, field)
+          name, operator, value = resolved.name, resolved.operator, resolved.value
+
+          unless field_value?(operator)
+            return Criterion.new(persisted_name: name, operator: operator, value: value)
+          end
+
+          validate_id_query!(name, operator, value)
+
+          list_operator = operator && LIST_VALUE_KINDS.include?(operator.value_kind)
+
+          if value.is_a?(Array) && !list_operator
+            raise Locomotive::Steam::Adapters::Query::InvalidValue,
+                  "#{name} takes one value with eq or ne"
+          end
+
+          Criterion.new(persisted_name: name, operator: operator,
+                        value: value_to_persisted_id(value, field))
+        end
+
+        # nil keeps missing/null semantics; an invalid id is unmatchable, not nil.
+        def value_to_persisted_id(value, field)
+          case value
+          when nil then nil
+          when Array
+            if value.any? { |element| element.is_a?(Array) }
+              raise Locomotive::Steam::Adapters::Query::InvalidValue,
+                    "#{field.persisted_name} takes a flat list of ids"
+            end
+
+            value.map { |element| value_to_persisted_id(element, field) }
+          when Symbol then explicit_id(value.to_s, field)
+          else explicit_id(value, field)
+          end
         end
 
         # nil keeps nil semantics; a lone operand is a one-element list.

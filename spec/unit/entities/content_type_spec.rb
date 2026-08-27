@@ -30,6 +30,26 @@ describe Locomotive::Steam::ContentType do
 
   end
 
+  describe '#fields_by_persisted_name' do
+
+    let(:fields) do
+      [Locomotive::Steam::ContentTypeField.new(name: 'maker', type: 'belongs_to'),
+       Locomotive::Steam::ContentTypeField.new(name: 'category', type: 'select'),
+       Locomotive::Steam::ContentTypeField.new(name: 'topics', type: 'many_to_many'),
+       Locomotive::Steam::ContentTypeField.new(name: 'secret', type: 'password'),
+       Locomotive::Steam::ContentTypeField.new(name: 'posts', type: 'has_many'),
+       Locomotive::Steam::ContentTypeField.new(name: 'title', type: 'string')]
+    end
+
+    subject { content_type.fields_by_persisted_name }
+
+    it 'indexes only the fields persisted apart from their declared name' do
+      expect(subject.keys).to contain_exactly('maker_id', 'category_id', 'topic_ids')
+      expect(subject['maker_id'].name).to eq 'maker'
+    end
+
+  end
+
   describe '#unqueryable_field_names' do
 
     let(:fields) do

@@ -135,6 +135,68 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     end
 
+    describe 'a persisted name criterion' do
+
+      let(:field) do
+        instance_double('BelongsToField', name: 'maker', persisted_name: 'maker_id',
+                        type: :belongs_to, target_id: '42')
+      end
+      let(:list_field) do
+        instance_double('ManyToManyField', name: 'topics', persisted_name: 'topic_ids',
+                        type: :many_to_many, target_id: '43')
+      end
+      let(:type) do
+        build_content_type('Articles', label_field_name: :title,
+                           fields_by_name: { maker: field, topics: list_field },
+                           fields_by_persisted_name: { 'maker_id' => field, 'topic_ids' => list_field },
+                           fields_with_default: [])
+      end
+
+      it 'keeps nil semantics' do
+        expect(prepared_for('maker_id' => nil)).to include('maker_id' => nil)
+      end
+
+      it 'reads the operand as an id, never a slug' do
+        expect(prepared_for('maker_id' => '42')).to include('maker_id' => '42')
+      end
+
+      it 'reads a symbol as the text form of an id' do
+        expect(prepared_for('maker_id' => :'42')).to include('maker_id' => '42')
+      end
+
+      it 'reads list elements as ids, keeping a null element' do
+        expect(prepared_for('topic_ids.in' => [nil, '42'])).to include('topic_ids.in' => [nil, '42'])
+      end
+
+      it 'leaves exists to its own kind' do
+        expect(prepared_for('maker_id.exists' => true)).to include('maker_id.exists' => true)
+      end
+
+      it 'refuses an Array with eq or ne' do
+        [{ 'topic_ids' => %w(a b) }, { 'maker_id.ne' => %w(a) }].each do |conditions|
+          expect { prepared_for(conditions) }
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue,
+                            /takes one value with eq or ne/)
+        end
+      end
+
+      it 'takes a flat list of ids, not stored fragments' do
+        [{ 'topic_ids.in' => [%w(a b)] }, { 'topic_ids.all' => [%w(a b)] }].each do |conditions|
+          expect { prepared_for(conditions) }
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /flat list of ids/)
+        end
+      end
+
+      it 'refuses an ordering comparison, a Range and a Regexp' do
+        [{ 'maker_id.gt' => 'x' }, { 'maker_id' => 1..10 }, { 'maker_id' => /abc/ },
+         { 'topic_ids.in' => [/abc/] }].each do |conditions|
+          expect { prepared_for(conditions) }
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /matched by id/)
+        end
+      end
+
+    end
+
     describe 'two bounds on one field' do
 
       let(:field)   { instance_double('NumberField', name: 'price', persisted_name: 'price', type: :float) }
