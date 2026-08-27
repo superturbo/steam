@@ -18,8 +18,12 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
     Locomotive::Steam::Models::I18nField.new(:field, translations)
   end
 
+  def build_entry(attributes = {})
+    Class.new { include Locomotive::Steam::Models::Entity }.new(attributes)
+  end
+
   describe '#matches? localization and presence' do
-    let(:entry) { instance_double('Site', title: i18n(en: 'Awesome Site', fr: 'Génial'), content: 'foo') }
+    let(:entry) { build_entry(title: i18n(en: 'Awesome Site', fr: 'Génial'), content: 'foo') }
 
     it 'matches a localized field in the current locale' do
       expect(described_class.new('title.eq', 'Awesome Site', :en).matches?(entry)).to eq true
@@ -30,17 +34,17 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
     end
 
     it 'treats a localized field missing the current locale as absent' do
-      only_fr = instance_double('Site', title: i18n(fr: 'Bonjour'))
+      only_fr = build_entry(title: i18n(fr: 'Bonjour'))
       expect(described_class.new(:title, nil, :en).matches?(only_fr)).to eq true
       expect(described_class.new('title.ne', 'x', :en).matches?(only_fr)).to eq true
     end
   end
 
   describe '#matches? equality and lists' do
-    let(:with_tags)    { instance_double('Product', tags: %w(red green)) }
-    let(:blank_tags)   { instance_double('Product', tags: nil) }
-    let(:without_tags) { instance_double('Product') }
-    let(:grunge_band)  { instance_double('Band', kind: 'grunge') }
+    let(:with_tags)    { build_entry(tags: %w(red green)) }
+    let(:blank_tags)   { build_entry(tags: nil) }
+    let(:without_tags) { build_entry }
+    let(:grunge_band)  { build_entry(kind: 'grunge') }
 
     def match?(name, value, entry)
       described_class.new(name, value, :en).matches?(entry)
@@ -85,8 +89,8 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
     end
 
     context '[nil] against null and missing fields' do
-      let(:present_null)     { instance_double('Product', tags: nil) }
-      let(:locale_missing)   { instance_double('Product', tags: i18n(fr: %w(x))) }
+      let(:present_null)     { build_entry(tags: nil) }
+      let(:locale_missing)   { build_entry(tags: i18n(fr: %w(x))) }
 
       it('in [nil] matches a present null') { expect(match?('tags.in', [nil], present_null)).to eq true }
       it('nin [nil] excludes a present null') { expect(match?('tags.nin', [nil], present_null)).to eq false }
@@ -97,9 +101,9 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
   end
 
   describe '#matches? exists' do
-    let(:present) { instance_double('Product', tags: %w(red)) }
-    let(:null)    { instance_double('Product', tags: nil) }
-    let(:absent)  { instance_double('Product') }
+    let(:present) { build_entry(tags: %w(red)) }
+    let(:null)    { build_entry(tags: nil) }
+    let(:absent)  { build_entry }
 
     def exists?(value, entry)
       described_class.new('tags.exists', value, :en).matches?(entry)
@@ -114,17 +118,17 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
     it('rejects a non-boolean') { expect { exists?('yes', present) }.to raise_error(invalid) }
 
     it 'treats a localized null translation as present' do
-      expect(exists?(true, instance_double('Product', tags: i18n(en: nil)))).to eq true
+      expect(exists?(true, build_entry(tags: i18n(en: nil)))).to eq true
     end
 
     it 'treats a field missing the current locale as absent' do
-      expect(exists?(true, instance_double('Product', tags: i18n(fr: 'x')))).to eq false
+      expect(exists?(true, build_entry(tags: i18n(fr: 'x')))).to eq false
     end
   end
 
   describe '#matches? size (arrays only)' do
     def size?(value, tags)
-      described_class.new('tags.size', value, :en).matches?(instance_double('Product', tags: tags))
+      described_class.new('tags.size', value, :en).matches?(build_entry(tags: tags))
     end
 
     it('matches an array of the right size') { expect(size?(2, %w(a b))).to eq true }
@@ -134,13 +138,13 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
     it('rejects a fractional size') { expect { size?(2.5, %w(a b)) }.to raise_error(invalid) }
 
     it 'does not match a missing field' do
-      expect(described_class.new('tags.size', 1, :en).matches?(instance_double('Product'))).to eq false
+      expect(described_class.new('tags.size', 1, :en).matches?(build_entry)).to eq false
     end
   end
 
   describe '#matches? a plain-field Range' do
     def in_range?(range, price)
-      described_class.new(:price, range, :en).matches?(instance_double('Product', price: price))
+      described_class.new(:price, range, :en).matches?(build_entry(price: price))
     end
 
     it('matches a value inside the range') { expect(in_range?(1..3, 2)).to eq true }
@@ -148,7 +152,7 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
     it('honours an exclusive end') { expect(in_range?(1...3, 3)).to eq false }
 
     it 'does not match a missing field' do
-      expect(described_class.new(:price, 1..3, :en).matches?(instance_double('Product'))).to eq false
+      expect(described_class.new(:price, 1..3, :en).matches?(build_entry)).to eq false
     end
 
     it 'rejects an unbounded range' do
@@ -158,8 +162,8 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
 
   describe 'list value normalization and errors' do
     it 'normalizes a scalar nil in a list to [nil]' do
-      absent  = instance_double('Product')
-      present = instance_double('Product', tags: %w(red))
+      absent  = build_entry
+      present = build_entry(tags: %w(red))
       expect(described_class.new('tags.in', nil, :en).matches?(absent)).to eq true
       expect(described_class.new('tags.in', nil, :en).matches?(present)).to eq false
     end
@@ -172,9 +176,9 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
       expect { described_class.new('tags.in', /red/, :en) }.to raise_error(invalid)
     end
 
-    it 'does not swallow a field reader error' do
-      entry = instance_double('Product')
-      allow(entry).to receive(:tags).and_raise('boom')
+    it 'does not swallow a reader error' do
+      entry = build_entry
+      allow(entry).to receive(:__query_attribute__).and_raise('boom')
       expect { described_class.new(:tags, 'x', :en).matches?(entry) }.to raise_error('boom')
     end
   end
@@ -187,7 +191,7 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
 
   describe '#matches? a Regexp on a plain field' do
     def match?(stored)
-      described_class.new(:f, /aw/, :en).matches?(instance_double('Product', f: stored))
+      described_class.new(:f, /aw/, :en).matches?(build_entry(f: stored))
     end
 
     it('matches a string field') { expect(match?('awesome')).to eq true }
@@ -198,7 +202,7 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
   end
 
   describe '#matches? comparisons against an array field' do
-    let(:entry) { instance_double('Product', f: %w(awesome open\ bar)) }
+    let(:entry) { build_entry(f: %w(awesome open\ bar)) }
 
     def match?(name, value)
       described_class.new(name, value, :en).matches?(entry)
@@ -217,7 +221,7 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
 
   describe '#matches? candidate model (whole value plus array elements)' do
     def match?(name, value, stored)
-      described_class.new(name, value, :en).matches?(instance_double('Product', f: stored))
+      described_class.new(name, value, :en).matches?(build_entry(f: stored))
     end
 
     context 'a nested array operand' do
@@ -249,9 +253,9 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
   end
 
   describe '#matches? comparison operands' do
-    let(:with_value) { instance_double('Product', f: 5) }
-    let(:null_value) { instance_double('Product', f: nil) }
-    let(:missing)    { instance_double('Product') }
+    let(:with_value) { build_entry(f: 5) }
+    let(:null_value) { build_entry(f: nil) }
+    let(:missing)    { build_entry }
 
     def match?(name, value, entry)
       described_class.new(name, value, :en).matches?(entry)
@@ -321,4 +325,30 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
       it('raises') { expect { subject }.to raise_error(invalid) }
     end
   end
+
+  describe '#matches? reads entity attributes only' do
+
+    it 'treats a Ruby method name without a stored attribute as absent' do
+      entry = build_entry(title: 'x')
+
+      expect(described_class.new('hash.exists', false, :en).matches?(entry)).to eq true
+      expect(described_class.new(:class, 'Foo', :en).matches?(entry)).to eq false
+    end
+
+    it 'reads method and send as plain absent attributes' do
+      entry = build_entry
+
+      expect(described_class.new(:method, 'x', :en).matches?(entry)).to eq false
+      expect(described_class.new('send.exists', false, :en).matches?(entry)).to eq true
+    end
+
+    it 'reads a stored attribute that shadows a Ruby method' do
+      entry = build_entry('hash' => 'stored', 'method' => 'kept')
+
+      expect(described_class.new(:hash, 'stored', :en).matches?(entry)).to eq true
+      expect(described_class.new(:method, 'kept', :en).matches?(entry)).to eq true
+    end
+
+  end
+
 end

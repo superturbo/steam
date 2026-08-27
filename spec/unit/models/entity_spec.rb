@@ -10,6 +10,54 @@ describe Locomotive::Steam::Models::Entity do
   end
   let(:notes) { Locomotive::Steam::Models::I18nField.new(:notes, 'en' => { 'a' => +'deep' }) }
 
+  describe '#__query_attribute__' do
+
+    def read(name, locale = :en)
+      entity.__query_attribute__(name, locale)
+    end
+
+    it 'reads a stored attribute' do
+      expect(read(:name)).to eq [true, 'Ada']
+    end
+
+    it 'reads an absent attribute as missing' do
+      expect(read(:unknown)).to eq [false, nil]
+    end
+
+    it 'reads a stored null as present' do
+      entity[:flag] = nil
+
+      expect(read(:flag)).to eq [true, nil]
+    end
+
+    it 'reads a localized attribute in the asked locale' do
+      expect(read(:title)).to eq [true, 'Hello']
+    end
+
+    it 'reads a localized attribute missing the asked locale as absent' do
+      expect(read(:title, :fr)).to eq [false, nil]
+    end
+
+    it 'never reads a Ruby method' do
+      expect(read(:hash)).to eq [false, nil]
+      expect(read(:method)).to eq [false, nil]
+    end
+
+    it 'reads a stored attribute that shadows a Ruby method' do
+      entity['hash'] = 'stored'
+
+      expect(read(:hash)).to eq [true, 'stored']
+    end
+
+    it 'leaves read_query_attribute free as a plain attribute name' do
+      entity['read_query_attribute'] = 'stored'
+
+      expect(entity.read_query_attribute).to eq 'stored'
+      expect(read(:read_query_attribute)).to eq [true, 'stored']
+    end
+
+  end
+
   describe '#dup' do
 
     subject { entity.dup }

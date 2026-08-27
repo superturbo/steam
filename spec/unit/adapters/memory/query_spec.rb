@@ -7,14 +7,18 @@ require_relative '../../../../lib/locomotive/steam/adapters/memory/query.rb'
 
 describe Locomotive::Steam::Adapters::Memory::Query do
 
-  let(:entry_1) { OpenStruct.new(name: 'foo', id: 1, attributes: { name: 'foo', id: 1 }) }
-  let(:entry_2) { OpenStruct.new(name: 'bar', id: 2, attributes: { name: 'bar', id: 2 }) }
-  let(:entry_3) { OpenStruct.new(name: 'zone', id: 3, attributes: { name: 'zone', id: 3 }) }
+  let(:entry_1) { build_entry(name: 'foo', id: 1) }
+  let(:entry_2) { build_entry(name: 'bar', id: 2) }
+  let(:entry_3) { build_entry(name: 'zone', id: 3) }
   let(:records) { { 1 => entry_1, 2 => entry_2, 3 => entry_3 } }
   let(:dataset) { Locomotive::Steam::Adapters::Memory::Dataset.new(:test) }
   let(:locale)  { :en }
 
   let(:query)   { Locomotive::Steam::Adapters::Memory::Query }
+
+  def build_entry(attributes = {})
+    Class.new { include Locomotive::Steam::Models::Entity }.new(attributes)
+  end
 
   before { allow(dataset).to receive(:records).and_return(records) }
 
@@ -33,8 +37,8 @@ describe Locomotive::Steam::Adapters::Memory::Query do
       expect(
         query.new(dataset, locale) do
           limit(1)
-        end.all
-      ).to eq([entry_1])
+        end.all.map(&:name)
+      ).to eq(['foo'])
     end
   end
 
@@ -85,8 +89,8 @@ describe Locomotive::Steam::Adapters::Memory::Query do
     context 'records stored under string identities' do
 
       let(:records) { { 'zone' => entry_3, 'foo' => entry_1 } }
-      let(:entry_1) { OpenStruct.new(name: 'foo', _id: 'foo', attributes: { name: 'foo', _id: 'foo' }) }
-      let(:entry_3) { OpenStruct.new(name: 'zone', _id: 'zone', attributes: { name: 'zone', _id: 'zone' }) }
+      let(:entry_1) { build_entry(name: 'foo', _id: 'foo') }
+      let(:entry_3) { build_entry(name: 'zone', _id: 'zone') }
 
       it 'reads a Symbol through the shared scalar grammar' do
         expect(names { in_id_order([:zone, :foo]) }).to eq(['zone', 'foo'])
@@ -112,8 +116,7 @@ describe Locomotive::Steam::Adapters::Memory::Query do
     context 'a record with a composite [mongo_id, slug] identity' do
 
       let(:entry_3) do
-        OpenStruct.new(name: 'zone', _id: ['5baf7d38a953300567956448', 'zone'],
-                       attributes: { name: 'zone', _id: ['5baf7d38a953300567956448', 'zone'] })
+        build_entry(name: 'zone', _id: ['5baf7d38a953300567956448', 'zone'])
       end
       let(:records) { { '5baf7d38a953300567956448' => entry_3, 2 => entry_2 } }
 
@@ -166,7 +169,7 @@ describe Locomotive::Steam::Adapters::Memory::Query do
       let(:records) do
         (1..32).to_h do |index|
           group = index.odd? ? 'a' : 'b'
-          [index, OpenStruct.new(id: index, group: group, attributes: { id: index, group: group })]
+          [index, build_entry(id: index, group: group)]
         end
       end
 
@@ -199,8 +202,8 @@ describe Locomotive::Steam::Adapters::Memory::Query do
   describe "#where with the 'all' operator" do
     # Locks the public adapter contract ($all) exercised by other LocomotiveCMS
     # gems through the query DSL, not just Condition in isolation.
-    let(:entry_1) { OpenStruct.new(name: 'foo', tags: %w(red green blue)) }
-    let(:entry_2) { OpenStruct.new(name: 'bar', tags: %w(red)) }
+    let(:entry_1) { build_entry(name: 'foo', tags: %w(red green blue)) }
+    let(:entry_2) { build_entry(name: 'bar', tags: %w(red)) }
     let(:records) { { 1 => entry_1, 2 => entry_2 } }
 
     specify 'keeps only entries whose array contains every queried value' do

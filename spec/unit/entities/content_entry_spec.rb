@@ -511,6 +511,20 @@ describe Locomotive::Steam::ContentEntry do
 
   end
 
+  describe '#__query_attribute__' do
+
+    before { allow(type).to receive(:_id).and_return(42) }
+
+    it 'serves content_type_id from the attached content type' do
+      expect(content_entry.__query_attribute__(:content_type_id, :en)).to eq [true, 42]
+    end
+
+    it 'reads an entry without a type or a stored id as missing it' do
+      expect(described_class.new({}).__query_attribute__(:content_type_id, :en)).to eq [false, nil]
+    end
+
+  end
+
   describe '#content_type_slug' do
 
     subject { content_entry.content_type_slug }

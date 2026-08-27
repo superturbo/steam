@@ -7,6 +7,11 @@ describe Locomotive::Steam::FilesystemAdapter do
 
   let(:mapper)  { instance_double('Mapper', name: :test) }
   let(:scope)   { instance_double('Scope', site: site, locale: nil, to_key: 'key') }
+
+  def build_entry(attributes = {})
+    Class.new { include Locomotive::Steam::Models::Entity }.new(attributes)
+  end
+
   let(:adapter) { Locomotive::Steam::FilesystemAdapter.new(nil) }
 
   it_behaves_like 'a repository adapter'
@@ -26,7 +31,7 @@ describe Locomotive::Steam::FilesystemAdapter do
 
   describe '#query' do
 
-    let(:collection) { [OpenStruct.new(site_id: 42, name: 'Hello world')] }
+    let(:collection) { [build_entry(site_id: 42, name: 'Hello world')] }
 
     before do
       allow(mapper).to receive(:to_entity) { |arg| arg }
@@ -62,9 +67,9 @@ describe Locomotive::Steam::FilesystemAdapter do
 
     let(:mapper)     { instance_double('Mapper', name: :posts) }
     let(:site)       { instance_double('Site', _id: 1) }
-    let(:stored)     { OpenStruct.new(_id: 1, name: 'My post', views: 50) }
+    let(:stored)     { build_entry(_id: 1, name: 'My post', views: 50) }
     let(:collection) { [stored] }
-    let(:entity)     { OpenStruct.new(_id: 1, name: 'stale copy', views: 41) }
+    let(:entity)     { build_entry(_id: 1, name: 'stale copy', views: 41) }
     let(:cache_key)  { "#{scope.to_key}_#{mapper.name}" }
 
     before do
@@ -124,7 +129,7 @@ describe Locomotive::Steam::FilesystemAdapter do
 
     context 'an unknown record' do
 
-      let(:entity) { OpenStruct.new(_id: 999, name: 'ghost', views: 7) }
+      let(:entity) { build_entry(_id: 999, name: 'ghost', views: 7) }
 
       it 'raises RecordNotFound without mutating the passed entity' do
         expect { subject }.to raise_error(Locomotive::Steam::Models::Repository::RecordNotFound)

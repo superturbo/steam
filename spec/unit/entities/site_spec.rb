@@ -5,6 +5,24 @@ describe Locomotive::Steam::Site do
   let(:attributes) { {} }
   let(:site) { described_class.new(attributes) }
 
+  describe '#__query_attribute__' do
+
+    let(:attributes) { { subdomain: 'acme' } }
+
+    it 'serves handle for a site declaring only a subdomain' do
+      expect(site.__query_attribute__(:handle, :en)).to eq [true, 'acme']
+    end
+
+    it 'reads a site without either source as missing the handle' do
+      expect(described_class.new({}).__query_attribute__(:handle, :en)).to eq [false, nil]
+    end
+
+    it 'reads an explicit null source as present' do
+      expect(described_class.new(subdomain: nil).__query_attribute__(:handle, :en)).to eq [true, nil]
+    end
+
+  end
+
   describe '#handle' do
 
     let(:attributes) { { handle: 'acme' } }

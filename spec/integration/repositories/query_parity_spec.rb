@@ -141,6 +141,13 @@ describe 'Query parity' do
       conditions: { 'topics.all' => [nil] },
       expected: %w(all-missing arrays embedded explicit-nils) },
 
+    { desc: 'exists false on a timestamp no entry stores',
+      conditions: { 'created_at.exists' => false },
+      expected: %w(all-missing arrays embedded explicit-nils scalars zero) },
+
+    { desc: 'exists true on a timestamp no entry stores',
+      conditions: { 'created_at.exists' => true }, expected: [] },
+
     { desc: 'a lone many_to_many operand is a membership test',
       conditions: { topics: 'topic-b' }, expected: %w(arrays scalars) },
 

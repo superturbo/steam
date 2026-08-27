@@ -63,6 +63,13 @@ module Locomotive::Steam
       @content_type.try(&:_id) || attributes[:content_type_id]
     end
 
+    # Repository scope reads content_type_id from the attached type.
+    def __query_attribute__(name, locale)
+      return [true, content_type_id] if name.to_s == 'content_type_id' && @content_type
+
+      super
+    end
+
     def content_type_slug
       content_type.slug
     end

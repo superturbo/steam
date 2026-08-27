@@ -34,6 +34,15 @@ module Locomotive::Steam
       self[:handle] || self[:subdomain]
     end
 
+    # A site declaring only a subdomain still answers a handle query.
+    def __query_attribute__(name, locale)
+      return super unless name.to_s == 'handle'
+
+      present = attributes.key?(:handle) || attributes.key?(:subdomain)
+
+      [present, handle]
+    end
+
     def default_locale
       locales.first || :en
     end

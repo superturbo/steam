@@ -47,6 +47,20 @@ module Locomotive::Steam
         self['_id']
       end
 
+      # Queries read entity attributes without invoking public methods.
+      # The flag distinguishes a missing key from an explicit null.
+      def __query_attribute__(name, locale)
+        return [false, nil] unless attributes.key?(name)
+
+        value = attributes[name]
+
+        if value.is_a?(I18nField)
+          [value.translations.key?(locale), value[locale]]
+        else
+          [true, value]
+        end
+      end
+
       def []=(name, value)
         attributes[name] = value
       end

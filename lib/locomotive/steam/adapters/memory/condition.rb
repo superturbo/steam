@@ -18,7 +18,7 @@ module Locomotive::Steam
         end
 
         def matches?(entry)
-          present, value = read(entry)
+          present, value = entry.__query_attribute__(@field, @locale)
 
           case @operator
           when :==, :eq   then eq_match?(value)
@@ -69,19 +69,6 @@ module Locomotive::Steam
           when :range          then @range   = values.coerce(:range, @value)
           when :==, :eq, :ne   then @literal = values.coerce(:literal, @value)
           when :gt, :gte, :lt, :lte then @scalar = values.coerce(:scalar, @value)
-          end
-        end
-
-        # Preserve missing vs null for MongoDB parity.
-        def read(entry)
-          return [false, nil] unless entry.respond_to?(@field)
-
-          value = entry.public_send(@field)
-
-          if value.respond_to?(:translations)
-            [value.translations.key?(@locale), value[@locale]]
-          else
-            [true, value]
           end
         end
 

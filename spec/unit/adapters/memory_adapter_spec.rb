@@ -5,9 +5,14 @@ require_relative '../../support/examples/adapter_contract'
 
 describe Locomotive::Steam::MemoryAdapter do
 
-  let(:collection)  { [OpenStruct.new(name: 'Hello world')] }
+  let(:collection)  { [build_entry(name: 'Hello world')] }
   let(:mapper)      { instance_double('Mapper', name: :test) }
   let(:scope)       { instance_double('Scope', locale: nil) }
+
+  def build_entry(attributes = {})
+    Class.new { include Locomotive::Steam::Models::Entity }.new(attributes)
+  end
+
   let(:adapter)     { Locomotive::Steam::MemoryAdapter.new(collection) }
 
   before { allow(mapper).to receive(:to_entity) { |arg| arg } }
@@ -55,7 +60,7 @@ describe Locomotive::Steam::MemoryAdapter do
 
   describe '#count' do
 
-    let(:collection) { [OpenStruct.new(name: 'a'), OpenStruct.new(name: 'b')] }
+    let(:collection) { [build_entry(name: 'a'), build_entry(name: 'b')] }
 
     it 'counts every record' do
       expect(adapter.count(mapper, scope)).to eq 2
