@@ -244,6 +244,31 @@ describe Locomotive::Steam::ContentEntryRepository do
       expect(articles.all).to be_empty
     end
 
+    it 'combines chained with_conditions sources with and' do
+      articles = repository.value_for(subject, :articles, '_id.in' => %w(hello-world))
+      articles = articles.with_conditions('_id.in' => %w(hello-world lorem-ipsum))
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
+
+      expect(articles.all.map(&:title)).to eq ['Hello world']
+    end
+
+    it 'vets a template source against the target schema' do
+      source   = Locomotive::Steam::LiquidCriteria.wrap('author_id' => 'john-doe')
+      articles = repository.value_for(subject, :articles, source)
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
+
+      expect { articles.all }
+        .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue,
+                        /author_id cannot filter entries of articles/)
+    end
+
+    it 'keeps a ruby source permissive on the same name' do
+      articles = repository.value_for(subject, :articles, 'author_id' => 'john-doe')
+      allow(adapter).to receive(:collection).and_return(loaded(other_entries))
+
+      expect(articles.all.map(&:title)).to eq ['Hello world', 'Lorem ipsum']
+    end
+
     context 'querying by a composite-id [mongo_id, slug] target entry' do
 
       let(:field) do

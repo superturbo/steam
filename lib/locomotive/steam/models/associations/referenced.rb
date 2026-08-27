@@ -20,9 +20,11 @@ module Locomotive::Steam
         @entity
       end
 
+      # Separate sources preserve template validation and AND semantics.
       def with_conditions(conditions)
         dup.tap do |scoped|
-          scoped.association_conditions = scoped.association_conditions.merge(conditions)
+          scoped.association_condition_sources =
+            scoped.association_condition_sources + [conditions]
         end
       end
 

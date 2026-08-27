@@ -1,5 +1,7 @@
 require 'spec_helper'
 
+require_relative '../../../support/content_entry_repository_context'
+
 describe Locomotive::Steam::Liquid::Drops::ContentEntryCollection do
 
   let(:assigns)       { {} }
@@ -237,19 +239,19 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntryCollection do
       let(:assigns) { { 'with_scope' => { 'visible' => true } } }
 
       describe '#first' do
-        before { expect(repo).to receive(:first).with({ 'visible' => true }).and_return('a') }
+        before { expect(repo).to receive(:first).with(Locomotive::Steam::LiquidCriteria.wrap('visible' => true)).and_return('a') }
         it { expect(drop.first).to eq('a') }
       end
 
       describe '#count' do
-        before { expect(repo).to receive(:count).with({ 'visible' => true }).and_return(2) }
+        before { expect(repo).to receive(:count).with(Locomotive::Steam::LiquidCriteria.wrap('visible' => true)).and_return(2) }
         it { expect(drop.count).to eq 2 }
       end
 
       describe 'only applied to the first content type' do
 
         it 'sets the content type in the context' do
-          expect(repo).to receive(:first).with({ 'visible' => true }).and_return('a')
+          expect(repo).to receive(:first).with(Locomotive::Steam::LiquidCriteria.wrap('visible' => true)).and_return('a')
           expect(context['with_scope_content_type']).to eq nil
           drop.first
           expect(context['with_scope_content_type']).to eq 'articles'
@@ -257,7 +259,7 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntryCollection do
 
         it "doesn't apply the with_scope conditions if it's not the same content type" do
           context['with_scope_content_type'] = 'projects'
-          expect(repo).to receive(:first).with({}).and_return('a')
+          expect(repo).to receive(:first).with(nil).and_return('a')
           drop.first
           expect(context['with_scope_content_type']).to eq 'projects'
         end
@@ -294,6 +296,50 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntryCollection do
   describe 'unknown method' do
 
     it { expect(drop.liquid_method_missing(:foo)).to eq nil }
+
+  end
+
+  describe 'the template criteria surface' do
+
+    include_context 'content entry repository'
+
+    let(:repository) do
+      Locomotive::Steam::ContentEntryRepository.new(adapter, site, locale, content_type_repository)
+    end
+    let(:field) do
+      instance_double('BelongsToField', name: 'maker', persisted_name: 'maker_id',
+                      type: :belongs_to, target_id: '42')
+    end
+    let(:type) do
+      build_content_type('Articles', label_field_name: :title,
+                         fields_by_name: { maker: field },
+                         fields_by_persisted_name: { 'maker_id' => field },
+                         fields_with_default: [])
+    end
+    let(:scope_context) { ::Liquid::Context.new({}, {}, {}) }
+    let(:scoped_drop) do
+      described_class.new(type, repository.with(type)).tap { |d| d.context = scope_context }
+    end
+
+    before { scope_context['with_scope'] = { 'maker_id' => 'x' } }
+
+    it 'refuses an undeclared scope name on a read' do
+      expect { scoped_drop.count }
+        .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue,
+                        /maker_id cannot filter entries of articles/)
+    end
+
+    it 'refuses it through a slice too' do
+      expect { scoped_drop.load_slice(0, 5) }
+        .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue,
+                        /maker_id cannot filter entries of articles/)
+    end
+
+    it 'keeps a declared scope name working' do
+      scope_context['with_scope'] = { 'maker' => nil }
+
+      expect(scoped_drop.count).to eq 1
+    end
 
   end
 

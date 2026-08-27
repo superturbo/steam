@@ -197,6 +197,62 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     end
 
+    describe 'the liquid surface' do
+
+      let(:field) do
+        instance_double('BelongsToField', name: 'maker', persisted_name: 'maker_id',
+                        type: :belongs_to, target_id: '42')
+      end
+      let(:type) do
+        build_content_type('Articles', label_field_name: :title,
+                           fields_by_name: { maker: field },
+                           fields_by_persisted_name: { 'maker_id' => field },
+                           fields_with_default: [])
+      end
+
+      def liquid_prepared(conditions)
+        source = Locomotive::Steam::LiquidCriteria.wrap(conditions)
+
+        combined_conditions(repository.with(type).send(:query_parts, source).first)
+      end
+
+      it 'keeps a declared field and the public system names' do
+        expect(liquid_prepared('maker' => nil, '_slug' => 'x', 'created_at.exists' => true,
+                               '_visible' => false, '_position.lt' => 5))
+          .to include('maker_id' => nil, '_slug' => 'x', 'created_at.exists' => true,
+                      '_position.lt' => 5)
+      end
+
+      it 'keeps order_by for the ordering stage' do
+        source = Locomotive::Steam::LiquidCriteria.wrap('order_by' => 'title.asc')
+
+        _, order_by = repository.with(type).send(:query_parts, source)
+
+        expect(order_by).to eq 'title.asc'
+      end
+
+      # SEO names read from Liquid but do not filter.
+      %w(maker_id content_type_id site_id unknown_field _label
+         seo_title meta_description meta_keywords _translated).each do |name|
+        it "refuses #{name}" do
+          expect { liquid_prepared(name => 'x') }
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue,
+                            /#{name} cannot filter entries of articles/)
+        end
+      end
+
+      it 'refuses order_by under an operator' do
+        expect { liquid_prepared('order_by.gt' => 'title') }
+          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue,
+                          /order_by cannot filter entries of articles/)
+      end
+
+      it 'leaves the ruby surface permissive' do
+        expect(prepared_for('maker_id' => '42')).to include('maker_id' => '42')
+      end
+
+    end
+
     describe 'two bounds on one field' do
 
       let(:field)   { instance_double('NumberField', name: 'price', persisted_name: 'price', type: :float) }
@@ -239,7 +295,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       it 'keeps contradicting visibility criteria as two clauses' do
         repo = repository.with(type)
-        repo.send(:association_conditions=, '_visible' => true)
+        repo.send(:association_condition_sources=, ['_visible' => true])
 
         clauses, _ = repo.send(:query_parts, '_visible' => false)
 
@@ -253,7 +309,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
         it 'field-normalizes them like any caller input' do
           repo = repository.with(type)
-          repo.send(:association_conditions=, 'score' => '12')
+          repo.send(:association_condition_sources=, ['score' => '12'])
 
           clauses, _ = repo.send(:query_parts, {})
 
@@ -265,7 +321,7 @@ describe Locomotive::Steam::ContentEntryRepository do
       it 'keeps association caller criteria apart from the association bound' do
         repo = repository.with(type)
         repo.local_conditions['_id.in'] = %w(article-a)
-        repo.send(:association_conditions=, '_id.in' => %w(article-b))
+        repo.send(:association_condition_sources=, ['_id.in' => %w(article-b)])
 
         clauses, _ = repo.send(:query_parts, {})
 
@@ -342,7 +398,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       it 'rejects an operator in the association criteria' do
         repo = repository.with(type)
-        repo.send(:association_conditions=, '_visible.ne' => true)
+        repo.send(:association_condition_sources=, ['_visible.ne' => true])
 
         expect { repo.send(:query_parts, {}) }
           .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /operator/)

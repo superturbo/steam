@@ -31,7 +31,7 @@ module Locomotive
       def initialize_copy(source)
         super
         @memoized_mappers = {}
-        @association_conditions = source.association_conditions.dup
+        @association_condition_sources = source.association_condition_sources.dup
       end
 
       # Entity mapping
@@ -125,13 +125,13 @@ module Locomotive
         first { clauses.each { |clause| where(clause) } }
       end
 
-      def association_conditions
-        @association_conditions ||= {}
+      def association_condition_sources
+        @association_condition_sources ||= []
       end
 
-      attr_writer :association_conditions
+      attr_writer :association_condition_sources
 
-      protected :association_conditions, :association_conditions=
+      protected :association_condition_sources, :association_condition_sources=
 
       def value_for(entry, name, conditions = {})
         return nil if entry.nil?
@@ -395,8 +395,13 @@ module Locomotive
       end
 
       def normalized_condition_sources(conditions)
-        [conditions, association_conditions].reject(&:blank?).flat_map do |source|
-          Conditions.new(source, self.content_type, simple_clone).prepare.map do |criterion|
+        [conditions, *association_condition_sources].flat_map do |source|
+          liquid     = source.is_a?(LiquidCriteria)
+          attributes = liquid ? source.attributes : source
+
+          next [] if attributes.blank?
+
+          Conditions.new(attributes, self.content_type, simple_clone, liquid: liquid).prepare.map do |criterion|
             HashWithIndifferentAccess.new(criterion.key => criterion.value)
           end
         end
@@ -539,12 +544,13 @@ module Locomotive
 
         private_constant :Criterion, :ResolvedCriterion, :ID_FIELD
 
-        def initialize(conditions = {}, content_type, target_repository)
+        def initialize(conditions = {}, content_type, target_repository, liquid: false)
           normalized  = Adapters::Query::Criteria.normalize(conditions)
           @conditions = Adapters::Query::Criteria.reject_raw_operators!(normalized)
           @content_type = content_type
           @target_repository = target_repository
           @locale = target_repository.locale
+          @liquid = liquid
         end
 
         def prepare
@@ -554,6 +560,8 @@ module Locomotive
             ResolvedCriterion.new(key: key, name: name, field: field_for(name),
                                   operator: operator, value: value)
           end
+
+          validate_liquid_names!(resolved) if @liquid
 
           reject_field_collisions!(resolved)
 
@@ -595,6 +603,23 @@ module Locomotive
 
         def field_value?(operator)
           operator.nil? || !NON_FIELD_VALUE_KINDS.include?(operator.value_kind)
+        end
+
+        PUBLIC_QUERY_SYSTEM_FIELDS = %w(_id _slug _visible _position created_at updated_at).freeze
+
+        private_constant :PUBLIC_QUERY_SYSTEM_FIELDS
+
+        # A template names declared fields; system internals, persisted names
+        # and unknown names belong to the Ruby surface.
+        def validate_liquid_names!(resolved)
+          resolved.each do |criterion|
+            next if criterion.field
+            next if criterion.name == 'order_by' && criterion.operator.nil?
+            next if PUBLIC_QUERY_SYSTEM_FIELDS.include?(criterion.name)
+
+            raise Adapters::Query::InvalidValue,
+                  "#{criterion.name} cannot filter entries of #{@content_type.slug}"
+          end
         end
 
         # A field and its persisted name are one criterion; only the operator

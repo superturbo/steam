@@ -170,9 +170,9 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntry do
 
     subject { drop.send(:conditions_for, name) }
 
-    before { context['with_scope'] = 42 }
+    before { context['with_scope'] = { 'title' => 'x' } }
 
-    it { is_expected.to eq 42 }
+    it { is_expected.to eq Locomotive::Steam::LiquidCriteria.wrap('title' => 'x') }
 
     context 'the with_scope has been used before by another and different content type' do
 
@@ -184,7 +184,7 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntry do
     context 'the with_scope has been used before by the same content type' do
 
       before { context['with_scope_content_type'] = 'news' }
-      it { is_expected.to eq 42 }
+      it { is_expected.to eq Locomotive::Steam::LiquidCriteria.wrap('title' => 'x') }
 
     end
 

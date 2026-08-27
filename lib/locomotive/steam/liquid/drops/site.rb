@@ -25,10 +25,10 @@ module Locomotive
             @context.registers[:services].repositories.page
           end
 
+          # The shared scope hash belongs to every drop in the block.
           def scoped_pages
-            conditions = @context['with_scope'] || {}
-            conditions['slug.ne']   = '404'
-            conditions[:published]  = true
+            conditions = (@context['with_scope'] || {}).merge('slug.ne' => '404', published: true)
+
             repository.all(conditions)
           end
 

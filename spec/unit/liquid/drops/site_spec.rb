@@ -52,6 +52,16 @@ describe Locomotive::Steam::Liquid::Drops::Site do
       expect(subject.pages).to eq([{ 'title' => 'About us' }])
     end
 
+    it 'scopes its own criteria without touching the shared scope' do
+      context['with_scope'] = { 'title' => 'About us' }
+
+      expect { subject.pages }.not_to change { context['with_scope'] }
+
+      expect(services.repositories.page)
+        .to have_received(:all)
+        .with({ 'title' => 'About us', 'slug.ne' => '404', published: true })
+    end
+
   end
 
 end

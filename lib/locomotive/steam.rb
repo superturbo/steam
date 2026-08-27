@@ -3,6 +3,7 @@ require 'locomotive/common'
 require_relative      'steam/version'
 require_relative      'steam/configuration'
 require_relative_all  'steam/decorators'
+require_relative      'steam/liquid_criteria'
 require_relative      'steam/liquid'
 require_relative      'steam/errors'
 

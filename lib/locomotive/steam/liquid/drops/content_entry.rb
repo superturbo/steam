@@ -101,7 +101,9 @@ module Locomotive
           def conditions_for(name)
             # note: treat conditions only they apply to the content type (if it's a has_many/many_to_many relationships)
             _name = @context['with_scope_content_type']
-            !_name || _name == name ? @context['with_scope'] : nil
+            scope = !_name || _name == name ? @context['with_scope'] : nil
+
+            Locomotive::Steam::LiquidCriteria.wrap(scope) if scope.present?
           end
 
         end

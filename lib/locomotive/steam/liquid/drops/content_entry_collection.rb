@@ -117,7 +117,9 @@ module Locomotive
 
           def conditions
             _slug = (@context['with_scope_content_type'] ||= @content_type.slug)
-            _slug == @content_type.slug ? @context['with_scope'] : {}
+            scope = _slug == @content_type.slug ? @context['with_scope'] : nil
+
+            Locomotive::Steam::LiquidCriteria.wrap(scope) if scope.present?
           end
 
           def services

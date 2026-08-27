@@ -22,7 +22,7 @@ module Locomotive::Steam
       content_type_slug content_type site created_at updated_at
       seo_title meta_description meta_keywords _class_name
       _password_field _auth_reset_token _auth_reset_sent_at
-      _permalink _translated errors next previous
+      _permalink _translated errors next previous order_by
     ).each(&:freeze).freeze
 
     RESERVED_NAME_PREFIXES = %w(_ position_in_).each(&:freeze).freeze

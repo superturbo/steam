@@ -86,6 +86,7 @@ describe Locomotive::Steam::ContentType do
        Locomotive::Steam::ContentTypeField.new(name: 'note', type: 'text'),
        Locomotive::Steam::ContentTypeField.new(name: 'created_at', type: 'string'),
        Locomotive::Steam::ContentTypeField.new(name: '_custom', type: 'string'),
+       Locomotive::Steam::ContentTypeField.new(name: 'order_by', type: 'string'),
        Locomotive::Steam::ContentTypeField.new(name: 'title', type: 'string')]
     end
 
@@ -100,7 +101,7 @@ describe Locomotive::Steam::ContentType do
         'badge', 'badge_url',
         'secret', 'secret_hash',
         'note',
-        'created_at', '_custom'
+        'created_at', '_custom', 'order_by'
       )
     end
 

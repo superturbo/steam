@@ -112,7 +112,7 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentType do
        content_type_slug content_type site created_at updated_at
        seo_title meta_description meta_keywords _class_name
        _password_field _auth_reset_token _auth_reset_sent_at
-       _permalink _translated errors next previous).each do |name|
+       _permalink _translated errors next previous order_by).each do |name|
       it "refuses a field named #{name}" do
         expect do
           load_fields(<<~YAML)

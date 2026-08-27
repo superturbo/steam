@@ -212,12 +212,12 @@ describe 'Liquid adapter parity' do
         expect(render_liquid(source)).to eq ''
       end
 
-      it 'cannot widen the content type scope' do
+      it 'rejects the internal content type field' do
         source = "{% with_scope content_type_id: 'somewhere-else' %}" \
                  '{% for entry in contents.specimens %}[{{ entry._slug }}]{% endfor %}' \
                  '{% endwith_scope %}'
 
-        expect(render_liquid(source)).to eq ''
+        expect { render_liquid(source) }.to raise_error(::Liquid::Error)
       end
 
       it 'reverses the rows it took, not the ones it skipped' do
