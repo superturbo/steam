@@ -156,4 +156,54 @@ describe Locomotive::Steam::ContentTypeField do
 
   end
 
+  describe '#occupied_names' do
+
+    subject { field.occupied_names }
+
+    it { is_expected.to eq %w(title) }
+
+    context 'belongs_to type' do
+
+      let(:attributes) { { name: 'author', type: 'belongs_to' } }
+      it { is_expected.to eq %w(author author_id position_in_author) }
+
+    end
+
+    context 'select type' do
+
+      let(:attributes) { { name: 'category', type: 'select' } }
+      it { is_expected.to eq %w(category category_id) }
+
+    end
+
+    context 'many_to_many type' do
+
+      let(:attributes) { { name: 'topics', type: 'many_to_many' } }
+      it { is_expected.to eq %w(topics topic_ids) }
+
+    end
+
+    context 'file type' do
+
+      let(:attributes) { { name: 'photo', type: 'file' } }
+      it { is_expected.to eq %w(photo photo_size photo_url) }
+
+    end
+
+    context 'password type' do
+
+      let(:attributes) { { name: 'secret', type: 'password' } }
+      it { is_expected.to eq %w(secret secret_hash secret_confirmation) }
+
+    end
+
+    context 'has_many type' do
+
+      let(:attributes) { { name: 'articles', type: 'has_many', inverse_of: 'author' } }
+      it { is_expected.to eq %w(articles) }
+
+    end
+
+  end
+
 end

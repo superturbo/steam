@@ -54,6 +54,59 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     end
 
+    describe 'a name owned by two fields' do
+
+      let(:field) do
+        instance_double('BelongsToField', name: 'maker', persisted_name: 'maker_id',
+                        type: :belongs_to, target_id: '42')
+      end
+      let(:extra) do
+        instance_double('StringField', name: 'maker_id', persisted_name: 'maker_id', type: :string)
+      end
+      let(:type) do
+        build_content_type('Articles', label_field_name: :title,
+                           fields_by_name: { maker: field, maker_id: extra },
+                           ambiguous_field_names: %w(maker maker_id), fields_with_default: [])
+      end
+
+      it 'refuses the shared name' do
+        expect { prepared_for('maker_id' => 'zzz') }
+          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /maker_id has more than one owner/)
+      end
+
+      it 'refuses the shared name under any operator' do
+        expect { prepared_for('maker_id.ne' => 'zzz') }
+          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /maker_id has more than one owner/)
+      end
+
+      it 'refuses every name of the colliding group' do
+        expect { prepared_for('maker' => nil) }
+          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /maker has more than one owner/)
+      end
+
+      it 'refuses to order by any name of the colliding group' do
+        %w(maker maker_id).each do |name|
+          expect { repository.with(type).all(order_by: name) }
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /#{name} has more than one owner/)
+        end
+      end
+
+      context 'the primary key name is contested' do
+
+        let(:type) do
+          build_content_type('Articles', label_field_name: :title,
+                             ambiguous_field_names: %w(_id), fields_with_default: [])
+        end
+
+        it 'refuses it like any other name' do
+          expect { prepared_for('_id' => '42') }
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /_id has more than one owner/)
+        end
+
+      end
+
+    end
+
     describe 'two bounds on one field' do
 
       let(:field)   { instance_double('NumberField', name: 'price', persisted_name: 'price', type: :float) }

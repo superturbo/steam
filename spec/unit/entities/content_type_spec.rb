@@ -30,6 +30,45 @@ describe Locomotive::Steam::ContentType do
 
   end
 
+  describe '#ambiguous_field_names' do
+
+    let(:fields) do
+      [Locomotive::Steam::ContentTypeField.new(name: 'maker', type: 'belongs_to'),
+       Locomotive::Steam::ContentTypeField.new(name: 'maker_id', type: 'string'),
+       Locomotive::Steam::ContentTypeField.new(name: 'topics', type: 'many_to_many'),
+       Locomotive::Steam::ContentTypeField.new(name: 'topic_ids', type: 'string'),
+       Locomotive::Steam::ContentTypeField.new(name: 'categories', type: 'many_to_many'),
+       Locomotive::Steam::ContentTypeField.new(name: 'category', type: 'many_to_many'),
+       Locomotive::Steam::ContentTypeField.new(name: 'photo', type: 'file'),
+       Locomotive::Steam::ContentTypeField.new(name: 'photo_size', type: 'string'),
+       Locomotive::Steam::ContentTypeField.new(name: 'badge', type: 'file'),
+       Locomotive::Steam::ContentTypeField.new(name: 'badge_url', type: 'string'),
+       Locomotive::Steam::ContentTypeField.new(name: 'secret', type: 'password'),
+       Locomotive::Steam::ContentTypeField.new(name: 'secret_hash', type: 'string'),
+       Locomotive::Steam::ContentTypeField.new(name: 'note', type: 'string'),
+       Locomotive::Steam::ContentTypeField.new(name: 'note', type: 'text'),
+       Locomotive::Steam::ContentTypeField.new(name: 'created_at', type: 'string'),
+       Locomotive::Steam::ContentTypeField.new(name: '_custom', type: 'string'),
+       Locomotive::Steam::ContentTypeField.new(name: 'title', type: 'string')]
+    end
+
+    subject { content_type.ambiguous_field_names }
+
+    it 'lists every contested entry name along with the names of its owners' do
+      is_expected.to contain_exactly(
+        'maker', 'maker_id',
+        'topics', 'topic_ids',
+        'categories', 'category', 'category_ids',
+        'photo', 'photo_size',
+        'badge', 'badge_url',
+        'secret', 'secret_hash',
+        'note',
+        'created_at', '_custom'
+      )
+    end
+
+  end
+
   describe '#field_label_of' do
 
     subject { content_type.field_label_of(:title) }

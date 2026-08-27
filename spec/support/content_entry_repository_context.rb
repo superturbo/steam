@@ -37,7 +37,8 @@ RSpec.shared_context 'content entry repository' do
       localized_names:        [],
       select_fields:          [],
       association_fields:     [],
-      fields_by_name:         {}
+      fields_by_name:         {},
+      ambiguous_field_names:  []
     }
 
     attributes = defaults.merge(attributes)

@@ -41,6 +41,22 @@ module Locomotive::Steam
       !fields.localized_names.blank?
     end
 
+    def self.entry_name_owners(fields)
+      fields.each_with_object(Hash.new { |hash, key| hash[key] = [] }) do |field, owners|
+        field.occupied_names.each { |name| owners[name] << field }
+      end
+    end
+
+    # A collision invalidates the shared name and every field that owns it.
+    def ambiguous_field_names
+      @ambiguous_field_names ||= self.class.entry_name_owners(fields.all).flat_map do |name, owners|
+        contested = owners.size > 1 ||
+          (ContentTypeField.reserved_name?(name) && owners.any? { |field| field.name.to_s == name })
+
+        contested ? [name, *owners.map { |field| field.name.to_s }] : []
+      end.uniq
+    end
+
     def persisted_field_names
       [].tap do |names|
         fields_by_name.each do |name, field|

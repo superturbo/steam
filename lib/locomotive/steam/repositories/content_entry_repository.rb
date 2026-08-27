@@ -335,6 +335,10 @@ module Locomotive
         criteria = Adapters::Query::OrderBy.decode(spec)
 
         criteria.each do |name, _|
+          if content_type.ambiguous_field_names.include?(name.to_s)
+            raise Adapters::Query::InvalidValue, "#{name} has more than one owner"
+          end
+
           field = content_type.fields_by_name[name.to_s]
 
           next if orderable?(field, name.to_s)
@@ -568,6 +572,10 @@ module Locomotive
         private_constant :NON_FIELD_VALUE_KINDS, :COERCED_TYPES, :ID_BACKED_TYPES
 
         def field_for(name)
+          if @content_type.ambiguous_field_names.include?(name)
+            raise Adapters::Query::InvalidValue, "#{name} has more than one owner"
+          end
+
           return ID_FIELD if name == '_id'
 
           @content_type.fields_by_name[name]

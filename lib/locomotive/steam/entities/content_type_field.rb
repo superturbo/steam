@@ -16,6 +16,26 @@ module Locomotive::Steam
       }.merge(attributes))
     end
 
+    # Names reserved for ContentEntry state and API.
+    RESERVED_NAMES = %w(
+      id _id _slug _label _visible _position site_id content_type_id
+      content_type_slug content_type site created_at updated_at
+      seo_title meta_description meta_keywords _class_name
+      _password_field _auth_reset_token _auth_reset_sent_at
+      _permalink _translated errors next previous
+    ).each(&:freeze).freeze
+
+    RESERVED_NAME_PREFIXES = %w(_ position_in_).each(&:freeze).freeze
+
+    private_constant :RESERVED_NAMES, :RESERVED_NAME_PREFIXES
+
+    def self.reserved_name?(name)
+      name = name.to_s
+
+      RESERVED_NAMES.include?(name) ||
+        RESERVED_NAME_PREFIXES.any? { |prefix| name.start_with?(prefix) }
+    end
+
     def type
       self[:type].try(:to_sym)
     end
@@ -108,6 +128,17 @@ module Locomotive::Steam
       when :has_many            then nil
       when :password            then nil
       else name
+      end
+    end
+
+    # Includes declared, persisted and derived names.
+    def occupied_names
+      case type
+      when :belongs_to            then [name.to_s, persisted_name, "position_in_#{name}"]
+      when :select, :many_to_many then [name.to_s, persisted_name]
+      when :file                  then [name.to_s, "#{name}_size", "#{name}_url"]
+      when :password              then [name.to_s, "#{name}_hash", "#{name}_confirmation"]
+      else [name.to_s]
       end
     end
 

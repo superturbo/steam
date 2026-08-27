@@ -28,7 +28,7 @@ module Locomotive
             def build_fields(list, filepath)
               list.each_with_index.map do |attributes, index|
                 build_field(attributes.keys.first, attributes.values.first, index, filepath)
-              end
+              end.tap { |fields| validate_namespace!(fields, filepath) }
             end
 
             def build_field(name, attributes, position, filepath)
@@ -42,11 +42,44 @@ module Locomotive
                   attributes[:label] = name.to_s.humanize
                 end
 
+                validate_name!(attributes, filepath)
                 validate_capabilities!(attributes, filepath)
 
                 if select_options = attributes.delete(:select_options)
                   attributes[:select_options] = build_select_options(select_options)
                 end
+              end
+            end
+
+            def validate_name!(attributes, filepath)
+              name = attributes[:name]
+
+              return unless Locomotive::Steam::ContentTypeField.reserved_name?(name)
+
+              raise Locomotive::Steam::UnsupportedSchemaError.new(:reserved_field_name,
+                "#{filepath}, field #{name}: #{name} is a reserved name")
+            end
+
+            def validate_namespace!(fields, filepath)
+              duplicate, _ = fields.map { |attributes| attributes[:name] }
+                                   .tally.find { |_, count| count > 1 }
+
+              if duplicate
+                raise Locomotive::Steam::UnsupportedSchemaError.new(:colliding_field_name,
+                  "#{filepath}, field #{duplicate}: declared more than once")
+              end
+
+              entities = fields.map do |attributes|
+                Locomotive::Steam::ContentTypeField.new(name: attributes[:name], type: attributes[:type])
+              end
+
+              Locomotive::Steam::ContentType.entry_name_owners(entities).each do |name, owners|
+                next unless owners.size > 1
+
+                names = owners.map { |owner| owner.name.to_s }.sort.to_sentence
+
+                raise Locomotive::Steam::UnsupportedSchemaError.new(:colliding_field_name,
+                  "#{filepath}: fields #{names} share the entry name #{name}")
               end
             end
 
