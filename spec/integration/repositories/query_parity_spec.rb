@@ -550,6 +550,29 @@ describe 'Query parity' do
       it("rejects #{c[:desc]}") { expect { slugs(c[:conditions]) }.to raise_error(c[:error]) }
     end
 
+    describe 'a has_many criterion' do
+
+      def makers
+        Locomotive::Steam::ContentEntryRepository.new(
+          adapter, site, AdapterParityFixture::LOCALE, type_repository)
+          .with(type_repository.by_slug('makers'))
+      end
+
+      [['specimens',        'x'],
+       ['specimens',        nil],
+       ['specimens.ne',     'x'],
+       ['specimens.ne',     nil],
+       ['specimens.gt',     'x'],
+       ['specimens.exists', true],
+       ['specimens.size',   2]].each do |key, operand|
+        it "rejects #{key} with #{operand.inspect}" do
+          expect { makers.all(key => operand) }
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /specimens is not queryable/)
+        end
+      end
+
+    end
+
     it 'a contradicted scope answers count and exists the same way' do
       expect(specimens.count(content_type_id: 'somewhere-else')).to eq 0
       expect(specimens.exists?(content_type_id: 'somewhere-else')).to be(false)

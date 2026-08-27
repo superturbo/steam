@@ -30,6 +30,23 @@ describe Locomotive::Steam::ContentType do
 
   end
 
+  describe '#unqueryable_field_names' do
+
+    let(:fields) do
+      [Locomotive::Steam::ContentTypeField.new(name: 'specimens', type: 'has_many'),
+       Locomotive::Steam::ContentTypeField.new(name: 'secret', type: 'password'),
+       Locomotive::Steam::ContentTypeField.new(name: 'maker', type: 'belongs_to'),
+       Locomotive::Steam::ContentTypeField.new(name: 'title', type: 'string')]
+    end
+
+    subject { content_type.unqueryable_field_names }
+
+    it 'returns every name of a field with no queryable persisted value' do
+      is_expected.to contain_exactly('specimens', 'secret', 'secret_hash', 'secret_confirmation')
+    end
+
+  end
+
   describe '#ambiguous_field_names' do
 
     let(:fields) do

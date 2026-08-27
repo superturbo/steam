@@ -107,6 +107,34 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     end
 
+    describe 'a field with no queryable persisted value' do
+
+      let(:field)  { instance_double('HasManyField', name: 'articles', persisted_name: nil, type: :has_many) }
+      let(:secret) { instance_double('PasswordField', name: 'secret', persisted_name: nil, type: :password) }
+      let(:type) do
+        build_content_type('Articles', label_field_name: :title,
+                           fields_by_name: { articles: field, secret: secret },
+                           unqueryable_field_names: %w(articles secret secret_hash secret_confirmation),
+                           fields_with_default: [])
+      end
+
+      { 'articles' => 'x', 'articles.ne' => 'x', 'articles.gt' => 'x',
+        'articles.exists' => true, 'articles.size' => 3, 'secret' => 'x',
+        'secret_hash.exists' => true, 'secret_confirmation' => 'x' }.each do |key, operand|
+        it "refuses the #{key} criterion" do
+          name = key.split('.').first
+
+          expect { prepared_for(key => operand) }
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /#{name} is not queryable/)
+        end
+      end
+
+      it 'keeps a name the schema does not know at all' do
+        expect(prepared_for('foobar' => 'x')).to include('foobar' => 'x')
+      end
+
+    end
+
     describe 'two bounds on one field' do
 
       let(:field)   { instance_double('NumberField', name: 'price', persisted_name: 'price', type: :float) }

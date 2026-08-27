@@ -47,6 +47,12 @@ module Locomotive::Steam
       end
     end
 
+    def unqueryable_field_names
+      @unqueryable_field_names ||= fields.all
+        .select { |field| field.persisted_name.nil? }
+        .flat_map(&:occupied_names)
+    end
+
     # A collision invalidates the shared name and every field that owns it.
     def ambiguous_field_names
       @ambiguous_field_names ||= self.class.entry_name_owners(fields.all).flat_map do |name, owners|

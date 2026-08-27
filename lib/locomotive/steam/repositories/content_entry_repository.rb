@@ -576,6 +576,10 @@ module Locomotive
             raise Adapters::Query::InvalidValue, "#{name} has more than one owner"
           end
 
+          if @content_type.unqueryable_field_names.include?(name)
+            raise Adapters::Query::InvalidValue, "#{name} is not queryable"
+          end
+
           return ID_FIELD if name == '_id'
 
           @content_type.fields_by_name[name]

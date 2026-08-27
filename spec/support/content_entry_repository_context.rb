@@ -31,14 +31,15 @@ RSpec.shared_context 'content entry repository' do
   # ContentType#fields_by_name is indifferent; the double has to be too.
   def build_content_type(name, attributes = {})
     defaults = {
-      _id:                    1,
-      slug:                   name.to_s.downcase,
-      order_by:               nil,
-      localized_names:        [],
-      select_fields:          [],
-      association_fields:     [],
-      fields_by_name:         {},
-      ambiguous_field_names:  []
+      _id:                     1,
+      slug:                    name.to_s.downcase,
+      order_by:                nil,
+      localized_names:         [],
+      select_fields:           [],
+      association_fields:      [],
+      fields_by_name:          {},
+      ambiguous_field_names:   [],
+      unqueryable_field_names: []
     }
 
     attributes = defaults.merge(attributes)
