@@ -7,8 +7,9 @@ describe Locomotive::Steam::ContentFieldValues do
     { 'text that reads as no number'  => [[:integer, '12x'],           :invalid_number],
       'a number past the bounds'      => [[:integer, 2**63],           :outside_numeric_bounds],
       'text past the bounds'          => [[:integer, '9' * 20],        :outside_numeric_bounds],
-      'text past the 19-digit cap'    => [[:integer, '0' * 20],        :outside_numeric_bounds],
-      'text no int64 could ever hold' => [[:integer, '9' * 1_000_000], :outside_numeric_bounds],
+      'text past the byte cap'        => [[:integer, '0' * 64 + '9'],  :numeric_text_too_long],
+      'float text past the byte cap'  => [[:float,   '0' * 100],       :numeric_text_too_long],
+      'extremely long integer text'   => [[:integer, '9' * 1_000_000], :numeric_text_too_long],
       'a value of another type'       => [[:integer, [1]],             :wrong_type],
       'text that reads as no boolean' => [[:boolean, 'yes'],           :invalid_boolean],
       'a number where a boolean goes' => [[:boolean, 2],               :wrong_type],
@@ -53,6 +54,47 @@ describe Locomotive::Steam::ContentFieldValues do
     it 'names what JSON text turned out to be, not the text it came from' do
       expect { described_class.normalize_input(:json, '[1, 2]') }
         .to raise_error(described_class::ParseError, 'expected a JSON object, got Array')
+    end
+
+  end
+
+  describe 'integer text' do
+
+    { 'a zero-padded value'        => ['0' * 18 + '12', 12],
+      'a short zero-padded value'  => ['00042', 42],
+      'a signed zero'              => ['-000', 0],
+      'a signed zero-padded value' => ['-00042', -42],
+      'a positively signed zero'   => ['+000', 0],
+      'padding up to the byte cap' => ['0' * 63 + '9', 9] }.each do |what, (text, expected)|
+      it "reads #{what} as its canonical number" do
+        expect(described_class.normalize_input(:integer, text)).to eq expected
+      end
+    end
+
+    it 'keeps reading short blank text as a null' do
+      expect(described_class.normalize_input(:integer, '   ')).to be_nil
+    end
+
+    it 'still refuses short blank text as a query operand' do
+      expect { described_class.number('   ', :integer) }
+        .to raise_error(described_class::ParseError) { |error| expect(error.reason).to eq :invalid_number }
+    end
+
+    it 'counts the byte cap on the text as handed over, before transcoding' do
+      text = ('0' * 40).encode(Encoding::UTF_16LE)
+
+      expect { described_class.normalize_input(:integer, text) }
+        .to raise_error(described_class::ParseError) { |error| expect(error.reason).to eq :numeric_text_too_long }
+    end
+
+    it 'reports the byte cap before the encoding' do
+      expect { described_class.number(%(1\xFF) + '0' * 100, :integer) }
+        .to raise_error(described_class::ParseError) { |error| expect(error.reason).to eq :numeric_text_too_long }
+    end
+
+    it 'refuses blank text past the byte cap before treating it as null' do
+      expect { described_class.normalize_input(:integer, ' ' * 100) }
+        .to raise_error(described_class::ParseError) { |error| expect(error.reason).to eq :numeric_text_too_long }
     end
 
   end

@@ -59,6 +59,12 @@ describe 'Query parity' do
     { desc: 'gt on a numeric field',
       conditions: { 'score.gt' => 5 }, expected: %w(arrays) },
 
+    { desc: 'a zero-padded numeric operand reads its canonical value',
+      conditions: { score: '0' * 18 + '10' }, expected: %w(arrays) },
+
+    { desc: 'numeric text past the byte cap matches nothing',
+      conditions: { price: '0' * 96 + '15.0' }, expected: [] },
+
     { desc: 'in on a select field resolves every option name',
       conditions: { 'category.in' => %w(alpha beta) }, expected: %w(arrays scalars) },
 

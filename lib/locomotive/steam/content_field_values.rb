@@ -13,8 +13,9 @@ module Locomotive::Steam
 
       REASONS = %i(invalid_boolean invalid_date invalid_encoding invalid_json
                    invalid_json_name invalid_json_value invalid_number
-                   invalid_password_hash json_too_deep outside_numeric_bounds
-                   unknown_select_option wrong_stored_type wrong_type).freeze
+                   invalid_password_hash json_too_deep numeric_text_too_long
+                   outside_numeric_bounds unknown_select_option
+                   wrong_stored_type wrong_type).freeze
 
       attr_reader :reason
 
@@ -48,18 +49,34 @@ module Locomotive::Steam
     # MongoDB's limit includes the document and localized field container.
     MAX_JSON_DEPTH = 98
 
+    # Allows canonical int64/double text while bounding parse work.
+    MAX_NUMERIC_TEXT_BYTES = 64
+
     private_constant :INTEGER_FORMAT, :FLOAT_FORMAT, :DASH_DATE, :SLASH_DATE, :ISO_TIME,
-                     :TO_S_TIME, :BOOLEANS, :MAX_JSON_DEPTH
+                     :TO_S_TIME, :BOOLEANS, :MAX_JSON_DEPTH, :MAX_NUMERIC_TEXT_BYTES
 
     module_function
 
+    def numeric_text(value)
+      if value.bytesize > MAX_NUMERIC_TEXT_BYTES
+        raise ParseError.new(:numeric_text_too_long, 'numeric text too long')
+      end
+
+      readable_text(value).strip
+    end
+
     def number(value, type)
-      candidate = readable_text(value).strip
-      format    = type == :integer ? INTEGER_FORMAT : FLOAT_FORMAT
+      parse_numeric_text(numeric_text(value), type)
+    end
+
+    def parse_numeric_text(candidate, type)
+      format = type == :integer ? INTEGER_FORMAT : FLOAT_FORMAT
 
       raise ParseError.new(:invalid_number, "invalid #{type} value") unless format.match?(candidate)
 
-      # Integer input is capped at 19 digits before parsing.
+      # Leading zeros do not count toward the integer digit bound.
+      candidate = candidate.sub(/\A([+-]?)0+(?=\d)/, '\1') if type == :integer
+
       if type == :integer && candidate.sub(/\A[+-]/, '').length > 19
         raise ParseError.new(:outside_numeric_bounds, 'number outside supported bounds')
       end
@@ -72,6 +89,8 @@ module Locomotive::Steam
 
       parsed
     end
+
+    private_class_method :numeric_text, :parse_numeric_text
 
     def date(value)
       candidate = readable_text(value).strip
@@ -186,7 +205,9 @@ module Locomotive::Steam
     def normalize_input(type, value, site = nil)
       return value if value.nil?
 
-      value = readable_text(value) if value.is_a?(String)
+      if value.is_a?(String) && !%i(integer float).include?(type)
+        value = readable_text(value)
+      end
 
       case type
       when :integer, :float               then input_number(value, type)
@@ -257,8 +278,13 @@ module Locomotive::Steam
     end
 
     def input_number(value, type)
-      return nil if blank_text?(value)
-      return number(value, type) if value.is_a?(String)
+      if value.is_a?(String)
+        text = numeric_text(value)
+
+        return nil if text.empty?
+
+        return parse_numeric_text(text, type)
+      end
 
       wanted = type == :integer ? Integer : Float
       parsed = wanted == Float && value.is_a?(Integer) ? value.to_f : value
