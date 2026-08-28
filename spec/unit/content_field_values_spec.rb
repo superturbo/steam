@@ -99,6 +99,54 @@ describe Locomotive::Steam::ContentFieldValues do
 
   end
 
+  describe 'an impossible calendar day' do
+
+    let(:site) { Struct.new(:timezone).new(ActiveSupport::TimeZone['UTC']) }
+
+    { 'a date-only moment' => '2019-02-29',
+      'an ISO moment'      => '2020-02-30T10:00:00Z',
+      'a thirteenth month' => '2020-13-01T10:00:00Z',
+      'a zeroth day'       => '2020-01-00T10:00:00Z' }.each do |what, text|
+      it "refuses #{what}" do
+        expect { described_class.normalize_input(:date_time, text, site) }
+          .to raise_error(described_class::ParseError) { |error| expect(error.reason).to eq :invalid_date }
+      end
+    end
+
+    it 'refuses a to_s moment as a query operand' do
+      expect { described_class.coerce_date_operand('2019-02-30 10:00:00 UTC', :date_time, site) }
+        .to raise_error(described_class::ParseError) { |error| expect(error.reason).to eq :invalid_date }
+    end
+
+    it 'refuses it on a date field the same way' do
+      expect { described_class.normalize_input(:date, '2019-02-29') }
+        .to raise_error(described_class::ParseError) { |error| expect(error.reason).to eq :invalid_date }
+    end
+
+    it 'refuses an impossible moment queried against a date field' do
+      expect { described_class.coerce_date_operand('2019-02-29T10:00:00Z', :date, site) }
+        .to raise_error(described_class::ParseError) { |error| expect(error.reason).to eq :invalid_date }
+    end
+
+    it 'keeps the leap day of a leap year' do
+      expect(described_class.normalize_input(:date_time, '2020-02-29T10:00:00Z', site))
+        .to eq Time.utc(2020, 2, 29, 10)
+    end
+
+    it 'holds in a non-UTC process timezone' do
+      old = ENV['TZ']
+      ENV['TZ'] = 'Pacific/Auckland'
+
+      expect { described_class.normalize_input(:date_time, '2019-02-29T23:30:00', site) }
+        .to raise_error(described_class::ParseError)
+      expect(described_class.normalize_input(:date_time, '2020-02-29T23:30:00', site))
+        .to eq Time.utc(2020, 2, 29, 23, 30)
+    ensure
+      ENV['TZ'] = old
+    end
+
+  end
+
   describe 'reading a query operand in no readable encoding' do
 
     it 'raises the structured encoding error before any parsing' do

@@ -34,6 +34,9 @@ describe 'Query parity' do
     { desc: 'a date the grammar cannot read matches nothing',
       conditions: { 'held_on.lte' => 'tomorrow' }, expected: [] },
 
+    { desc: 'an impossible calendar day matches nothing',
+      conditions: { at: '2015-02-29T08:30:00Z' }, expected: [] },
+
     { desc: 'gt treats true as greater than false',
       conditions: { 'flag.gt' => false }, expected: %w(scalars) },
 

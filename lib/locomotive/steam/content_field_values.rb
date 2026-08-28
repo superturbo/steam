@@ -106,6 +106,17 @@ module Locomotive::Steam
       end
     end
 
+    # Time parsers normalize an impossible day instead of rejecting it.
+    def assert_calendar_day!(candidate)
+      year, month, day = candidate[0, 10].split('-').map(&:to_i)
+
+      return if Date.valid_date?(year, month, day)
+
+      raise ParseError.new(:invalid_date, 'invalid date and time value')
+    end
+
+    private_class_method :assert_calendar_day!
+
     # A date on its own resolves to midnight in the zone it is given; an offset
     # the value carries decides the instant on its own.
     def date_time(value, zone)
@@ -114,6 +125,8 @@ module Locomotive::Steam
       unless DASH_DATE.match?(candidate) || ISO_TIME.match?(candidate)
         raise ParseError.new(:invalid_date, 'invalid date and time value')
       end
+
+      assert_calendar_day!(candidate)
 
       parsed = begin
         zone.parse(candidate)
@@ -164,6 +177,8 @@ module Locomotive::Steam
 
     def parse_moment(candidate, zone)
       return date_time(candidate, zone) unless TO_S_TIME.match?(candidate)
+
+      assert_calendar_day!(candidate)
 
       begin
         Time.strptime(candidate, '%Y-%m-%d %H:%M:%S %z')
