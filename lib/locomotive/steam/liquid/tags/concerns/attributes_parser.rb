@@ -9,8 +9,8 @@ module Locomotive
         module Concerns
 
           # Parses the Ruby-like attributes DSL of the with_scope tag (e.g.
-          # `a: 1, providers.in: ['acme'], title: /foo/i, ref: some.var`) with
-          # Prism. Fail-closed: anything outside the accepted node set raises
+          # `a: 1, providers.in: ['acme'], ref: some.var`) with Prism.
+          # Fail-closed: anything outside the accepted node set raises
           # Liquid::SyntaxError.
           module AttributesParser
             extend ActiveSupport::Concern
@@ -43,12 +43,13 @@ module Locomotive
               when ::Prism::HashNode               then visit_hash(node)
               when ::Prism::ArrayNode              then node.elements.map { |e| visit(e) }
               when ::Prism::SymbolNode             then node.unescaped.to_sym
-              when ::Prism::StringNode             then string_value(node)
+              when ::Prism::StringNode             then node.unescaped
               when ::Prism::IntegerNode            then node.value
               when ::Prism::FloatNode              then node.value
               when ::Prism::TrueNode               then true
               when ::Prism::FalseNode              then false
-              when ::Prism::RegularExpressionNode  then visit_regexp(node)
+              when ::Prism::RegularExpressionNode
+                raise ::Liquid::SyntaxError, 'regular expression literals are not supported in with_scope'
               when ::Prism::CallNode               then visit_call(node)
               else
                 unsupported!
@@ -109,41 +110,6 @@ module Locomotive
             def variable_chain?(node)
               node.is_a?(::Prism::CallNode) && !node.safe_navigation? &&
                 node.arguments.nil? && node.block.nil?
-            end
-
-            REGEXP_SHAPE = %r{\A/[^/]+/[imx]*\z}.freeze
-
-            private_constant :REGEXP_SHAPE
-
-            # Reject the removed quoted-regexp form instead of treating it as text.
-            def string_value(node)
-              value = node.unescaped
-
-              if value.match?(REGEXP_SHAPE)
-                raise ::Liquid::SyntaxError, 'A with_scope regexp must be a literal, not a quoted string'
-              end
-
-              value
-            end
-
-            # Only i/m/x flags are supported; encoding (u/e/s/n) and once (o)
-            # flags are rejected, and an invalid pattern is reported as a syntax
-            # error rather than leaking a RegexpError.
-            def visit_regexp(node)
-              if node.once? || node.utf_8? || node.euc_jp? || node.windows_31j? || node.ascii_8bit?
-                unsupported!
-              end
-
-              options = 0
-              options |= Regexp::IGNORECASE if node.ignore_case?
-              options |= Regexp::MULTILINE  if node.multi_line?
-              options |= Regexp::EXTENDED   if node.extended?
-
-              begin
-                Regexp.new(node.unescaped, options)
-              rescue RegexpError
-                unsupported!
-              end
             end
 
             REMOVED_ALL_FORM = /\A\s*\$and\s*:/

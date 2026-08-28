@@ -14,7 +14,7 @@ describe Locomotive::Steam::Liquid::Tags::WithScope do
 
   end
 
-  describe 'a removed or unknown operator is not recognised' do
+  describe 'an operator outside the registry' do
 
     %w(near within approx).each do |operator|
       context "with #{operator}" do
@@ -25,7 +25,7 @@ describe Locomotive::Steam::Liquid::Tags::WithScope do
 
   end
 
-  describe 'the removed all operand form' do
+  describe 'an all operand spelled as raw operator text' do
 
     let(:source) { %q({% with_scope categories.all: "$and: ['A', 'B']" %}42{% endwith_scope %}) }
 
@@ -50,7 +50,7 @@ describe Locomotive::Steam::Liquid::Tags::WithScope do
     let(:source) { '{% with_scope my_filters %}42{% endwith_scope %}' }
 
     { 'an operator the tag does not offer'  => { 'price.eq' => 1 },
-      'a removed operator'                  => { 'price.near' => 1 },
+      'an operator outside the registry'    => { 'price.near' => 1 },
       'a raw Mongo operator'                => { '$where' => 'sleep(1)' },
       'a nested field path'                 => { 'address.location.ne' => 1 },
       'a raw Mongo operator inside a value'  => { 'price' => { '$gt' => 1 } } }.each do |what, filters|
@@ -140,11 +140,22 @@ describe Locomotive::Steam::Liquid::Tags::WithScope do
 
   end
 
+  describe 'a regexp literal' do
+
+    let(:source) { "{% with_scope title: /Like this one|or this one/ %}42{% endwith_scope %}" }
+
+    it { expect { output }.to raise_error(::Liquid::SyntaxError, /regular expression literals are not supported/) }
+
+  end
+
   describe 'a quoted string shaped like a regexp' do
 
-    let(:source) { "{% with_scope title: '/foo/i' %}42{% endwith_scope %}" }
+    let(:source) { "{% with_scope title: '/foo/i' %}{% assign conditions = with_scope %}{% endwith_scope %}" }
 
-    it { expect { output }.to raise_error(::Liquid::SyntaxError, /must be a literal/) }
+    it 'stays text' do
+      output
+      expect(conditions['title']).to eq '/foo/i'
+    end
 
   end
 
@@ -214,20 +225,6 @@ describe Locomotive::Steam::Liquid::Tags::WithScope do
 
     end
     
-    describe 'decode regexps' do
-
-      let(:source) { "{% with_scope title: /Like this one|or this one/ %}{% assign conditions = with_scope %}{% endwith_scope %}" }
-      it { expect(conditions['title']).to eq(/Like this one|or this one/) }
-
-    end
-
-    describe 'decode regexps with case-insensitive' do
-
-      let(:source) { "{% with_scope title: /like this/ix %}{% assign conditions = with_scope %}{% endwith_scope %}" }
-      it { expect(conditions['title']).to eq(/like this/ix) }
-
-    end
-
     describe 'decode content entry' do
 
       let(:entry) {

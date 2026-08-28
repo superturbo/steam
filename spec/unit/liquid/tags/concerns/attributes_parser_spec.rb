@@ -33,10 +33,6 @@ describe Locomotive::Steam::Liquid::Tags::Concerns::AttributesParser do
       expect(parse('nested: { a: 1 }')).to eq(nested: { a: 1 })
     end
 
-    it 'parses a regexp with flags' do
-      expect(parse('title: /foo/imx')).to eq(title: /foo/mix)
-    end
-
     it 'refuses a key named twice, however it is spelled' do
       expect { parse('a: 1, a: 2') }.to raise_error(::Liquid::SyntaxError)
       expect { parse('a: 1, "a" => 2') }.to raise_error(::Liquid::SyntaxError)
@@ -82,9 +78,20 @@ describe Locomotive::Steam::Liquid::Tags::Concerns::AttributesParser do
       expect(parse(%q{name: "$and: ['A']"})).to eq(name: "$and: ['A']")
     end
 
+    it 'reads a quoted value as text whatever its shape' do
+      expect(parse("url: '/about/'")).to eq(url: '/about/')
+      expect(parse("path.in: ['/about/']")).to eq('path.in': ['/about/'])
+      expect(parse("maker: { _id: '/about/' }")).to eq(maker: { _id: '/about/' })
+      expect(parse("title: '/foo/i'")).to eq(title: '/foo/i')
+    end
+
+    it 'reads a path without a trailing slash as text' do
+      expect(parse("url: '/about'")).to eq(url: '/about')
+    end
+
   end
 
-  describe 'the removed all operand form' do
+  describe 'an all operand spelled as raw operator text' do
 
     it 'refuses it rather than reading it as a value nothing matches' do
       expect { parse(%q{categories.all: "$and: ['A', 'B']"}) }
@@ -108,7 +115,7 @@ describe Locomotive::Steam::Liquid::Tags::Concerns::AttributesParser do
         .to eq(payload: { :'categories.all' => "$and: ['A']" })
     end
 
-    it 'still parses the array operand it was replaced by' do
+    it 'parses the array operand form' do
       expect(parse(%q{categories.all: ['A', 'B']})).to eq(:'categories.all' => %w(A B))
     end
 
@@ -142,16 +149,12 @@ describe Locomotive::Steam::Liquid::Tags::Concerns::AttributesParser do
       expect { parse('ref: foo&.bar') }.to raise_error(::Liquid::SyntaxError)
     end
 
-    it 'raises on a regexp once (o) flag' do
-      expect { parse('title: /foo/o') }.to raise_error(::Liquid::SyntaxError)
-    end
-
-    it 'raises on a regexp encoding (u) flag' do
-      expect { parse('title: /foo/u') }.to raise_error(::Liquid::SyntaxError)
-    end
-
-    it 'raises on an invalid regexp pattern instead of leaking a RegexpError' do
-      expect { parse('title: /[z-a]/') }.to raise_error(::Liquid::SyntaxError)
+    it 'refuses a regexp literal whatever its flags or pattern' do
+      ['title: /foo/', 'title: /foo/imx', 'title: /foo/o', 'title: /foo/u',
+       'title: /[z-a]/'].each do |markup|
+        expect { parse(markup) }
+          .to raise_error(::Liquid::SyntaxError, /regular expression literals are not supported in with_scope/)
+      end
     end
 
     it 'raises on every range literal' do
@@ -159,16 +162,6 @@ describe Locomotive::Steam::Liquid::Tags::Concerns::AttributesParser do
        'price: 1..', 'price: ..3'].each do |markup|
         expect { parse(markup) }.to raise_error(::Liquid::SyntaxError)
       end
-    end
-
-    it 'raises on a quoted pattern wherever it sits' do
-      ["url: '/about/'", "path.in: ['/about/']", "maker: { _id: '/about/' }"].each do |markup|
-        expect { parse(markup) }.to raise_error(::Liquid::SyntaxError)
-      end
-    end
-
-    it 'reads a path without a trailing slash as text' do
-      expect(parse("url: '/about'")).to eq(url: '/about')
     end
 
     it 'validates the right operand of a + operation' do
