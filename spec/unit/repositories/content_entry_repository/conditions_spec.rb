@@ -253,6 +253,24 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     end
 
+    context 'boolean fields' do
+
+      let(:field)   { instance_double('BooleanField', name: 'flag', persisted_name: 'flag', type: :boolean) }
+      let(:_fields) { instance_double('Fields', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: [field]) }
+
+      it 'refuses a Range directly or inside an Array' do
+        [{ 'flag' => 1..5 }, { 'flag' => [true, 1..5] }].each do |conditions|
+          expect { prepared_for(conditions) }
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /expected a boolean/)
+        end
+      end
+
+      it 'keeps a scalar comparison operand' do
+        expect(prepared_for('flag.gte' => 'false')).to include('flag.gte' => false)
+      end
+
+    end
+
     describe 'two bounds on one field' do
 
       let(:field)   { instance_double('NumberField', name: 'price', persisted_name: 'price', type: :float) }

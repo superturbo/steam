@@ -474,6 +474,10 @@ describe 'Query parity' do
       conditions: { 'maker.gt' => 'maker-one' },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
 
+    { desc: 'a Range on a boolean field',
+      conditions: { flag: 1..5 },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
     { desc: 'a Regexp on a many_to_many field',
       conditions: { topics: /topic/ },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },

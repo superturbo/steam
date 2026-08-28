@@ -867,8 +867,8 @@ module Locomotive
 
         def value_to_boolean(value, field)
           case value
-          # a Range or Regexp is its own plain-field expression, not an operand
-          when nil, Range, Regexp then value
+          # a Regexp is its own plain-field expression, not an operand
+          when nil, Regexp then value
           when Array       then value.map { |element| value_to_boolean(element, field) }
           when true, false then value
           when String      then parse_boolean(value, field)
