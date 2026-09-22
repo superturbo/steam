@@ -17,8 +17,6 @@ module Locomotive
 
             OPERATORS = Locomotive::Steam::Adapters::Query::Operators::PUBLIC.map(&:to_s).freeze
 
-            SYMBOL_OPERATORS_REGEXP = /(\w+\.(#{OPERATORS.join('|')})){1}\s*\:/o
-
             def parse_markup(markup)
               body = ::Prism.parse("{#{clean_markup(markup)}}").then do |r|
                 r.success? ? r.value.statements.body : []
@@ -33,9 +31,59 @@ module Locomotive
 
             private
 
+            # Rewrites operator keys without changing quoted text.
             def clean_markup(markup)
-              # convert symbol operators into valid ruby code
-              markup.gsub(SYMBOL_OPERATORS_REGEXP, ':"\1" =>')
+              operator_keys(markup).reverse_each do |from, to, name|
+                replacement = %(:"#{name}" =>).force_encoding(markup.encoding)
+
+                markup = markup.byteslice(0, from) + replacement + markup.byteslice(to..-1)
+              end
+
+              markup
+            end
+
+            # Prism offsets count bytes, so the splice above does too.
+            def operator_keys(markup)
+              tokens = ::Prism.lex(markup).value.map(&:first)
+
+              tokens.each_index.with_object([]) do |index, keys|
+                field, dot, operator = tokens[index, 3]
+                next unless operator_key?(field, dot, operator)
+
+                colon = colon_after(tokens, index + 3)
+                next if colon.nil?
+
+                # Prism may include an adjacent value's opening quote in
+                # SYMBOL_BEGIN, so only the colon itself makes way.
+                keys << [field.location.start_offset,
+                         colon.location.start_offset + 1,
+                         "#{field.value}.#{operator.value}"]
+              end
+            end
+
+            # Prism may classify schema names as constants or ruby keywords.
+            FIELD_NAME = /\A\w+\z/
+
+            COLONS = %i(COLON SYMBOL_BEGIN).freeze
+
+            NEWLINES = %i(NEWLINE IGNORED_NEWLINE).freeze
+
+            private_constant :FIELD_NAME, :COLONS, :NEWLINES
+
+            # Nothing separates the field from its operator.
+            def operator_key?(field, dot, operator)
+              return false if operator.nil?
+
+              FIELD_NAME.match?(field.value.to_s) && dot.type == :DOT &&
+                operator.type == :IDENTIFIER && OPERATORS.include?(operator.value) &&
+                field.location.end_offset == dot.location.start_offset &&
+                dot.location.end_offset == operator.location.start_offset
+            end
+
+            def colon_after(tokens, index)
+              index += 1 while NEWLINES.include?(tokens[index]&.type)
+
+              tokens[index] if COLONS.include?(tokens[index]&.type)
             end
 
             def visit(node)

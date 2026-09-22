@@ -43,6 +43,37 @@ describe Locomotive::Steam::Liquid::Tags::Concerns::AttributesParser do
       expect(parse('f.gt: 5')).to eq(:'f.gt' => 5)
     end
 
+    it 'takes a value that follows the colon immediately' do
+      expect(parse('price.lt:50')).to eq(:'price.lt' => 50)
+      expect(parse(%q{name.in:['a']})).to eq(:'name.in' => ['a'])
+      expect(parse(%q{title.ne:'x'})).to eq(:'title.ne' => 'x')
+      expect(parse(%q{title.ne:"x"})).to eq(:'title.ne' => 'x')
+    end
+
+    it 'takes an operator key after non-ascii text' do
+      expect(parse(%q{title: 'Žalias', price.gte: 5}))
+        .to eq(:title => 'Žalias', :'price.gte' => 5)
+    end
+
+    it 'takes a field name ruby spells otherwise' do
+      expect(parse('case.in: [1]')).to eq(:'case.in' => [1])
+      expect(parse('end.ne: 1')).to eq(:'end.ne' => 1)
+      expect(parse('SKU.in: [1]')).to eq(:'SKU.in' => [1])
+    end
+
+    it 'allows whitespace between the operator suffix and the colon' do
+      expect(parse('price.gte : 5')).to eq(:'price.gte' => 5)
+      expect(parse("price.gte\n  : 5")).to eq(:'price.gte' => 5)
+      expect(parse("price.gte\n\n: 5")).to eq(:'price.gte' => 5)
+      expect(parse("price.gte\t: 5")).to eq(:'price.gte' => 5)
+    end
+
+    it 'refuses a field and an operator held apart by whitespace' do
+      ['price . gte: 5', 'price .gte: 5', 'price. gte: 5'].each do |markup|
+        expect { parse(markup) }.to raise_error(::Liquid::SyntaxError)
+      end
+    end
+
     it 'parses a bare identifier into a Liquid variable lookup' do
       value = parse('ref: bare')[:ref]
       expect(value).to be_a(::Liquid::VariableLookup)
@@ -87,6 +118,27 @@ describe Locomotive::Steam::Liquid::Tags::Concerns::AttributesParser do
 
     it 'reads a path without a trailing slash as text' do
       expect(parse("url: '/about'")).to eq(url: '/about')
+    end
+
+    it 'reads a value shaped like an operator key as text' do
+      expect(parse(%q{name: 'a.in: b'})).to eq(name: 'a.in: b')
+      expect(parse(%q{name: "a.gt: b"})).to eq(name: 'a.gt: b')
+      expect(parse(%q{name: "a\"b.in: c"})).to eq(name: 'a"b.in: c')
+    end
+
+    it 'reads it as text inside an array and a nested object' do
+      expect(parse(%q{tags: ['x.in: y']})).to eq(tags: ['x.in: y'])
+      expect(parse(%q{nested: { k: 'x.lt: y' }})).to eq(nested: { k: 'x.lt: y' })
+    end
+
+    it 'reads it as text in the middle of a sentence' do
+      expect(parse(%q{title: 'see foo.ne: bar'})).to eq(title: 'see foo.ne: bar')
+    end
+
+    it 'takes an operator key alongside such a value' do
+      expect(parse(%q{name.in: ['a.in: b']})).to eq(:'name.in' => ['a.in: b'])
+      expect(parse(%q{a.gt: 1, title: 'x.in: y', b.lt: 2}))
+        .to eq(:'a.gt' => 1, :title => 'x.in: y', :'b.lt' => 2)
     end
 
   end

@@ -308,6 +308,14 @@ describe 'Liquid adapter parity' do
         expect(render_liquid(source)).to eq '[Hidden]'
       end
 
+      it 'finds an entry by a value shaped like a criterion key' do
+        source = %q({% with_scope name: 'a.in: b' %}) +
+                 '{% for entry in contents.quoted %}[{{ entry.name }}]{% endfor %}' \
+                 '{% endwith_scope %}'
+
+        expect(render_liquid(source)).to eq '[a.in: b]'
+      end
+
       # all requires every operand; stored order and extra values do not matter.
       it 'narrows an array field to the rows holding every listed value' do
         names = ->(scope) do
