@@ -99,6 +99,68 @@ describe Locomotive::Steam::ContentFieldValues do
 
   end
 
+  describe 'a timezone offset' do
+
+    let(:utc)      { Struct.new(:timezone).new(ActiveSupport::TimeZone['UTC']) }
+    let(:vilnius)  { Struct.new(:timezone).new(ActiveSupport::TimeZone['Europe/Vilnius']) }
+
+    describe 'a valid UTC offset' do
+
+      ['2024-06-15T12:00:00+03:00', '2024-06-15T12:00:00+0300',
+       '2024-06-15T12:00:00+23:59', '2024-06-15T12:00:00-23:59',
+       '2024-06-15T12:00:00Z'].each do |text|
+        it "reads #{text}" do
+          expect(described_class.normalize_input(:date_time, text, utc)).to be_a(Time)
+        end
+      end
+
+      it 'reads one spelled the way Time prints it' do
+        expect(described_class.coerce_date_operand('2024-06-15 12:00:00 +0300', :date_time, utc))
+          .to eq Time.utc(2024, 6, 15, 9)
+        expect(described_class.coerce_date_operand('2024-06-15 12:00:00 UTC', :date_time, utc))
+          .to eq Time.utc(2024, 6, 15, 12)
+      end
+
+      it 'names the same instant whatever timezone the site keeps' do
+        %w(2024-06-15T12:00:00+03:00 2024-06-15T12:00:00+0300).each do |text|
+          expect(described_class.normalize_input(:date_time, text, utc))
+            .to eq described_class.normalize_input(:date_time, text, vilnius)
+        end
+      end
+
+    end
+
+    describe 'an invalid UTC offset' do
+
+      ['+99:99', '+9999', '+25:00', '+2500', '+24:00', '-24:00', '-2400',
+       '+00:60', '+0060', '-99:00', '+1560'].each do |offset|
+        it "refuses #{offset}" do
+          expect { described_class.normalize_input(:date_time, "2024-06-15T12:00:00#{offset}", utc) }
+            .to raise_error(described_class::ParseError) { |error| expect(error.reason).to eq :invalid_date }
+        end
+      end
+
+      it 'refuses one spelled the way Time prints it' do
+        expect { described_class.coerce_date_operand('2024-06-15 12:00:00 +0060', :date_time, utc) }
+          .to raise_error(described_class::ParseError) { |error| expect(error.reason).to eq :invalid_date }
+      end
+
+      it 'refuses it on a date field the same way' do
+        expect { described_class.coerce_date_operand('2024-06-15T12:00:00+25:00', :date, utc) }
+          .to raise_error(described_class::ParseError) { |error| expect(error.reason).to eq :invalid_date }
+      end
+
+    end
+
+    it 'reads a moment carrying none in the timezone the site keeps' do
+      expect(described_class.normalize_input(:date_time, '2024-06-15T12:00:00', utc))
+        .to eq Time.utc(2024, 6, 15, 12)
+      expect(described_class.normalize_input(:date_time, '2024-06-15T12:00:00', vilnius))
+        .to eq Time.utc(2024, 6, 15, 9)
+    end
+
+  end
+
   describe 'an impossible calendar day' do
 
     let(:site) { Struct.new(:timezone).new(ActiveSupport::TimeZone['UTC']) }

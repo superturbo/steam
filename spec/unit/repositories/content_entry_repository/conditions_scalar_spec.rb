@@ -133,6 +133,14 @@ describe Locomotive::Steam::ContentEntryRepository do
         end
       end
 
+      ['2019-09-10T10:30:00+25:00', '2019-09-10T10:30:00+00:60',
+       '2019-09-10 10:30:00 +0060'].each do |text|
+        context "an invalid UTC offset, #{text.inspect}" do
+          let(:value) { text }
+          it { expect(prepared['launched_at']).to eq Locomotive::Steam::Adapters::Query::Values.unmatchable }
+        end
+      end
+
     end
 
     context 'date fields' do

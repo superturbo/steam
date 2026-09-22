@@ -208,6 +208,42 @@ describe Locomotive::Steam::ContentEntry do
 
     end
 
+    context 'a date and time field' do
+
+      let(:field)           { instance_double('Field', name: :at, type: :date_time, persisted_name: :at) }
+      let(:required_fields) { [] }
+      let(:attributes)      { { at: '2024-06-15T12:00:00+03:00' } }
+
+      it 'keeps the instant the offset names' do
+        subject
+        expect(content_entry.attributes[:at]).to eq Time.utc(2024, 6, 15, 9)
+      end
+
+      context 'holding an invalid UTC offset' do
+
+        let(:attributes) { { at: '2024-06-15T12:00:00+25:00' } }
+
+        it { is_expected.to eq false }
+        it { subject; expect(content_entry.errors[:at]).to eq(['is invalid']) }
+
+        it 'leaves the value the caller sent' do
+          subject
+          expect(content_entry.attributes[:at]).to eq '2024-06-15T12:00:00+25:00'
+        end
+
+      end
+
+      context 'holding a moment spelled the way Time prints it' do
+
+        let(:attributes) { { at: '2024-06-15 12:00:00 +0300' } }
+
+        it { is_expected.to eq false }
+        it { subject; expect(content_entry.errors[:at]).to eq(['is invalid']) }
+
+      end
+
+    end
+
     context 'a json field' do
 
       let(:field)           { instance_double('Field', name: :payload, type: :json, persisted_name: :payload) }

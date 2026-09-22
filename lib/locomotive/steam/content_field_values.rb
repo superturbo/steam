@@ -117,6 +117,24 @@ module Locomotive::Steam
 
     private_class_method :assert_calendar_day!
 
+    # A numeric UTC offset ranges from 00:00 through 23:59.
+    OFFSET = /[+-](\d{2}):?(\d{2})\z/.freeze
+
+    private_constant :OFFSET
+
+    # Reject invalid offsets before a parser can discard or normalize them.
+    def assert_offset!(candidate)
+      return unless (match = OFFSET.match(candidate))
+
+      hours, minutes = match.captures.map(&:to_i)
+
+      return if hours <= 23 && minutes <= 59
+
+      raise ParseError.new(:invalid_date, 'invalid date and time value')
+    end
+
+    private_class_method :assert_offset!
+
     # A date on its own resolves to midnight in the zone it is given; an offset
     # the value carries decides the instant on its own.
     def date_time(value, zone)
@@ -127,6 +145,7 @@ module Locomotive::Steam
       end
 
       assert_calendar_day!(candidate)
+      assert_offset!(candidate)
 
       parsed = begin
         zone.parse(candidate)
@@ -179,6 +198,7 @@ module Locomotive::Steam
       return date_time(candidate, zone) unless TO_S_TIME.match?(candidate)
 
       assert_calendar_day!(candidate)
+      assert_offset!(candidate)
 
       begin
         Time.strptime(candidate, '%Y-%m-%d %H:%M:%S %z')
