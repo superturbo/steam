@@ -103,7 +103,7 @@ module Locomotive
       end
 
       def find(id)
-        clauses, _ = query_parts(_id: self.adapter.make_id(id))
+        clauses, _ = query_parts(_id: id)
         first { clauses.each { |clause| where(clause) } }
       end
 
@@ -787,7 +787,7 @@ module Locomotive
           case value
           when Array then value.map { |element| value_to_primary_key(element, field) }
           else
-            id = @target_repository.adapter.make_id(value)
+            id = adapter_id(value)
 
             id == false ? unmatchable(field, :invalid_id) : id
           end
@@ -875,9 +875,16 @@ module Locomotive
         def explicit_id(id, field)
           return unmatchable(field, :invalid_id) if id.nil?
 
-          key = @target_repository.adapter.make_id(id)
+          key = adapter_id(id)
 
           key == false ? unmatchable(field, :invalid_id) : key
+        end
+
+        # Numeric IDs obey the shared query domain before adapter coercion.
+        def adapter_id(value)
+          Locomotive::Steam::Adapters::Query::Values.numeric_operand(value) if value.is_a?(Numeric)
+
+          @target_repository.adapter.make_id(value)
         end
 
         # An unresolved slug must not gain nil semantics; only a real nil keeps it.

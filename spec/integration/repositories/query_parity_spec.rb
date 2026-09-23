@@ -112,6 +112,12 @@ describe 'Query parity' do
     { desc: 'a symbol id absent from both stores matches nothing',
       conditions: { _id: :ffffffffffffffffffffffff }, expected: [] },
 
+    { desc: 'a finite Float no store holds as an id matches nothing',
+      conditions: { _id: 1.5 }, expected: [] },
+
+    { desc: 'a finite Float no store holds as a belongs_to id matches nothing',
+      conditions: { maker: 1.5 }, expected: [] },
+
     { desc: 'scalar equality on a string field',
       conditions: { name: 'Scalars' }, expected: %w(scalars) },
 
@@ -510,6 +516,46 @@ describe 'Query parity' do
       conditions: { payload: { 'a' => BigDecimal('1.5') } },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
 
+    { desc: 'a Rational primary key',
+      conditions: { _id: Rational(1, 1) },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an integer beyond int64 inside a primary key list',
+      conditions: { '_id.in' => ['scalars', 2**63] },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a BigDecimal on a belongs_to field',
+      conditions: { maker: BigDecimal('1') },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a NaN inside a belongs_to document',
+      conditions: { maker: { _id: Float::NAN } },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an entry whose id is a Rational',
+      conditions: { maker: Data.define(:_id).new(_id: Rational(1, 1)) },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a Rational inside a many_to_many list',
+      conditions: { 'topics.in' => [Rational(1, 1)] },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an infinite component of a composite identity',
+      conditions: { topics: { _id: ['topic-a', Float::INFINITY] } },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an integer beyond int64 on a persisted belongs_to name',
+      conditions: { maker_id: 2**63 },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a BigDecimal inside a persisted many_to_many list',
+      conditions: { 'topic_ids.in' => [BigDecimal('1')] },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a Rational on a persisted select name',
+      conditions: { category_id: Rational(1, 1) },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
     { desc: 'a structural bound on a system field',
       conditions: { _position: [1]..[2] },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
@@ -630,6 +676,35 @@ describe 'Query parity' do
 
     ERROR_CASES.each do |c|
       it("rejects #{c[:desc]}") { expect { slugs(c[:conditions]) }.to raise_error(c[:error]) }
+    end
+
+    it 'reads a select option id on the persisted name' do
+      option = type_repository.select_options(type_repository.by_slug('specimens'), :category)
+                              .detect { |candidate| candidate.name[:en] == 'alpha' }
+
+      expect(slugs(category: 'alpha')).not_to be_empty
+      expect(slugs(category_id: option._id)).to match_array(slugs(category: 'alpha'))
+    end
+
+    describe 'finding by id' do
+
+      it 'refuses a number outside the numeric domain' do
+        [Rational(1, 1), BigDecimal('1'), 2**63, Float::NAN].each do |id|
+          expect { specimens.find(id) }.to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+        end
+      end
+
+      it 'finds nothing for a finite number no entry holds as its id' do
+        expect(specimens.find(1.5)).to be_nil
+      end
+
+      it 'finds an entry by its id or the text of its id' do
+        id = specimens.by_slug('scalars')._id
+
+        expect(specimens.find(id).name).to eq 'Scalars'
+        expect(specimens.find(id.to_s).name).to eq 'Scalars'
+      end
+
     end
 
     describe 'a has_many criterion' do

@@ -222,7 +222,7 @@ module Locomotive::Steam
         end
 
         private_class_method :list_elements, :propagate_unmatchable, :readable_operand,
-                             :readable_size, :range_bound, :readable_pattern?, :numeric_operand
+                             :readable_size, :range_bound, :readable_pattern?
 
       end
 
