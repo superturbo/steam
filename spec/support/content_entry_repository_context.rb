@@ -39,7 +39,7 @@ RSpec.shared_context 'content entry repository' do
       association_fields:      [],
       fields_by_name:           {},
       fields_by_persisted_name: {},
-      ambiguous_field_names:    [],
+      invalid_entry_names:      [],
       unqueryable_field_names:  []
     }
 

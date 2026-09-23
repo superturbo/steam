@@ -66,28 +66,32 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:type) do
         build_content_type('Articles', label_field_name: :title,
                            fields_by_name: { maker: field, maker_id: extra },
-                           ambiguous_field_names: %w(maker maker_id), fields_with_default: [])
+                           invalid_entry_names: %w(maker maker_id position_in_maker),
+                           fields_with_default: [])
       end
 
       it 'refuses the shared name' do
         expect { prepared_for('maker_id' => 'zzz') }
-          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /maker_id has more than one owner/)
+          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, "maker_id belongs to a field with conflicting entry names")
       end
 
       it 'refuses the shared name under any operator' do
         expect { prepared_for('maker_id.ne' => 'zzz') }
-          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /maker_id has more than one owner/)
+          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, "maker_id belongs to a field with conflicting entry names")
       end
 
       it 'refuses every name of the colliding group' do
-        expect { prepared_for('maker' => nil) }
-          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /maker has more than one owner/)
+        %w(maker position_in_maker).each do |name|
+          expect { prepared_for(name => nil) }
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue,
+                            "#{name} belongs to a field with conflicting entry names")
+        end
       end
 
       it 'refuses to order by any name of the colliding group' do
-        %w(maker maker_id).each do |name|
+        %w(maker maker_id position_in_maker).each do |name|
           expect { repository.with(type).all(order_by: name) }
-            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /#{name} has more than one owner/)
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, "#{name} belongs to a field with conflicting entry names")
         end
       end
 
@@ -95,12 +99,12 @@ describe Locomotive::Steam::ContentEntryRepository do
 
         let(:type) do
           build_content_type('Articles', label_field_name: :title,
-                             ambiguous_field_names: %w(_id), fields_with_default: [])
+                             invalid_entry_names: %w(_id), fields_with_default: [])
         end
 
         it 'refuses it like any other name' do
           expect { prepared_for('_id' => '42') }
-            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, /_id has more than one owner/)
+            .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, "_id belongs to a field with conflicting entry names")
         end
 
       end

@@ -67,7 +67,7 @@ describe Locomotive::Steam::ContentType do
 
   end
 
-  describe '#ambiguous_field_names' do
+  describe '#invalid_entry_names' do
 
     let(:fields) do
       [Locomotive::Steam::ContentTypeField.new(name: 'maker', type: 'belongs_to'),
@@ -87,19 +87,21 @@ describe Locomotive::Steam::ContentType do
        Locomotive::Steam::ContentTypeField.new(name: 'created_at', type: 'string'),
        Locomotive::Steam::ContentTypeField.new(name: '_custom', type: 'string'),
        Locomotive::Steam::ContentTypeField.new(name: 'order_by', type: 'string'),
-       Locomotive::Steam::ContentTypeField.new(name: 'title', type: 'string')]
+       Locomotive::Steam::ContentTypeField.new(name: 'title', type: 'string'),
+       Locomotive::Steam::ContentTypeField.new(name: 'avatar', type: 'file'),
+       Locomotive::Steam::ContentTypeField.new(name: 'author', type: 'belongs_to')]
     end
 
-    subject { content_type.ambiguous_field_names }
+    subject { content_type.invalid_entry_names }
 
-    it 'lists every contested entry name along with the names of its owners' do
+    it 'lists every entry name held by a conflicting field' do
       is_expected.to contain_exactly(
-        'maker', 'maker_id',
+        'maker', 'maker_id', 'position_in_maker',
         'topics', 'topic_ids',
         'categories', 'category', 'category_ids',
-        'photo', 'photo_size',
-        'badge', 'badge_url',
-        'secret', 'secret_hash',
+        'photo', 'photo_size', 'photo_url',
+        'badge', 'badge_size', 'badge_url',
+        'secret', 'secret_hash', 'secret_confirmation',
         'note',
         'created_at', '_custom', 'order_by'
       )

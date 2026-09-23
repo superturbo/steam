@@ -59,13 +59,13 @@ module Locomotive::Steam
         .flat_map(&:occupied_names)
     end
 
-    # A collision invalidates the shared name and every field that owns it.
-    def ambiguous_field_names
-      @ambiguous_field_names ||= self.class.entry_name_owners(fields.all).flat_map do |name, owners|
+    # A conflict invalidates every entry name held by its fields.
+    def invalid_entry_names
+      @invalid_entry_names ||= self.class.entry_name_owners(fields.all).flat_map do |name, owners|
         contested = owners.size > 1 ||
           (ContentTypeField.reserved_name?(name) && owners.any? { |field| field.name.to_s == name })
 
-        contested ? [name, *owners.map { |field| field.name.to_s }] : []
+        contested ? owners.flat_map(&:occupied_names) : []
       end.uniq
     end
 
