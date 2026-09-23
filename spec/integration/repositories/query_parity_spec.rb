@@ -502,6 +502,18 @@ describe 'Query parity' do
       conditions: { 'maker.in' => [%w(maker-one)] },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
 
+    { desc: 'a Rational on a system field',
+      conditions: { _position: Rational(1, 3) },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a BigDecimal inside an embedded document',
+      conditions: { payload: { 'a' => BigDecimal('1.5') } },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a structural bound on a system field',
+      conditions: { _position: [1]..[2] },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
     { desc: 'a Regexp on a many_to_many field',
       conditions: { topics: /topic/ },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },

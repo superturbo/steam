@@ -209,9 +209,11 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
       expect(filter('t.gt' => time)).to eq('t' => { '$gt' => time })
     end
 
-    it 'leaves a BigDecimal for the driver to serialize' do
-      amount = BigDecimal('1.5')
-      expect(filter('n.gt' => amount)).to eq('n' => { '$gt' => amount })
+    it 'refuses a number outside the shared domain before the driver sees it' do
+      [Rational(1, 3), BigDecimal('1.5')].each do |number|
+        expect { filter('_position' => number) }.to raise_error(invalid)
+        expect { filter('n.gt' => number) }.to raise_error(invalid)
+      end
     end
   end
 

@@ -6,8 +6,7 @@ module Locomotive::Steam
 
       # Compiles Steam's neutral query DSL into a MongoDB filter structure using
       # the shared operator registry and value coercions (Adapters::Query).
-      # Value types (Date, Time, BigDecimal, ...) are left untouched for BSON to
-      # serialize. The tenant boundary is not its concern — Query adds it.
+      # The tenant boundary is not its concern — Query adds it.
       class QueryCompiler
 
         CompiledQuery = Data.define(:filter, :options)

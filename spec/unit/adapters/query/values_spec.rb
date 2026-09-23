@@ -77,6 +77,12 @@ describe Locomotive::Steam::Adapters::Query::Values do
       expect(described_class.unmatchable?(described_class.range('a'..%(caf\xFF)))).to be true
     end
 
+    it 'refuses a bound that cannot be compared' do
+      [[1]..[2], { a: 1 }..nil, Object.new..nil].each do |range|
+        expect { described_class.range(range) }.to raise_error(invalid)
+      end
+    end
+
   end
 
   describe '.list' do
@@ -191,7 +197,7 @@ describe Locomotive::Steam::Adapters::Query::Values do
   describe '.scalar' do
 
     it 'passes comparable values through unchanged' do
-      [5, 4.2, 'a', Time.now, Date.today, BigDecimal('1.5')].each do |value|
+      [5, 4.2, 'a', Time.now, Date.today].each do |value|
         expect(described_class.scalar(value)).to eq value
       end
     end
@@ -255,6 +261,35 @@ describe Locomotive::Steam::Adapters::Query::Values do
       it "refuses #{label}" do
         expect { described_class.regexp(pattern) }
           .to raise_error(invalid, 'a Regexp must read UTF-8 text and hold no NUL byte')
+      end
+    end
+
+  end
+
+  describe 'the numeric domain' do
+
+    let(:message) { /is not a supported numeric operand or is outside its bounds/ }
+
+    def places(number)
+      { 'literal'        => -> { described_class.literal(number) },
+        'scalar'         => -> { described_class.scalar(number) },
+        'list element'   => -> { described_class.list([1, number]) },
+        'all element'    => -> { described_class.all_list([number]) },
+        'document value' => -> { described_class.literal('a' => { 'b' => number }) },
+        'range bound'    => -> { described_class.range(number..) } }
+    end
+
+    it 'takes an int64 integer or a finite float wherever a number stands' do
+      [2**63 - 1, -2**63, 0, 1.5].each do |number|
+        places(number).each_value { |read| expect(&read).not_to raise_error }
+      end
+    end
+
+    it 'refuses any other number wherever a number stands' do
+      [Rational(1, 3), BigDecimal('1.5'), Float::INFINITY, Float::NAN, 2**63, -2**63 - 1].each do |number|
+        places(number).each do |place, read|
+          expect(&read).to raise_error(invalid, message), "#{number.inspect} as a #{place}"
+        end
       end
     end
 

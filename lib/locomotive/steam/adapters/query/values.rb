@@ -38,6 +38,7 @@ module Locomotive::Steam
           when String, Symbol then readable_operand(value.to_s)
           when Enumerable
             raise InvalidValue, "#{value.class} is not a supported query collection"
+          when Numeric then numeric_operand(value)
           else Comparison.normalize_scalar(value)
           end
         end
@@ -149,6 +150,7 @@ module Locomotive::Steam
             raise InvalidValue, "#{value.class} is not a supported query collection"
           when true, false    then value
           when String, Symbol then readable_operand(value.to_s)
+          when Numeric        then numeric_operand(value)
           when Comparable     then Comparison.normalize_scalar(value)
           else raise InvalidValue, "value is not comparable: #{value.inspect}"
           end
@@ -199,10 +201,13 @@ module Locomotive::Steam
         end
 
         def range_bound(bound)
-          case bound
-          when String, Symbol then readable_operand(bound.to_s)
-          else bound
-          end
+          bound.nil? ? nil : scalar(bound)
+        end
+
+        def numeric_operand(value)
+          return value if NumericBounds.within?(value)
+
+          raise InvalidValue, "#{value.class} is not a supported numeric operand or is outside its bounds"
         end
 
         # Reject incompatible encodings before inspecting the source for NUL.
@@ -217,7 +222,7 @@ module Locomotive::Steam
         end
 
         private_class_method :list_elements, :propagate_unmatchable, :readable_operand,
-                             :readable_size, :range_bound, :readable_pattern?
+                             :readable_size, :range_bound, :readable_pattern?, :numeric_operand
 
       end
 

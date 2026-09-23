@@ -216,6 +216,15 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
     end
   end
 
+  describe '#matches? a number outside the shared domain' do
+    it 'refuses it before comparing' do
+      [Rational(1, 3), BigDecimal('1.5')].each do |number|
+        expect { described_class.new(:n, number, :en).matches?(build_entry(n: 1)) }.to raise_error(invalid)
+        expect { described_class.new('n.gt', number, :en).matches?(build_entry(n: 1)) }.to raise_error(invalid)
+      end
+    end
+  end
+
   describe '#matches? comparisons against an array field' do
     let(:entry) { build_entry(f: %w(awesome open\ bar)) }
 

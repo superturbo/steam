@@ -28,6 +28,7 @@ module Locomotive::Steam
   end
 end
 
+require_relative 'numeric_bounds'
 require_relative 'query/comparison'
 require_relative 'query/values'
 require_relative 'query/operators'
