@@ -91,6 +91,13 @@ describe Locomotive::Steam::Adapters::MongoDB::QueryCompiler do
     it { expect(filter(price: (..3))).to eq('price' => { '$lte' => 3 }) }
     it { expect(filter(price: (...3))).to eq('price' => { '$lt' => 3 }) }
     it { expect { filter(price: Range.new(nil, nil)) }.to raise_error(invalid) }
+
+    it 'refuses a pattern that cannot read utf-8 text' do
+      [Regexp.new("a\0b"), Regexp.new("\xFF\xFE".b)].each do |pattern|
+        expect { filter(name: pattern) }
+          .to raise_error(invalid, 'a Regexp must read UTF-8 text and hold no NUL byte')
+      end
+    end
   end
 
   describe '#compile filter — localisation aliases' do

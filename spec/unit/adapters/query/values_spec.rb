@@ -234,6 +234,32 @@ describe Locomotive::Steam::Adapters::Query::Values do
 
   end
 
+  describe '.regexp' do
+
+    { 'plain ascii'                  => /foo/,
+      'ascii with options'           => /foo/ix,
+      'utf-8 text'                   => /Žalias/,
+      'a non-ascii escape'           => Regexp.new('\\u00e9'),
+      'ascii built from binary text' => Regexp.new('foo'.b) }.each do |label, pattern|
+      it "keeps #{label} as the very pattern given" do
+        expect(described_class.regexp(pattern)).to equal pattern
+      end
+    end
+
+    { 'a NUL byte'                          => Regexp.new("a\0b"),
+      'ascii fixed to US-ASCII'             => Regexp.new('foo'.encode('US-ASCII'), Regexp::FIXEDENCODING),
+      'ascii fixed to another encoding'     => Regexp.new('foo'.encode('ISO-8859-1'), Regexp::FIXEDENCODING),
+      'text in another encoding'            => Regexp.new('café'.encode('ISO-8859-1')),
+      'binary text'                         => Regexp.new("\xFF\xFE".b),
+      'text in an encoding ascii cannot read' => Regexp.new("\uFEFF".encode('UTF-16LE')) }.each do |label, pattern|
+      it "refuses #{label}" do
+        expect { described_class.regexp(pattern) }
+          .to raise_error(invalid, 'a Regexp must read UTF-8 text and hold no NUL byte')
+      end
+    end
+
+  end
+
   describe '.unmatchable?' do
 
     it { expect(described_class.unmatchable?(described_class.scalar(nil))).to eq true }
@@ -250,6 +276,7 @@ describe Locomotive::Steam::Adapters::Query::Values do
       expect(described_class.coerce(:boolean, 'true')).to eq true
       expect(described_class.coerce(:size, '2')).to eq 2
       expect(described_class.coerce(:range, 1..3)).to eq(1..3)
+      expect(described_class.coerce(:regexp, /a/)).to eq(/a/)
     end
 
     it 'rejects an unknown value kind' do

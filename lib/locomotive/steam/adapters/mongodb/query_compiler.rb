@@ -100,7 +100,7 @@ module Locomotive::Steam
         # (honouring an exclusive end); everything else is a literal.
         def plain_value(value)
           case value
-          when Regexp then value
+          when Regexp then Adapters::Query::Values.coerce(:regexp, value)
           when Range  then range_bounds(value)
           else Adapters::Query::Values.literal(value)
           end

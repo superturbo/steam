@@ -67,6 +67,7 @@ module Locomotive::Steam
           when :exists         then @exists  = values.coerce(:boolean, @value)
           when :size           then @size    = values.coerce(:size, @value)
           when :range          then @range   = values.coerce(:range, @value)
+          when :matches        then @pattern = values.coerce(:regexp, @value)
           when :==, :eq, :ne   then @literal = values.coerce(:literal, @value)
           when :gt, :gte, :lt, :lte then @scalar = values.coerce(:scalar, @value)
           end
@@ -112,7 +113,7 @@ module Locomotive::Steam
 
         # MongoDB applies a regexp to string values only, array elements included.
         def regexp_match?(value)
-          elements(value).any? { |candidate| candidate.is_a?(String) && @value.match?(candidate) }
+          elements(value).any? { |candidate| candidate.is_a?(String) && @pattern.match?(candidate) }
         end
 
         def in_match?(value)

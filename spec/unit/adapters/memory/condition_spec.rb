@@ -199,6 +199,21 @@ describe Locomotive::Steam::Adapters::Memory::Condition do
     it('does not match when no element does') { expect(match?(%w(x y))).to eq false }
     it('does not match a non-string field') { expect(match?(5)).to eq false }
     it('does not match a missing or null field') { expect(match?(nil)).to eq false }
+
+    it 'matches utf-8 text with an ascii or utf-8 pattern' do
+      entry = build_entry(f: 'Žalias café')
+
+      expect(described_class.new(:f, /café/, :en).matches?(entry)).to eq true
+      expect(described_class.new(:f, /Žal/, :en).matches?(entry)).to eq true
+      expect(described_class.new(:f, /zz/, :en).matches?(entry)).to eq false
+    end
+
+    it 'refuses a pattern that cannot read utf-8 text before matching' do
+      pattern = Regexp.new('foo'.encode('US-ASCII'), Regexp::FIXEDENCODING)
+
+      expect { described_class.new(:f, pattern, :en).matches?(build_entry(f: 'Žalias foo')) }
+        .to raise_error(invalid, 'a Regexp must read UTF-8 text and hold no NUL byte')
+    end
   end
 
   describe '#matches? comparisons against an array field' do

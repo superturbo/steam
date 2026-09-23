@@ -7,7 +7,7 @@ module Locomotive::Steam
       # normalized value or raises InvalidValue. See docs/query_semantics.md.
       module Values
 
-        VALUE_KINDS = %i(literal list all_list scalar boolean size range).freeze
+        VALUE_KINDS = %i(literal list all_list scalar boolean size range regexp).freeze
 
         private_constant :VALUE_KINDS
 
@@ -113,6 +113,13 @@ module Locomotive::Steam
           Range.new(lower, upper, value.exclude_end?)
         end
 
+        # A portable pattern must match UTF-8 text in Ruby and survive BSON serialization.
+        def regexp(value)
+          return value if readable_pattern?(value)
+
+          raise InvalidValue, 'a Regexp must read UTF-8 text and hold no NUL byte'
+        end
+
         # A unique value no stored field can equal.
         UNMATCHABLE = Object.new.freeze
 
@@ -198,8 +205,19 @@ module Locomotive::Steam
           end
         end
 
+        # Reject incompatible encodings before inspecting the source for NUL.
+        def readable_pattern?(pattern)
+          readable = case pattern.encoding
+                     when Encoding::UTF_8    then true
+                     when Encoding::US_ASCII then !pattern.fixed_encoding?
+                     else false
+                     end
+
+          readable && !pattern.source.include?("\0")
+        end
+
         private_class_method :list_elements, :propagate_unmatchable, :readable_operand,
-                             :readable_size, :range_bound
+                             :readable_size, :range_bound, :readable_pattern?
 
       end
 
