@@ -478,6 +478,22 @@ describe 'Query parity' do
       conditions: { flag: 1..5 },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
 
+    { desc: 'a Range under ne whose bounds read as no number',
+      conditions: { 'score.ne' => 'a'..'b' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a Range under eq whose bounds read as no date',
+      conditions: { 'held_on.eq' => 'tomorrow'..'never' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a Range inside a list on a number field',
+      conditions: { score: ['a'..'b'] },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a Range under an operator on a text field',
+      conditions: { 'name.ne' => 'a'..'b' },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
     { desc: 'a Regexp on a many_to_many field',
       conditions: { topics: /topic/ },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },

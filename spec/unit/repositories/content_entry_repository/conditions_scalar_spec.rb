@@ -199,6 +199,24 @@ describe Locomotive::Steam::ContentEntryRepository do
             .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
         end
 
+        it 'refuses a Range under an operator whatever its bounds read as' do
+          %w(eq ne gt in).each do |operator|
+            ['2012-01-01'..'2012-03-01', 'tomorrow'..'2012-03-01'].each do |range|
+              expect { prepared_for("held_on.#{operator}" => range) }
+                .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue,
+                                'held_on takes a Range only as the whole operand of a plain field')
+            end
+          end
+        end
+
+        it 'refuses a Range inside a list or a document' do
+          [['2012-01-01'..'2012-03-01'], { 'a' => 'tomorrow'..'2012-03-01' }].each do |value|
+            expect { prepared_for('held_on' => value) }
+              .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue,
+                              'held_on takes a Range only as the whole operand of a plain field')
+          end
+        end
+
       end
 
       # Liquid renders {{ now }} through to_s and the action bridge through
@@ -548,6 +566,24 @@ describe Locomotive::Steam::ContentEntryRepository do
            [1]..[2]].each do |bad|
             expect { subject_for('price' => bad) }
               .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
+          end
+        end
+
+        it 'refuses a Range under an operator whatever its bounds read as' do
+          %w(eq ne gt in).each do |operator|
+            ['10'..'20', 'abc'..'20'].each do |range|
+              expect { subject_for("price.#{operator}" => range) }
+                .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue,
+                                'price takes a Range only as the whole operand of a plain field')
+            end
+          end
+        end
+
+        it 'refuses a Range inside a list or a document' do
+          [['10'..'20'], { 'a' => 'abc'..'20' }, [['abc'..'20']]].each do |value|
+            expect { subject_for('price' => value) }
+              .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue,
+                              'price takes a Range only as the whole operand of a plain field')
           end
         end
 

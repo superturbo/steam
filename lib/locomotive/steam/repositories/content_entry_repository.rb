@@ -576,8 +576,10 @@ module Locomotive
 
         COERCED_TYPES   = %i(id select date date_time integer float boolean belongs_to many_to_many).freeze
         ID_BACKED_TYPES = %i(id select belongs_to many_to_many).freeze
+        # Their grammar reads a Range as its bounds.
+        RANGE_TYPES     = %i(date date_time integer float).freeze
 
-        private_constant :NON_FIELD_VALUE_KINDS, :COERCED_TYPES, :ID_BACKED_TYPES
+        private_constant :NON_FIELD_VALUE_KINDS, :COERCED_TYPES, :ID_BACKED_TYPES, :RANGE_TYPES
 
         def field_for(name)
           if @content_type.ambiguous_field_names.include?(name)
@@ -652,6 +654,10 @@ module Locomotive
 
           if id_backed?(field) && field_value?(operator)
             validate_id_query!(resolved.name, operator, value)
+          end
+
+          if RANGE_TYPES.include?(field.type) && field_value?(operator)
+            validate_range_placement!(resolved.name, operator, value)
           end
 
           if field.type == :many_to_many && field_value?(operator)
@@ -803,6 +809,25 @@ module Locomotive
 
           raise Locomotive::Steam::Adapters::Query::InvalidValue,
                 "#{name} is matched by id, which a range or pattern cannot describe"
+        end
+
+        # Coercing a field reads a Range's bounds, and an unreadable bound
+        # leaves no Range for the adapter to refuse; settle placement first.
+        def validate_range_placement!(name, operator, value)
+          return unless (operator && value.is_a?(Range)) || nested_range?(value)
+
+          raise Locomotive::Steam::Adapters::Query::InvalidValue,
+                "#{name} takes a Range only as the whole operand of a plain field"
+        end
+
+        def nested_range?(value)
+          elements = case value
+                     when Array then value
+                     when Hash  then value.values
+                     else []
+                     end
+
+          elements.any? { |element| element.is_a?(Range) || nested_range?(element) }
         end
 
         def contains_range_or_pattern?(value)
