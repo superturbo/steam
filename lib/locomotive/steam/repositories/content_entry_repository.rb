@@ -654,6 +654,7 @@ module Locomotive
 
           if id_backed?(field) && field_value?(operator)
             validate_id_query!(resolved.name, operator, value)
+            validate_flat_list!(resolved.name, operator, value)
           end
 
           if RANGE_TYPES.include?(field.type) && field_value?(operator)
@@ -809,6 +810,14 @@ module Locomotive
 
           raise Locomotive::Steam::Adapters::Query::InvalidValue,
                 "#{name} is matched by id, which a range or pattern cannot describe"
+        end
+
+        # Each list element names one entry or option; a nested list names none.
+        def validate_flat_list!(name, operator, value)
+          return unless operator && LIST_VALUE_KINDS.include?(operator.value_kind)
+          return unless value.is_a?(Array) && value.any? { |element| element.is_a?(Array) }
+
+          raise Locomotive::Steam::Adapters::Query::InvalidValue, "#{name} takes a flat list"
         end
 
         # Coercing a field reads a Range's bounds, and an unreadable bound

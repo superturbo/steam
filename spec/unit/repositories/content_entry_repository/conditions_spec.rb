@@ -458,6 +458,11 @@ describe Locomotive::Steam::ContentEntryRepository do
         expect(prepared_for('_id.in' => %w(a b))).to include('_id.in' => %w(id-a id-b))
       end
 
+      it 'refuses a nested list' do
+        expect { prepared_for('_id.in' => [%w(a b)]) }
+          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, '_id takes a flat list')
+      end
+
       context 'an id the adapter cannot read' do
 
         before { allow(adapter).to receive(:make_id) { false } }
@@ -487,6 +492,11 @@ describe Locomotive::Steam::ContentEntryRepository do
       it 'converts the elements of a list operand' do
         expect(prepared_for('category.in' => %w(CMS)))
           .to include('category_id.in' => [42])
+      end
+
+      it 'refuses a nested list' do
+        expect { prepared_for('category.in' => [%w(CMS)]) }
+          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, 'category takes a flat list')
       end
 
       it 'leaves a non-field operand for its own kind to judge' do
@@ -524,6 +534,11 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:conditions)  { { 'person' => value } }
 
       it { expect(prepared).to eq({ '_visible' => true, 'content_type_id' => 1, 'person_id' => 42 }) }
+
+      it 'refuses a nested list under a list operator' do
+        expect { prepared_for('person.in' => [[42]]) }
+          .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, 'person takes a flat list')
+      end
 
       context 'the target value is a content entry' do
 
@@ -694,6 +709,25 @@ describe Locomotive::Steam::ContentEntryRepository do
               .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue)
 
             expect(content_type_repository).not_to have_received(:find)
+          end
+
+          it 'refuses a nested list before resolving any slug' do
+            %w(in nin all).each do |operator|
+              expect { prepared_for("tags.#{operator}" => [%w(A B)]) }
+                .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, 'tags takes a flat list')
+            end
+
+            expect(content_type_repository).not_to have_received(:find)
+          end
+
+          it 'reads a nested list under equality as one value too many' do
+            expect { prepared_for('tags' => [%w(A B)]) }
+              .to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue, 'tags takes one value with eq or ne')
+          end
+
+          it 'keeps a composite id document as one identity in the list' do
+            expect(prepared_for('tags.in' => [{ '_id' => [42, 'comp'] }]))
+              .to include('tag_ids.in' => [42, 'comp'])
           end
 
         end

@@ -494,6 +494,14 @@ describe 'Query parity' do
       conditions: { 'name.ne' => 'a'..'b' },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
 
+    { desc: 'a nested list under a many_to_many list operator',
+      conditions: { 'topics.in' => [%w(topic-a topic-b)] },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a nested list under a belongs_to list operator',
+      conditions: { 'maker.in' => [%w(maker-one)] },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
     { desc: 'a Regexp on a many_to_many field',
       conditions: { topics: /topic/ },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
