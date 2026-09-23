@@ -80,6 +80,40 @@ describe Locomotive::Steam::ContentEntryRepository do
 
   end
 
+  describe 'a slug generated without a site' do
+
+    let(:site) { nil }
+    let(:type) do
+      build_content_type('Articles', label_field_name: :title, fields: _fields, fields_with_default: [],
+                         fields_by_name: { title: instance_double('Field', name: :title, type: :string) })
+    end
+    let(:entries) do
+      [{ content_type_id: 1, _position: 0, _label: 'A B' },
+       { content_type_id: 1, _position: 1, _label: 'A-B' }]
+    end
+
+    it 'stays one value for any locale and still moves aside' do
+      slugs = repository.with(type).all.map { |entry| entry[:_slug] }
+
+      expect(slugs.map(&:scalar_fallback?)).to eq [true, true]
+      expect(slugs.map(&:default)).to eq %w(a-b a-b-1)
+    end
+
+    context 'given as one value' do
+
+      let(:entries) { [{ content_type_id: 1, _position: 0, _label: 'A B', _slug: 'chosen' }] }
+
+      it 'stays that value for any locale' do
+        slug = repository.with(type).all.first[:_slug]
+
+        expect(slug.scalar_fallback?).to be true
+        expect(slug[:fr]).to eq 'chosen'
+      end
+
+    end
+
+  end
+
   describe 'reading a stored entry' do
 
     let(:type) do

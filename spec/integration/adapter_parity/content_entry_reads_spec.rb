@@ -41,6 +41,15 @@ describe 'Adapter parity' do
         expect(specimens.first(flag: true).name).to eq 'Scalars'
       end
 
+      it 'reads a slug as present in every locale' do
+        visible = specimens.all.map(&:name)
+
+        %i(en fr).each do |locale|
+          expect(specimens(locale).all('_slug.exists' => true).map(&:name)).to eq visible
+          expect(specimens(locale).all('_slug.exists' => false)).to eq []
+        end
+      end
+
       it 'takes no criteria as nil or an empty Hash' do
         visible = specimens.all.map(&:name)
 

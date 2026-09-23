@@ -57,13 +57,20 @@ module Locomotive::Steam
           end
 
           def set_slug(entity, dataset)
+            slug = entity[:_slug]
+
+            if slug.respond_to?(:scalar_fallback?) && slug.scalar_fallback? && slug.default.present?
+              slug.translations = every_locale(slug.default)
+              return
+            end
+
             return unless entity._slug.blank?
 
             entity[:_slug] ||= Locomotive::Steam::Models::I18nField.new(:_slug, nil)
 
             unless entity._label.respond_to?(:translations)
-              # same value for any locale
-              entity[:_slug].translations = slugify(entity._id, entity._label, dataset)
+              generated = slugify(entity._id, entity._label, dataset, locales.presence || [nil])
+              entity[:_slug].translations = every_locale(generated)
               return
             end
 
@@ -72,19 +79,24 @@ module Locomotive::Steam
             locales.each do |locale|
               label = entity._label[locale] || entity._label[default_locale]
 
-              entity[:_slug][locale] = slugify(entity._id, label, dataset, locale)
+              entity[:_slug][locale] = slugify(entity._id, label, dataset, [locale])
             end
           end
 
-          def slugify(id, label, dataset, locale = nil)
+          # A slug shared by every locale has to be free in each of them.
+          def slugify(id, label, dataset, locales)
             base, index = label.to_s.permalink(false), nil
             _slugify = -> (i) { [base, i].compact.join('-') }
 
-            while !is_slug_unique?(id, _slugify.call(index), dataset, locale)
+            until locales.all? { |locale| is_slug_unique?(id, _slugify.call(index), dataset, locale) }
               index = index ? index + 1 : 1
             end
 
             _slugify.call(index)
+          end
+
+          def every_locale(value)
+            locales.blank? ? value : locales.to_h { |locale| [locale, value] }
           end
 
           def is_slug_unique?(id, slug, dataset, locale)

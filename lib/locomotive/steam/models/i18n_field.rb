@@ -76,8 +76,6 @@ module Locomotive::Steam
         to_hash.to_json
       end
 
-      protected
-
       def scalar_fallback?
         @scalar_fallback
       end
