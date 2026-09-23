@@ -308,6 +308,35 @@ describe 'Liquid adapter parity' do
         expect(render_liquid(source)).to eq '[Hidden]'
       end
 
+      describe 'a nil literal' do
+
+        def names(scope)
+          render_liquid("{% with_scope #{scope} %}" \
+                        '{% for entry in contents.specimens %}[{{ entry.name }}]{% endfor %}' \
+                        '{% endwith_scope %}')
+        end
+
+        it 'includes hidden entries when nil disables the visibility filter' do
+          expect(names('_visible: nil'))
+            .to eq '[All missing][Arrays][Embedded][Explicit nils][Hidden][Scalars][Zero]'
+        end
+
+        it 'matches a missing, null, or null-holding association' do
+          expect(names('topics: nil'))
+            .to eq '[All missing][Arrays][Embedded][Explicit nils]'
+        end
+
+        it 'keeps nil as a list operand' do
+          expect(names("labels.in: [nil, 'y']"))
+            .to eq '[All missing][Arrays][Explicit nils][Scalars][Zero]'
+        end
+
+        it 'uses the default order when order_by is nil' do
+          expect(names('order_by: nil')).to eq '[All missing][Arrays][Embedded][Explicit nils][Scalars][Zero]'
+        end
+
+      end
+
       it 'finds an entry by a value shaped like a criterion key' do
         source = %q({% with_scope name: 'a.in: b' %}) +
                  '{% for entry in contents.quoted %}[{{ entry.name }}]{% endfor %}' \

@@ -96,6 +96,7 @@ module Locomotive
               when ::Prism::FloatNode              then node.value
               when ::Prism::TrueNode               then true
               when ::Prism::FalseNode              then false
+              when ::Prism::NilNode                then nil
               when ::Prism::RegularExpressionNode
                 raise ::Liquid::SyntaxError, 'regular expression literals are not supported in with_scope'
               when ::Prism::CallNode               then visit_call(node)

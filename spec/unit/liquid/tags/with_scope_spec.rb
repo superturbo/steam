@@ -25,6 +25,17 @@ describe Locomotive::Steam::Liquid::Tags::WithScope do
 
   end
 
+  describe 'a nil key' do
+
+    ['nil', 'null'].each do |literal|
+      context "spelled #{literal}" do
+        let(:source) { "{% with_scope #{literal} => 1 %}42{% endwith_scope %}" }
+        it { expect { output }.to raise_error(::Liquid::SyntaxError, /invalid field name/) }
+      end
+    end
+
+  end
+
   describe 'an all operand spelled as raw operator text' do
 
     let(:source) { %q({% with_scope categories.all: "$and: ['A', 'B']" %}42{% endwith_scope %}) }

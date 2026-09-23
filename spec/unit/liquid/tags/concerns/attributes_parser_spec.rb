@@ -25,6 +25,13 @@ describe Locomotive::Steam::Liquid::Tags::Concerns::AttributesParser do
         .to eq(active: true, price: 42, ratio: 3.14, title: 'foo', hidden: false)
     end
 
+    it 'parses nil and null alike' do
+      expect(parse('_visible: nil')).to eq(_visible: nil)
+      expect(parse('_visible: null')).to eq(_visible: nil)
+      expect(parse(%q{tags.in: [nil, 'a']})).to eq(:'tags.in' => [nil, 'a'])
+      expect(parse('nested: { k: nil }')).to eq(nested: { k: nil })
+    end
+
     it 'parses nested arrays' do
       expect(parse('tags: [1, 2, [3, 4]]')).to eq(tags: [1, 2, [3, 4]])
     end
