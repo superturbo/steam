@@ -399,7 +399,7 @@ module Locomotive
           liquid     = source.is_a?(LiquidCriteria)
           attributes = liquid ? source.attributes : source
 
-          next [] if attributes.blank?
+          next [] if attributes.nil? || (attributes.is_a?(Hash) && attributes.empty?)
 
           Conditions.new(attributes, self.content_type, simple_clone, liquid: liquid).prepare.map do |criterion|
             HashWithIndifferentAccess.new(criterion.key => criterion.value)

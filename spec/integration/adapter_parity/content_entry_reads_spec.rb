@@ -41,6 +41,28 @@ describe 'Adapter parity' do
         expect(specimens.first(flag: true).name).to eq 'Scalars'
       end
 
+      it 'takes no criteria as nil or an empty Hash' do
+        visible = specimens.all.map(&:name)
+
+        expect(specimens.all(nil).map(&:name)).to eq visible
+        expect(specimens.all({}).map(&:name)).to eq visible
+        expect(specimens.count(nil)).to eq visible.size
+      end
+
+      it 'refuses criteria that are not a Hash, however empty' do
+        empty_lookalike = Object.new.tap { |object| object.define_singleton_method(:==) { |other| other == {} } }
+
+        [[], '', false, empty_lookalike].each do |criteria|
+          [-> { specimens.all(criteria) },
+           -> { specimens.first(criteria) },
+           -> { specimens.count(criteria) },
+           -> { specimens.exists?(criteria) }].each do |read|
+            expect(&read).to raise_error(Locomotive::Steam::Adapters::Query::InvalidValue,
+                                         /expected criteria to be a Hash/)
+          end
+        end
+      end
+
       it 'filters by a belongs_to and by its absence' do
         expect(slugs(maker: 'maker-one')).to match_array %w(arrays scalars)
         expect(slugs(maker: nil)).to match_array %w(all-missing explicit-nils zero)
