@@ -7,7 +7,7 @@ module Locomotive
         #
         # Usage:
         #
-        # {% with_scope main_developer: 'John Doe', providers.in: ['acme'], started_at.le: today, active: true %}
+        # {% with_scope main_developer: 'John Doe', providers.in: ['acme'], started_at.lte: today, active: true %}
         #   {% for project in contents.projects %}
         #     {{ project.name }}
         #   {% endfor %}

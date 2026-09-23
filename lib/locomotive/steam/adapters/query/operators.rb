@@ -54,7 +54,7 @@ module Locomotive::Steam
         end
 
         # The one key grammar shared by every engine: no dot is a plain field,
-        # one dot is a field and a registered operator, more is a nested path.
+        # one dot is a field and a registered operator, and more is refused.
         def decode(key)
           name = readable_key(key)
           field, separator, suffix = name.rpartition('.')
