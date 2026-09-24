@@ -118,6 +118,9 @@ describe 'Query parity' do
     { desc: 'a finite Float no store holds as a belongs_to id matches nothing',
       conditions: { maker: 1.5 }, expected: [] },
 
+    { desc: 'an id document holding a number no store reads as an id matches nothing',
+      conditions: { maker_id: { _id: 1 } }, expected: [] },
+
     { desc: 'scalar equality on a string field',
       conditions: { name: 'Scalars' }, expected: %w(scalars) },
 
@@ -556,6 +559,22 @@ describe 'Query parity' do
       conditions: { category_id: Rational(1, 1) },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
 
+    { desc: 'an integer beyond int64 inside a primary key document',
+      conditions: { _id: { _id: 2**63 } },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an integer beyond int64 inside a persisted belongs_to document',
+      conditions: { maker_id: { _id: 2**63 } },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'a NaN inside a document nested in a belongs_to document',
+      conditions: { maker: { _id: { _id: Float::NAN } } },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
+    { desc: 'an integer beyond int64 inside a document listed under the primary key',
+      conditions: { '_id.in' => [{ _id: 2**63 }] },
+      error: Locomotive::Steam::Adapters::Query::InvalidValue },
+
     { desc: 'a structural bound on a system field',
       conditions: { _position: [1]..[2] },
       error: Locomotive::Steam::Adapters::Query::InvalidValue },
@@ -676,6 +695,15 @@ describe 'Query parity' do
 
     ERROR_CASES.each do |c|
       it("rejects #{c[:desc]}") { expect { slugs(c[:conditions]) }.to raise_error(c[:error]) }
+    end
+
+    it 'reads a persisted id as an id, never as a document' do
+      maker_id = Locomotive::Steam::ContentEntryRepository.new(
+        adapter, site, AdapterParityFixture::LOCALE, type_repository)
+        .with(type_repository.by_slug('makers')).by_slug('maker-one')._id
+
+      expect(slugs(maker_id: maker_id)).to match_array %w(arrays scalars)
+      expect(slugs(maker_id: { _id: maker_id })).to eq []
     end
 
     it 'reads a select option id on the persisted name' do

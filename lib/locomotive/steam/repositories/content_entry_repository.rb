@@ -880,9 +880,12 @@ module Locomotive
           key == false ? unmatchable(field, :invalid_id) : key
         end
 
-        # Numeric IDs obey the shared query domain before adapter coercion.
+        # Numeric IDs obey the shared query domain before adapter coercion,
+        # inside a document or list too.
         def adapter_id(value)
-          Locomotive::Steam::Adapters::Query::Values.numeric_operand(value) if value.is_a?(Numeric)
+          case value
+          when Numeric, Hash, Array then Locomotive::Steam::Adapters::Query::Values.literal(value)
+          end
 
           @target_repository.adapter.make_id(value)
         end
