@@ -54,6 +54,11 @@ open localhost:8080
 [https://github.com/locomotivecms/wagon/blob/master/lib/locomotive/wagon/commands/serve_command.rb](https://github.com/locomotivecms/wagon/blob/master/lib/locomotive/wagon/commands/serve_command.rb#L65)
 [https://github.com/locomotivecms/wagon/blob/master/lib/locomotive/wagon/commands/serve_command.rb](https://github.com/locomotivecms/wagon/blob/master/lib/locomotive/wagon/commands/serve_command.rb#L138)
 
+## Documentation
+
+[Steam query semantics](docs/query_semantics.md) — content-entry query
+behaviour in Wagon and Engine.
+
 ## TODO
 
 see the list in the issues section.
