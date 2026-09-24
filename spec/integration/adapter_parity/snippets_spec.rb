@@ -24,7 +24,7 @@ describe 'Adapter parity' do
       # A file may be named more loosely than the slug it is served under, so
       # both stores have to slugify it the same way.
       it 'holds the same snippets under the same slugs' do
-        expect(snippets(:en).all.map(&:slug)).to match_array %w(a_complicated-one banner greeting)
+        expect(snippets(:en).all.map(&:slug)).to match_array %w(a_complicated-one banner greeting specimen_names)
         expect(snippet('a_complicated-one', :en).liquid_source.strip).to eq 'Complicated en'
       end
 

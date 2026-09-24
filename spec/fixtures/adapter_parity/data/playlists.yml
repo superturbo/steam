@@ -2,6 +2,9 @@
     _slug: alpha
     topics:
       - topic-a
+    chapters:
+      - topic-a
+      - topic-b
 
 - Beta:
     _slug: beta

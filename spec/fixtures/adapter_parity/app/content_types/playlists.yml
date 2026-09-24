@@ -8,3 +8,7 @@ fields:
 - topics:
     type: many_to_many
     class_name: topics
+# A many_to_many named after another content type.
+- chapters:
+    type: many_to_many
+    class_name: topics

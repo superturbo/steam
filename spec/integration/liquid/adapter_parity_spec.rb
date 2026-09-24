@@ -54,10 +54,13 @@ describe 'Liquid adapter parity' do
     end
 
     let(:context) do
-      ::Liquid::Context.new(assigns, {}, { services: services,
-                                           locale:   AdapterParityFixture::LOCALE,
-                                           site:     site })
+      ::Liquid::Context.new(assigns, {}, { services:    services,
+                                           locale:      AdapterParityFixture::LOCALE,
+                                           site:        site,
+                                           file_system: file_system })
     end
+
+    let(:file_system) { Locomotive::Steam::Liquid::FileSystem.new(snippet_finder: services.snippet_finder) }
 
     before do
       services.locale                    = AdapterParityFixture::LOCALE
@@ -355,6 +358,124 @@ describe 'Liquid adapter parity' do
 
         expect(names.call("labels.all: ['x', 'y']")).to eq '[Arrays]'
         expect(names.call("labels: 'x'")).to eq '[Arrays][Embedded]'
+      end
+
+    end
+
+    describe 'the content type a with_scope block serves' do
+
+      let(:specimen_loop)   { '{% for entry in contents.specimens %}(s:{{ entry.name }}){% endfor %}' }
+      let(:topic_loop)      { '{% for entry in contents.topics %}(t:{{ entry.name }}){% endfor %}' }
+      let(:maker_specimens) { '{% for entry in maker.specimens %}[{{ entry.name }}]{% endfor %}' }
+
+      def pick(variable, type, slug)
+        "{% with_scope _slug: '#{slug}' %}{% assign #{variable} = contents.#{type}.first %}{% endwith_scope %}"
+      end
+
+      def scoped(block, criteria, before: '')
+        render_liquid("#{before}{% with_scope #{criteria} %}#{block}{% endwith_scope %}")
+      end
+
+      describe 'the first query that uses the criteria' do
+
+        it 'claims them for a contents collection it enumerates' do
+          expect(scoped(specimen_loop + topic_loop, "name: 'Scalars'"))
+            .to eq '(s:Scalars)(t:Topic a)(t:Topic b)'
+        end
+
+        it 'claims them for a collection it counts' do
+          expect(scoped("{{ contents.specimens.size }}#{topic_loop}", "name: 'Scalars'"))
+            .to eq '1(t:Topic a)(t:Topic b)'
+        end
+
+        it 'claims them for a collection it takes the first entry of' do
+          expect(scoped("{{ contents.specimens.first.name }}#{topic_loop}", "name: 'Scalars'"))
+            .to eq 'Scalars(t:Topic a)(t:Topic b)'
+        end
+
+        it 'claims them for the target type of a has_many' do
+          expect(scoped(maker_specimens + specimen_loop + topic_loop, "name: 'Scalars'",
+                        before: pick('maker', 'makers', 'maker-one')))
+            .to eq '[Scalars](s:Scalars)(t:Topic a)(t:Topic b)'
+        end
+
+        it 'claims them for the target type of a many_to_many' do
+          block = '{% for entry in playlist.topics %}[{{ entry.name }}]{% endfor %}' \
+                  "#{topic_loop}{{ contents.specimens.size }}"
+
+          expect(scoped(block, "name: 'Topic a'", before: pick('playlist', 'playlists', 'reversed')))
+            .to eq '[Topic a](t:Topic a)6'
+        end
+
+        it 'validates a name only in the collection that receives the criteria' do
+          expect(scoped(specimen_loop + topic_loop, "maker: 'maker-one'"))
+            .to eq '(s:Arrays)(s:Scalars)(t:Topic a)(t:Topic b)'
+        end
+
+      end
+
+      it 'claims nothing by reading a collection it does not query' do
+        expect(scoped("{% assign listed = maker.specimens %}#{topic_loop}", "name: 'Topic a'",
+                      before: pick('maker', 'makers', 'maker-one')))
+          .to eq '(t:Topic a)'
+      end
+
+      describe 'an association after the claim' do
+
+        it 'receives the criteria when its target type is the claimed type' do
+          expect(scoped(specimen_loop + maker_specimens, "name: 'Scalars'",
+                        before: pick('maker', 'makers', 'maker-one')))
+            .to eq '(s:Scalars)[Scalars]'
+        end
+
+        it 'receives them when its field name is the claimed slug' do
+          block = '{% for entry in contents.chapters %}(c:{{ entry.name }}){% endfor %}' \
+                  '{% for entry in playlist.chapters %}[{{ entry.name }}]{% endfor %}'
+
+          expect(scoped(block, "name: 'Topic a'", before: pick('playlist', 'playlists', 'alpha')))
+            .to eq '[Topic a]'
+        end
+
+        it 'receives none otherwise' do
+          block = '{% for maker in contents.makers %}' \
+                  '{% for entry in maker.specimens %}[{{ entry.name }}]{% endfor %}{% endfor %}'
+
+          expect(scoped(block, "name: 'Maker one'")).to eq '[Scalars][Arrays]'
+        end
+
+      end
+
+      it 'never passes the criteria to a belongs_to' do
+        expect(scoped('{{ badge.maker.name }}', "name: 'Nobody'", before: pick('badge', 'badges', 'gold')))
+          .to eq 'Maker one'
+      end
+
+      describe 'the Liquid scope that holds the claim' do
+
+        let(:criteria) { "name.in: ['Scalars', 'Topic a']" }
+
+        it 'keeps the claim of a for collection in a later nested scope' do
+          expect(scoped("#{specimen_loop}{% for i in (1..1) %}#{topic_loop}{% endfor %}", criteria))
+            .to eq '(s:Scalars)(t:Topic a)(t:Topic b)'
+        end
+
+        it 'keeps the claim of a tablerow collection for the rest of the block' do
+          tablerow = '{% tablerow entry in contents.specimens %}(s:{{ entry.name }}){% endtablerow %}'
+
+          expect(scoped(tablerow + topic_loop, criteria).scan(/\([st]:[^)]*\)/))
+            .to eq ['(s:Scalars)', '(t:Topic a)', '(t:Topic b)']
+        end
+
+        it 'forgets a first query made inside a loop body' do
+          expect(scoped("{% for i in (1..1) %}#{specimen_loop}{% endfor %}#{topic_loop}", criteria))
+            .to eq '(s:Scalars)(t:Topic a)'
+        end
+
+        it 'forgets a first query made inside an include' do
+          expect(scoped("{% include 'specimen_names' %}#{topic_loop}", criteria))
+            .to eq '(s:Scalars)(t:Topic a)'
+        end
+
       end
 
     end
