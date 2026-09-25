@@ -87,7 +87,9 @@ module Locomotive::Steam
       end
 
       def set_locale_cookie
-        services.cookie.set(cookie_key_name, { 'value': locale, 'path': '/', 'max_age': 1.year })
+        services.cookie.set(cookie_key_name, {
+          'value': locale, 'path': '/', 'max_age': 1.year, 'secure': request.ssl?
+        })
       end
 
       # The preview urls for all the sites share the same domain, so cookie[:locale]

@@ -14,12 +14,13 @@ describe Locomotive::Steam::Middlewares::Locale do
   let(:services)        { instance_double('Services', :locale= => 'en', :cookie => cookie_service) }
   let(:middleware)      { Locomotive::Steam::Middlewares::Locale.new(app) }
   let(:accept_language) { '' }
+  let(:extra_env)       { {} }
 
   subject do
     env = env_for(
         url,
-        'steam.site' => site,
-        'HTTP_ACCEPT_LANGUAGE' => accept_language)
+        { 'steam.site' => site,
+          'HTTP_ACCEPT_LANGUAGE' => accept_language }.merge(extra_env))
     env['steam.request']  = Rack::Request.new(env)
     env['steam.services'] = services
     env['steam.locale']
@@ -35,9 +36,54 @@ describe Locomotive::Steam::Middlewares::Locale do
        expect(cookie_service).to receive(:set).with('steam-locale', {
            value: :de,
            path: '/',
-           max_age: 1.year
+           max_age: 1.year,
+           secure: false
        }).and_return(nil)
        is_expected.to eq [:de,  '/whatever']
+    end
+
+  end
+
+  describe 'the locale cookie over HTTPS' do
+
+    def expect_secure_cookie
+      expect(cookie_service).to receive(:set)
+        .with('steam-locale', hash_including(secure: true)).and_return(nil)
+    end
+
+    context 'requested directly' do
+
+      let(:url) { 'https://models.example.com/whatever' }
+
+      it 'is marked Secure' do
+        expect_secure_cookie
+        subject
+      end
+
+    end
+
+    context 'behind a proxy forwarding the protocol' do
+
+      let(:url)       { 'http://models.example.com/whatever' }
+      let(:extra_env) { { 'HTTP_X_FORWARDED_PROTO' => 'https' } }
+
+      it 'is marked Secure' do
+        expect_secure_cookie
+        subject
+      end
+
+    end
+
+    context 'behind a proxy forwarding the SSL flag' do
+
+      let(:url)       { 'http://models.example.com/whatever' }
+      let(:extra_env) { { 'HTTP_X_FORWARDED_SSL' => 'on' } }
+
+      it 'is marked Secure' do
+        expect_secure_cookie
+        subject
+      end
+
     end
 
   end
