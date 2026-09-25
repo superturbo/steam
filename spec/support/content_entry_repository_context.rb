@@ -12,7 +12,7 @@ RSpec.shared_context 'content entry repository' do
 
     build_content_type('Articles', label_field_name: :title, localized_names: %w(title),
                        fields: _fields,
-                       fields_by_name: { title: instance_double('Field', name: :title, type: :string) }.merge(named),
+                       fields_by_name: { title: instance_double('Field', name: :title, type: :string, write_only?: false) }.merge(named),
                        fields_with_default: [])
   end
   let(:entries) { [{ content_type_id: 1, _position: 0, _label: 'Update #1', title: { fr: 'Mise a jour #1' }, text: { en: 'added some free stuff', fr: 'phrase FR' }, date: '2009/05/12', category: 'General' }] }

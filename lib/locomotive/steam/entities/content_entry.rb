@@ -11,8 +11,14 @@ module Locomotive::Steam
     NIL_IS_THE_ONLY_BLANK    = %i(boolean integer float date date_time).freeze
     REQUIRED_FROM_ATTRIBUTES = %i(belongs_to many_to_many file).freeze
     READ_THROUGH_GRAMMAR     = %i(integer float boolean string text email color date date_time json).freeze
+    PASSWORD_VERSIONS        = %w(2a 2b 2x 2y).freeze
 
-    private_constant :NIL_IS_THE_ONLY_BLANK, :REQUIRED_FROM_ATTRIBUTES, :READ_THROUGH_GRAMMAR
+    private_constant :NIL_IS_THE_ONLY_BLANK, :REQUIRED_FROM_ATTRIBUTES, :READ_THROUGH_GRAMMAR,
+                     :PASSWORD_VERSIONS
+
+    def self.usable_password?(value)
+      value.is_a?(String) && value.valid_encoding? && !value.blank? && !value.include?("\0")
+    end
 
     # Positional locale preserves calls such as change(title: 'x').
     def change(new_attributes, locale = nil)
@@ -35,6 +41,10 @@ module Locomotive::Steam
 
     def method_missing(name, *args, &block)
       if is_dynamic_attribute?(name)
+        if write_only_field?(name)
+          raise NoMethodError.new("undefined method '#{name}' for a content entry", name)
+        end
+
         cast_value(name)
       elsif attributes.include?(name)
         self[name]
@@ -78,8 +88,25 @@ module Locomotive::Steam
       "Locomotive::ContentEntry#{content_type_id}"
     end
 
+    # A write-only field has no reader, even while it holds its input.
+    def respond_to?(name, include_private = false)
+      return false if attributes.include?(name.to_s) && write_only_field?(name)
+
+      super
+    end
+
     def _label
-      self[content_type.label_field_name]
+      name = content_type.label_field_name
+
+      self[name] unless write_only_field?(name)
+    end
+
+    def password_matches?(field_name, candidate)
+      field = content_type.fields_by_name[field_name]
+      return false unless field&.write_only? && self.class.usable_password?(candidate)
+
+      password = stored_password(field)
+      !password.nil? && password.is_password?(candidate)
     end
 
     def _label_of(name)
@@ -259,18 +286,27 @@ module Locomotive::Steam
       end
     end
 
-    # Password hashes are not localized.
-    def _cast_password(field)
-      value = attributes[:"#{field.name}_hash"]
+    def write_only_field?(name)
+      return false unless content_type
 
+      content_type.fields_by_name[name]&.write_only?
+    end
+
+    # Rejects a hash this bcrypt engine cannot verify.
+    def stored_password(field)
+      value = attributes[:"#{field.name}_hash"]
       return if value.nil? || value == ''
 
-      BCrypt::Password.new(ContentFieldValues.normalize_read(:string, value))
+      text     = ContentFieldValues.normalize_read(:string, value)
+      password = BCrypt::Password.new(text) if BCrypt::Password.valid_hash?(text)
+
+      return password if password && PASSWORD_VERSIONS.include?(password.version) &&
+                         password.cost.between?(BCrypt::Engine::MIN_COST, BCrypt::Engine::MAX_COST)
+
+      report_unread_value(field, :invalid_password_hash, actual_type: value.class.name)
+      nil
     rescue ContentFieldValues::ParseError => e
       report_unread_value(field, e.reason, actual_type: value.class.name)
-      nil
-    rescue BCrypt::Errors::InvalidHash
-      report_unread_value(field, :invalid_password_hash, actual_type: value.class.name)
       nil
     end
 

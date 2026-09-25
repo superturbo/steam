@@ -3,7 +3,7 @@ require 'spec_helper'
 describe Locomotive::Steam::Liquid::Drops::ContentEntry do
 
   let(:site)      { instance_double('Site', default_locale: 'en') }
-  let(:type)      { instance_double('Type', fields_by_name: { title: instance_double('Field', type: :string ) }) }
+  let(:type)      { instance_double('Type', fields_by_name: { title: instance_double('Field', type: :string, write_only?: false ) }) }
   let(:entry)     { instance_double('Article', _id: 42, localized_attributes: {}, content_type: type, title: 'Hello world', _label: 'Hello world', _slug: 'hello-world', _translated: false, seo_title: 'seo title', meta_keywords: 'keywords', meta_description: 'description', created_at: 0, updated_at: 1) }
   let(:assigns)   { {} }
   let(:services)  { Locomotive::Steam::Services.build_instance }
@@ -33,7 +33,7 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntry do
     describe 'relationship field' do
 
       let(:authors) { instance_double('AuthorsRepository', first: 'john', local_conditions: {}) }
-      let(:type)    { instance_double('Type', fields_by_name: { authors: instance_double('Field', type: :has_many ) }) }
+      let(:type)    { instance_double('Type', fields_by_name: { authors: instance_double('Field', type: :has_many, write_only?: false ) }) }
       let(:entry)   { instance_double('Article', content_type: type, authors: authors, localized_attributes: {}) }
 
       before { allow(authors).to receive(:dup).and_return(authors) }
@@ -111,7 +111,7 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntry do
     describe 'belong_to content type' do
 
       let(:entry)       { instance_double('Article', _id: 42, localized_attributes: {}, content_type: type, title: 'Hello world', _label: 'Hello world', _slug: 'hello-world', _translated: false, seo_title: 'seo title', meta_keywords: 'keywords', meta_description: 'description', created_at: 0, updated_at: 1, author: author) }
-      let(:type)        { instance_double('Type', fields_by_name: { title: instance_double('StringField', type: :string ), author: instance_double('Author', type: :belongs_to), picture: instance_double('FileField', type: :file), category: instance_double('SelectField', type: :select) }) }
+      let(:type)        { instance_double('Type', fields_by_name: { title: instance_double('StringField', type: :string, write_only?: false ), author: instance_double('Author', type: :belongs_to), picture: instance_double('FileField', type: :file, write_only?: false), category: instance_double('SelectField', type: :select, write_only?: false) }) }
       let(:author)      { instance_double('Author', _slug: 'john-doe', localized_attributes: {}) }
       let(:picture_field) { Locomotive::Steam::ContentEntry::FileField.new('foo.png', 'http://assets.dev', 0, 42) }
 
@@ -148,7 +148,7 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntry do
   describe '#as_json' do
 
     let(:entry)       { instance_double('Article', _id: 42, localized_attributes: {}, content_type: type, title: 'Hello world', _label: 'Hello world', _slug: 'hello-world', _translated: false, seo_title: 'seo title', meta_keywords: 'keywords', meta_description: 'description', created_at: 0, updated_at: 1, author: author, authors: authors) }
-    let(:type)        { instance_double('Type', fields_by_name: { title: instance_double('StringField', type: :string ), author: instance_double('Author', type: :belongs_to), authors: instance_double('Author', type: :many_to_many), picture: instance_double('FileField', type: :file), category: instance_double('SelectField', type: :select) }) }
+    let(:type)        { instance_double('Type', fields_by_name: { title: instance_double('StringField', type: :string, write_only?: false ), author: instance_double('Author', type: :belongs_to), authors: instance_double('Author', type: :many_to_many), picture: instance_double('FileField', type: :file, write_only?: false), category: instance_double('SelectField', type: :select, write_only?: false) }) }
     let(:author)      { instance_double('Author', _slug: 'john-doe', localized_attributes: {}) }
     let(:authors)     { instance_double('Authors', all: [author]) }
     let(:picture_field) { Locomotive::Steam::ContentEntry::FileField.new('foo.png', 'http://assets.dev', 0, 42) }

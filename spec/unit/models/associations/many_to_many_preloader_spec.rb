@@ -24,7 +24,7 @@ describe Locomotive::Steam::Models::AssociationPreloader do
 
   describe 'a many_to_many association' do
 
-    let(:field) { instance_double('Field', name: :articles, type: :many_to_many, association_options: { target_id: 2, inverse_of: :authors }) }
+    let(:field) { instance_double('Field', name: :articles, type: :many_to_many, write_only?: false, association_options: { target_id: 2, inverse_of: :authors }) }
     let(:type)  { build_content_type('Authors', label_field_name: :name, association_fields: [field], fields_by_name: { articles: field }, fields_with_default: []) }
     let(:entries) do
       [
@@ -36,7 +36,7 @@ describe Locomotive::Steam::Models::AssociationPreloader do
     end
     let(:other_type) do
       build_content_type('Articles', _id: 2, label_field_name: :title, fields: _fields,
-                         fields_by_name: { title: instance_double('Field', name: :title, type: :string, persisted_name: 'title') },
+                         fields_by_name: { title: instance_double('Field', name: :title, type: :string, write_only?: false, persisted_name: 'title') },
                          fields_with_default: [])
     end
     let(:other_entries) do
@@ -599,7 +599,7 @@ describe Locomotive::Steam::Models::AssociationPreloader do
 
     context 'the field declares its own order' do
 
-      let(:field) { instance_double('Field', name: :articles, type: :many_to_many, association_options: { target_id: 2, inverse_of: :authors, order_by: 'title.asc' }) }
+      let(:field) { instance_double('Field', name: :articles, type: :many_to_many, write_only?: false, association_options: { target_id: 2, inverse_of: :authors, order_by: 'title.asc' }) }
 
       it 'stays on the repository path' do
         window = preloaded_window

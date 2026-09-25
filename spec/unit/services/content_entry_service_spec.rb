@@ -12,7 +12,7 @@ describe Locomotive::Steam::ContentEntryService do
 
   describe '#update_decorated_entry' do
 
-    let(:title_field)  { instance_double('Field', name: :title, type: :string, is_relationship?: false) }
+    let(:title_field)  { instance_double('Field', name: :title, type: :string, is_relationship?: false, write_only?: false) }
     let(:fields)       { instance_double('Fields', json: [], selects: []) }
     let(:content_type) do
       instance_double('ContentType', slug: 'articles', fields: fields, label_field_name: :title,
@@ -41,6 +41,42 @@ describe Locomotive::Steam::ContentEntryService do
       expect(result).to be(decorated)
       expect(result.__getobj__).to be(written)
       expect(result.__getobj__).not_to be(entry)
+    end
+
+  end
+
+  describe '#create an entry whose label field is a password' do
+
+    let(:secret_field) { instance_double('Field', name: :secret, type: :password, write_only?: true, is_relationship?: false) }
+    let(:fields)       { instance_double('Fields', json: [], selects: []) }
+    let(:content_type) do
+      instance_double('ContentType', slug: 'accounts', fields: fields, label_field_name: :secret,
+                                     fields_by_name: { secret: secret_field }.with_indifferent_access,
+                                     persisted_field_names: [])
+    end
+
+    before do
+      allow(type_repository).to receive(:by_slug).with('accounts').and_return(content_type)
+      allow(entry_repository).to receive(:content_type).and_return(content_type)
+      allow(entry_repository).to receive(:resolve_selects) { |attributes| attributes }
+      allow(entry_repository).to receive(:build) do |attributes|
+        Locomotive::Steam::ContentEntry.new(attributes).tap do |entry|
+          entry.content_type         = content_type
+          entry.localized_attributes = {}
+          allow(entry).to receive(:base_url).and_return('/assets')
+        end
+      end
+      allow(service).to receive(:validate) { |_, entry| entry.errors.add(:email, :blank); false }
+    end
+
+    it 'logs a failed write without the password' do
+      logged = []
+      allow(Locomotive::Common::Logger).to receive(:error) { |message| logged << message }
+
+      service.create('accounts', { secret: 'plain-secret-1' })
+
+      expect(logged.join).to include('Failed to persist entry')
+      expect(logged.join).not_to include('plain-secret-1')
     end
 
   end

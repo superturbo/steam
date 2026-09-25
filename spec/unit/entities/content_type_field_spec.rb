@@ -115,6 +115,15 @@ describe Locomotive::Steam::ContentTypeField do
 
   end
 
+  describe '#write_only?' do
+
+    it 'holds for a password field only' do
+      expect(described_class.new(type: :password).write_only?).to be true
+      expect(described_class.new(type: :string).write_only?).to be false
+    end
+
+  end
+
   describe '#persisted_name' do
 
     subject { field.persisted_name }

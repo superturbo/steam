@@ -29,10 +29,10 @@ describe Locomotive::Steam::ContentEntryRepository do
 
   describe 'belongs_to' do
 
-    let(:field)   { instance_double('Field', name: :author, type: :belongs_to, association_options: { target_id: 2 }) }
+    let(:field)   { instance_double('Field', name: :author, type: :belongs_to, write_only?: false, association_options: { target_id: 2 }) }
     let(:type)    { build_content_type('Articles', label_field_name: :title, association_fields: [field], fields_with_default: []) }
     let(:entries) { [{ content_type_id: 1, title: 'Hello world', author_id: 'john-doe' }] }
-    let(:other_type)    { build_content_type('Authors', _id: 2, label_field_name: :name, fields: _fields, fields_by_name: { name: instance_double('Field', name: :name, type: :string) }, fields_with_default: []) }
+    let(:other_type)    { build_content_type('Authors', _id: 2, label_field_name: :name, fields: _fields, fields_by_name: { name: instance_double('Field', name: :name, type: :string, write_only?: false) }, fields_with_default: []) }
     let(:other_entries) { [{ content_type_id: 2, _id: 'john-doe', name: 'John Doe' }] }
 
     let(:type_repository) { instance_double('ArticleBelongsToRepository', selects: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
@@ -88,12 +88,12 @@ describe Locomotive::Steam::ContentEntryRepository do
 
   describe 'has_many' do
 
-    let(:field)   { instance_double('Field', name: :articles, type: :has_many, association_options: { target_id: 2, inverse_of: :author, order_by: 'position_in_author' }) }
+    let(:field)   { instance_double('Field', name: :articles, type: :has_many, write_only?: false, association_options: { target_id: 2, inverse_of: :author, order_by: 'position_in_author' }) }
     let(:type)    { build_content_type('Authors', label_field_name: :name, association_fields: [field], fields_by_name: { articles: field }, fields_with_default: []) }
     let(:entries) { [{ content_type_id: 1, _id: 'john-doe', name: 'John Doe' }] }
     # The target declares the belongs_to named by its inverse position.
-    let(:title_field)   { instance_double('Field', name: :title, type: :string) }
-    let(:author_field)  { instance_double('Field', name: :author, type: :belongs_to) }
+    let(:title_field)   { instance_double('Field', name: :title, type: :string, write_only?: false) }
+    let(:author_field)  { instance_double('Field', name: :author, type: :belongs_to, write_only?: false) }
     let(:target_fields) { instance_double('Fields', selects: [], belongs_to: [author_field], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
     let(:other_type) do
       build_content_type('Articles', _id: 2, label_field_name: :title, fields: target_fields,
@@ -208,10 +208,10 @@ describe Locomotive::Steam::ContentEntryRepository do
 
   describe 'many_to_many' do
 
-    let(:field)   { instance_double('Field', name: :articles, type: :many_to_many, association_options: { target_id: 2, inverse_of: :authors }) }
+    let(:field)   { instance_double('Field', name: :articles, type: :many_to_many, write_only?: false, association_options: { target_id: 2, inverse_of: :authors }) }
     let(:type)    { build_content_type('Authors', label_field_name: :name, association_fields: [field], fields_by_name: { articles: field }, fields: _fields, fields_with_default: []) }
     let(:entries) { [{ content_type_id: 1, _id: 1, name: 'John Doe', article_ids: ['hello-world', 'lorem-ipsum'] }] }
-    let(:other_type)    { build_content_type('Articles', _id: 2, label_field_name: :title, fields: _fields, fields_by_name: { title: instance_double('Field', name: :title, type: :string) }, fields_with_default: []) }
+    let(:other_type)    { build_content_type('Articles', _id: 2, label_field_name: :title, fields: _fields, fields_by_name: { title: instance_double('Field', name: :title, type: :string, write_only?: false) }, fields_with_default: []) }
     let(:other_entries) {
         [
           { content_type_id: 2, _id: 'hello-world', title: 'Hello world', author_id: 'john-doe', position_in_author: 2 },
@@ -272,7 +272,7 @@ describe Locomotive::Steam::ContentEntryRepository do
     context 'querying by a composite-id [mongo_id, slug] target entry' do
 
       let(:field) do
-        instance_double('Field', name: :articles, type: :many_to_many, persisted_name: 'article_ids',
+        instance_double('Field', name: :articles, type: :many_to_many, write_only?: false, persisted_name: 'article_ids',
                         association_options: { target_id: 2, inverse_of: :authors })
       end
       let(:entries) do
@@ -371,7 +371,7 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     context 'the field declares its own order' do
 
-      let(:field)   { instance_double('Field', name: :articles, type: :many_to_many, association_options: { target_id: 2, inverse_of: :authors, order_by: 'title.asc' }) }
+      let(:field)   { instance_double('Field', name: :articles, type: :many_to_many, write_only?: false, association_options: { target_id: 2, inverse_of: :authors, order_by: 'title.asc' }) }
       let(:entries) { [{ content_type_id: 1, _id: 1, name: 'John Doe', article_ids: ['lorem-ipsum', 'hello-world'] }] }
 
       it 'overrides the ID sequence' do

@@ -8,7 +8,7 @@ describe Locomotive::Steam::Models::AssociationPreloader do
 
   let(:repository) { Locomotive::Steam::ContentEntryRepository.new(adapter, site, locale, content_type_repository) }
 
-  let(:field) { instance_double('Field', name: :author, type: :belongs_to, association_options: { target_id: 2 }) }
+  let(:field) { instance_double('Field', name: :author, type: :belongs_to, write_only?: false, association_options: { target_id: 2 }) }
   let(:type)  { build_content_type('Articles', label_field_name: :title, association_fields: [field], fields_with_default: []) }
   let(:entries) do
     [
@@ -22,7 +22,7 @@ describe Locomotive::Steam::Models::AssociationPreloader do
 
   let(:other_type) do
     build_content_type('Authors', _id: 2, label_field_name: :name, fields: _fields,
-                       fields_by_name: { name: instance_double('Field', name: :name, type: :string) },
+                       fields_by_name: { name: instance_double('Field', name: :name, type: :string, write_only?: false) },
                        fields_with_default: [])
   end
   let(:other_entries) do
@@ -201,7 +201,7 @@ describe Locomotive::Steam::Models::AssociationPreloader do
 
   context 'two belongs_to fields' do
 
-    let(:maker_field) { instance_double('Field', name: :maker, type: :belongs_to, association_options: { target_id: 3 }) }
+    let(:maker_field) { instance_double('Field', name: :maker, type: :belongs_to, write_only?: false, association_options: { target_id: 3 }) }
     let(:type)        { build_content_type('Articles', label_field_name: :title, association_fields: [field, maker_field], fields_with_default: []) }
     let(:entries) do
       [
@@ -211,7 +211,7 @@ describe Locomotive::Steam::Models::AssociationPreloader do
     end
     let(:maker_type) do
       build_content_type('Makers', _id: 3, label_field_name: :name, fields: _fields,
-                         fields_by_name: { name: instance_double('Field', name: :name, type: :string) },
+                         fields_by_name: { name: instance_double('Field', name: :name, type: :string, write_only?: false) },
                          fields_with_default: [])
     end
     let(:other_entries) do

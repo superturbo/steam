@@ -26,6 +26,10 @@ auth_password_too_short:
   en: "Your password is too short"
   fr: "Votre mot de passe est trop court"
 
+auth_invalid_password:
+  en: "Your password is not valid"
+  fr: "Votre mot de passe n'est pas valide"
+
 auth_password_different_from_confirmation:
   en: "Your password doesn't match the confirmation"
   fr: "Votre mot de passe ne correspond à la confirmation"

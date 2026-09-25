@@ -68,6 +68,22 @@ describe 'Authentication' do
 
       end
 
+      context 'a password of only spaces' do
+
+        before do
+          params[:auth_entry][:email] = 'kim@soundgarden.band'
+          params[:auth_entry][:password] = params[:auth_entry][:password_confirmation] = '      '
+        end
+
+        it 'renders the sign up page with an error message' do
+          sign_up(params)
+          expect(last_response.status).to eq 200
+          expect(last_response.body).to include '/account/sign-up'
+          expect(last_response.body).to include 'is invalid'
+        end
+
+      end
+
       def sign_up(params, follow_redirect = false)
         post '/account/sign-up', params
         follow_redirect! if follow_redirect
@@ -125,6 +141,18 @@ describe 'Authentication' do
           sign_in(params)
           expect(last_response.status).to eq 200
           expect(last_response.body).to include '/account/sign-in'
+          expect(last_response.body).to include 'Your email and/or password are incorrect'
+        end
+
+      end
+
+      context 'a password holding a NUL byte' do
+
+        let(:params) { super().merge(auth_password: "easy\0one") }
+
+        it 'renders the sign in page with an error message' do
+          sign_in(params)
+          expect(last_response.status).to eq 200
           expect(last_response.body).to include 'Your email and/or password are incorrect'
         end
 
@@ -256,6 +284,19 @@ describe 'Authentication' do
           expect(last_response.status).to eq 200
           expect(last_response.body).to include 'Change your password'
           expect(last_response.body).to include 'Your password is too short'
+        end
+
+      end
+
+      context 'with a password of only spaces' do
+
+        let(:new_password) { '      ' }
+
+        it 'renders the reset password page with an error message' do
+          post '/account/reset-password', params
+          expect(last_response.status).to eq 200
+          expect(last_response.body).to include 'Change your password'
+          expect(last_response.body).to include 'Your password is not valid'
         end
 
       end

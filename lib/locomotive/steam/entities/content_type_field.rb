@@ -121,6 +121,11 @@ module Locomotive::Steam
       %i(belongs_to has_many many_to_many).include?(self.type)
     end
 
+    # A password is written, never read back.
+    def write_only?
+      type == :password
+    end
+
     def persisted_name
       case type
       when :belongs_to, :select then "#{name}_id"

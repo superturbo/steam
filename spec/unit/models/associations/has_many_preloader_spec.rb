@@ -9,7 +9,7 @@ describe Locomotive::Steam::Models::AssociationPreloader do
   let(:repository) { Locomotive::Steam::ContentEntryRepository.new(adapter, site, locale, content_type_repository) }
 
   let(:field) do
-    instance_double('Field', name: :articles, type: :has_many,
+    instance_double('Field', name: :articles, type: :has_many, write_only?: false,
                              association_options: { target_id: 2, inverse_of: :author, order_by: 'position_in_author' })
   end
   let(:type) do
@@ -25,8 +25,8 @@ describe Locomotive::Steam::Models::AssociationPreloader do
     ]
   end
 
-  let(:title_field)   { instance_double('Field', name: :title, type: :string) }
-  let(:author_field)  { instance_double('Field', name: :author, type: :belongs_to) }
+  let(:title_field)   { instance_double('Field', name: :title, type: :string, write_only?: false) }
+  let(:author_field)  { instance_double('Field', name: :author, type: :belongs_to, write_only?: false) }
   let(:target_fields) { instance_double('Fields', selects: [], belongs_to: [author_field], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
   let(:other_type) do
     build_content_type('Articles', _id: 2, label_field_name: :title, fields: target_fields,

@@ -15,7 +15,7 @@ describe Locomotive::Steam::ContentEntry do
 
   describe '#change' do
 
-    let(:fields) { [instance_double('Field', name: :title, type: :string, required: true)] }
+    let(:fields) { [instance_double('Field', name: :title, type: :string, write_only?: false, required: true)] }
 
     before do
       allow(type).to receive(:fields_by_name).and_return({ title: fields.first })
@@ -69,7 +69,7 @@ describe Locomotive::Steam::ContentEntry do
 
   describe '#valid?' do
 
-    let(:field)           { instance_double('Field', name: :title, type: :string, persisted_name: :title) }
+    let(:field)           { instance_double('Field', name: :title, type: :string, write_only?: false, persisted_name: :title) }
     let(:fields)          { [field] }
     let(:required_fields) { fields }
 
@@ -101,7 +101,7 @@ describe Locomotive::Steam::ContentEntry do
 
     context 'a number field' do
 
-      let(:field)           { instance_double('Field', name: :score, type: :integer, persisted_name: :score) }
+      let(:field)           { instance_double('Field', name: :score, type: :integer, write_only?: false, persisted_name: :score) }
       let(:required_fields) { [] }
       let(:attributes)      { { score: ' 12 ' } }
 
@@ -114,7 +114,7 @@ describe Locomotive::Steam::ContentEntry do
 
       context 'holding a number no store can keep' do
 
-        let(:field)      { instance_double('Field', name: :price, type: :float, persisted_name: :price) }
+        let(:field)      { instance_double('Field', name: :price, type: :float, write_only?: false, persisted_name: :price) }
         let(:attributes) { { price: 10**400 } }
 
         it { subject; expect(content_entry.errors[:price]).to eq(['is invalid']) }
@@ -179,7 +179,7 @@ describe Locomotive::Steam::ContentEntry do
 
     context 'a date field' do
 
-      let(:field)           { instance_double('Field', name: :held_on, type: :date, persisted_name: :held_on) }
+      let(:field)           { instance_double('Field', name: :held_on, type: :date, write_only?: false, persisted_name: :held_on) }
       let(:required_fields) { [] }
       let(:attributes)      { { held_on: Time.utc(2020, 1, 2, 2) } }
 
@@ -210,7 +210,7 @@ describe Locomotive::Steam::ContentEntry do
 
     context 'a date and time field' do
 
-      let(:field)           { instance_double('Field', name: :at, type: :date_time, persisted_name: :at) }
+      let(:field)           { instance_double('Field', name: :at, type: :date_time, write_only?: false, persisted_name: :at) }
       let(:required_fields) { [] }
       let(:attributes)      { { at: '2024-06-15T12:00:00+03:00' } }
 
@@ -246,7 +246,7 @@ describe Locomotive::Steam::ContentEntry do
 
     context 'a json field' do
 
-      let(:field)           { instance_double('Field', name: :payload, type: :json, persisted_name: :payload) }
+      let(:field)           { instance_double('Field', name: :payload, type: :json, write_only?: false, persisted_name: :payload) }
       let(:required_fields) { [] }
       let(:attributes)      { { payload: ' {"a":1} ' } }
 
@@ -323,7 +323,7 @@ describe Locomotive::Steam::ContentEntry do
 
     context 'a required boolean field' do
 
-      let(:field)      { instance_double('Field', name: :flag, type: :boolean, persisted_name: :flag) }
+      let(:field)      { instance_double('Field', name: :flag, type: :boolean, write_only?: false, persisted_name: :flag) }
       let(:attributes) { { flag: false } }
 
       it { is_expected.to eq true }
@@ -340,7 +340,7 @@ describe Locomotive::Steam::ContentEntry do
 
     context 'a required localized boolean field' do
 
-      let(:field)      { instance_double('Field', name: :flag, type: :boolean, persisted_name: :flag) }
+      let(:field)      { instance_double('Field', name: :flag, type: :boolean, write_only?: false, persisted_name: :flag) }
       let(:attributes) { { flag: build_i18n_field(en: false, fr: true) } }
 
       before do
@@ -355,7 +355,7 @@ describe Locomotive::Steam::ContentEntry do
 
     context 'a required association' do
 
-      let(:field) { instance_double('Field', name: :maker, type: :belongs_to, persisted_name: 'maker_id') }
+      let(:field) { instance_double('Field', name: :maker, type: :belongs_to, write_only?: false, persisted_name: 'maker_id') }
 
       let(:proxy) { Locomotive::Steam::Models::BelongsToAssociation.allocate }
 
@@ -377,7 +377,7 @@ describe Locomotive::Steam::ContentEntry do
 
       context 'many to many' do
 
-        let(:field) { instance_double('Field', name: :topics, type: :many_to_many, persisted_name: 'topic_ids') }
+        let(:field) { instance_double('Field', name: :topics, type: :many_to_many, write_only?: false, persisted_name: 'topic_ids') }
         let(:proxy) { Locomotive::Steam::Models::ManyToManyAssociation.allocate }
 
         context 'holding no id' do
@@ -400,7 +400,7 @@ describe Locomotive::Steam::ContentEntry do
 
       context 'has many' do
 
-        let(:field)      { instance_double('Field', name: :reviews, type: :has_many, persisted_name: nil) }
+        let(:field)      { instance_double('Field', name: :reviews, type: :has_many, write_only?: false, persisted_name: nil) }
         let(:attributes) { {} }
 
         it { is_expected.to eq true }
@@ -411,7 +411,7 @@ describe Locomotive::Steam::ContentEntry do
 
     context 'a required file field' do
 
-      let(:field) { instance_double('Field', name: :cover, type: :file, persisted_name: :cover) }
+      let(:field) { instance_double('Field', name: :cover, type: :file, write_only?: false, persisted_name: :cover) }
 
       context 'the entry names no file' do
 
@@ -448,7 +448,7 @@ describe Locomotive::Steam::ContentEntry do
     context 'reading a select field' do
 
       let(:options)         { instance_double('SelectOptionRepository') }
-      let(:field)           { instance_double('Field', name: :category, type: :select,
+      let(:field)           { instance_double('Field', name: :category, type: :select, write_only?: false,
                                                        persisted_name: 'category_id', select_options: options) }
       let(:required_fields) { [] }
       let(:attributes)      { { category_id: 42 } }
@@ -469,7 +469,7 @@ describe Locomotive::Steam::ContentEntry do
     context 'a required select field' do
 
       let(:options)    { instance_double('SelectOptionRepository') }
-      let(:field)      { instance_double('Field', name: :category, type: :select,
+      let(:field)      { instance_double('Field', name: :category, type: :select, write_only?: false,
                                                   persisted_name: 'category_id', select_options: options) }
       let(:attributes) { {} }
 
@@ -498,7 +498,7 @@ describe Locomotive::Steam::ContentEntry do
 
     context 'a required date field the value does not read as' do
 
-      let(:field)      { instance_double('Field', name: :held_on, type: :date, persisted_name: :held_on) }
+      let(:field)      { instance_double('Field', name: :held_on, type: :date, write_only?: false, persisted_name: :held_on) }
       let(:attributes) { { held_on: 'nope' } }
 
       it 'reports what is wrong with it, not that it is missing' do
@@ -542,6 +542,11 @@ describe Locomotive::Steam::ContentEntry do
 
   describe '#_label' do
 
+    before do
+      title = instance_double('Field', name: :title, type: :string, write_only?: false)
+      allow(type).to receive(:fields_by_name).and_return({ title: title }.with_indifferent_access)
+    end
+
     subject { content_entry._label }
     it { is_expected.to eq 'Hello world' }
 
@@ -570,7 +575,7 @@ describe Locomotive::Steam::ContentEntry do
 
   describe '#to_hash' do
 
-    let(:fields)      { [instance_double('TitleField', name: :title, type: :string, is_relationship?: false), instance_double('PictureField', name: :picture, type: :file, localized: true)] }
+    let(:fields)      { [instance_double('TitleField', name: :title, type: :string, write_only?: false, is_relationship?: false), instance_double('PictureField', name: :picture, type: :file, write_only?: false, localized: true)] }
     let(:attributes)  { { id: 42, title: 'Hello world', _slug: 'hello-world', picture: Locomotive::Steam::Models::I18nField.new(:picture, fr: 'foo.png', en: 'bar.png'), custom_fields_recipe: ['hello', 'world'], _type: 'Entry' } }
 
     subject { content_entry.to_hash }
@@ -609,7 +614,7 @@ describe Locomotive::Steam::ContentEntry do
 
   describe '#as_json' do
 
-    let(:fields)      { [instance_double('TitleField', name: :title, type: :string, is_relationship?: false), instance_double('PictureField', name: :picture, type: :file, localized: true)] }
+    let(:fields)      { [instance_double('TitleField', name: :title, type: :string, write_only?: false, is_relationship?: false), instance_double('PictureField', name: :picture, type: :file, write_only?: false, localized: true)] }
     let(:attributes)  { { id: 42, title: 'Hello world', _slug: 'hello-world', picture: Locomotive::Steam::Models::I18nField.new(:picture, fr: 'foo.png', en: 'bar.png'), custom_fields_recipe: ['hello', 'world'], _type: 'Entry' } }
     let(:decorated)   { Locomotive::Steam::Decorators::I18nDecorator.new(content_entry, :fr, :en) }
 
@@ -639,7 +644,7 @@ describe Locomotive::Steam::ContentEntry do
 
     let(:field_type)  { :string }
     let(:attributes)  { { my_field: value } }
-    let(:field)       { instance_double('Field', name: :my_field, type: field_type) }
+    let(:field)       { instance_double('Field', name: :my_field, type: field_type, write_only?: field_type == :password) }
 
     before { allow(type).to receive(:fields_by_name).and_return(my_field: field) }
 
@@ -998,7 +1003,7 @@ describe Locomotive::Steam::ContentEntry do
       let(:translations)  { instance_double('Translations', translations: { en: 'Category #1', fr: 'Categorie #1' }) }
       let(:option)        { instance_double('SelectOption', name: translations) }
       let(:options)       { instance_double('SelectOptions') }
-      let(:field)         { instance_double('Field', name: :my_field, type: :select, select_options: options) }
+      let(:field)         { instance_double('Field', name: :my_field, type: :select, write_only?: false, select_options: options) }
       let(:attributes)    { { my_field_id: attribute } }
 
       context 'the attribute is not localized' do
@@ -1043,48 +1048,22 @@ describe Locomotive::Steam::ContentEntry do
     context 'a password' do
 
       let(:field_type) { :password }
-      let(:attributes) { { my_field_hash: BCrypt::Password.create('easyone') } }
+      let(:attributes) { { my_field_hash: BCrypt::Password.create('easyone', cost: 4) } }
 
-      it { is_expected.to eq 'easyone' }
-
-      context 'the store holds nothing' do
-
-        { 'nothing at all' => nil, 'an empty text' => '' }.each do |label, held|
-          context label do
-
-            let(:attributes) { { my_field_hash: held } }
-
-            it { is_expected.to be_nil }
-
-            it 'reports nothing' do
-              expect(capture_unread_values { subject }).to be_empty
-            end
-
-          end
-        end
-
+      it 'has no reader' do
+        expect { subject }.to raise_error(NoMethodError)
+        expect(content_entry.respond_to?(:my_field)).to be false
       end
 
-      { 'text that is no hash'  => ['not-a-hash', :invalid_password_hash, 'String'],
-        'text of only spaces'   => ['   ',        :invalid_password_hash, 'String'],
-        'a number'              => [123,          :wrong_stored_type,     'Integer'],
-        'false'                 => [false,        :wrong_stored_type,     'FalseClass'],
-        'a list'                => [[],           :wrong_stored_type,     'Array']
-      }.each do |label, (held, reason, actual_type)|
-        context "the store holds #{label}" do
+      context 'while the entry holds the password it was given' do
 
-          let(:attributes) { { my_field_hash: held } }
+        let(:attributes) { { my_field: 'easyone' } }
 
-          it { is_expected.to be_nil }
-
-          it "reports #{reason}" do
-            events = capture_unread_values { subject }
-
-            expect(events.map { |event| event.values_at(:field, :locale, :actual_type, :reason) })
-              .to eq [['my_field', nil, actual_type, reason.to_s]]
-          end
-
+        it 'does not hand it out' do
+          expect { subject }.to raise_error(NoMethodError)
+          expect(content_entry.respond_to?(:my_field)).to be false
         end
+
       end
 
     end
@@ -1156,6 +1135,141 @@ describe Locomotive::Steam::ContentEntry do
 
   def build_i18n_field(translations = {})
     Locomotive::Steam::Models::I18nField.new(:my_field, translations)
+  end
+
+  describe '#respond_to?' do
+
+    it 'answers for an attribute before the entry has a content type' do
+      expect(described_class.new(title: 'x').respond_to?(:title)).to be true
+    end
+
+  end
+
+  describe '#password_matches?' do
+
+    let(:secret_field) { instance_double('Field', name: :secret, type: :password, write_only?: true) }
+    let(:title_field)  { instance_double('Field', name: :title, type: :string, write_only?: false) }
+    let(:stored)       { BCrypt::Password.create('easyone', cost: 4).to_s }
+    let(:attributes)   { { title: 'Hello world', secret_hash: stored } }
+
+    before do
+      allow(type).to receive(:fields_by_name)
+        .and_return({ secret: secret_field, title: title_field }.with_indifferent_access)
+    end
+
+    it 'answers true for the password the hash was made from' do
+      expect(content_entry.password_matches?(:secret, 'easyone')).to be true
+      expect(content_entry.password_matches?('secret', 'easyone')).to be true
+    end
+
+    it 'answers false for any other candidate' do
+      ['wrong', "\xFFeasyone".dup.force_encoding('UTF-8')].each do |candidate|
+        expect(content_entry.password_matches?(:secret, candidate)).to be false
+      end
+    end
+
+    it 'does not hash a candidate that cannot be a password' do
+      expect(BCrypt::Engine).not_to receive(:hash_secret)
+
+      [nil, '', '   ', ['easyone'], { 'a' => 'easyone' }, 42, "\xFF".dup.force_encoding('UTF-8'),
+       "easy\0one", "\0"].each do |candidate|
+        expect(content_entry.password_matches?(:secret, candidate)).to be false
+      end
+    end
+
+    it 'answers false for a field that is not a password' do
+      expect(content_entry.password_matches?(:title, 'Hello world')).to be false
+      expect(content_entry.password_matches?(:unknown, 'easyone')).to be false
+    end
+
+    context 'the store holds nothing' do
+
+      { 'nothing at all' => nil, 'an empty text' => '' }.each do |label, held|
+        context label do
+
+          let(:stored) { held }
+
+          it 'answers false and reports nothing' do
+            events = capture_unread_values do
+              expect(content_entry.password_matches?(:secret, 'easyone')).to be false
+            end
+
+            expect(events).to be_empty
+          end
+
+        end
+      end
+
+    end
+
+    { 'text that is no hash'             => ['not-a-hash',            :invalid_password_hash, 'String'],
+      'text of only spaces'              => ['   ',                   :invalid_password_hash, 'String'],
+      'a hash of an unsupported version' => ['$zz$05$' + 'a' * 53,    :invalid_password_hash, 'String'],
+      'a hash below the costs bcrypt reads' => ['$2a$03$' + 'a' * 53, :invalid_password_hash, 'String'],
+      'a hash above the costs bcrypt reads' => ['$2a$32$' + 'a' * 53, :invalid_password_hash, 'String'],
+      'a number'                         => [123,                     :wrong_stored_type,     'Integer'],
+      'false'                            => [false,                   :wrong_stored_type,     'FalseClass'],
+      'a list'                           => [[],                      :wrong_stored_type,     'Array']
+    }.each do |label, (held, reason, actual_type)|
+      context "the store holds #{label}" do
+
+        let(:stored) { held }
+
+        it "answers false and reports #{reason} without the hash or the candidate" do
+          expect(BCrypt::Engine).not_to receive(:hash_secret)
+
+          events = capture_unread_values do
+            expect(content_entry.password_matches?(:secret, 'easyone')).to be false
+          end
+
+          expect(events.map { |event| event.values_at(:field, :locale, :actual_type, :reason) })
+            .to eq [['secret', nil, actual_type, reason.to_s]]
+          expect(events.first.values.map(&:to_s)).not_to include('easyone', held.to_s)
+        end
+
+      end
+    end
+
+    context 'the store holds a hash at the highest cost bcrypt reads' do
+
+      let(:stored) { '$2a$31$' + 'a' * 53 }
+
+      it 'hands the candidate to bcrypt and reports nothing' do
+        expect(BCrypt::Engine).to receive(:hash_secret).with('easyone', stored[0, 29]).and_return('')
+
+        events = capture_unread_values { content_entry.password_matches?(:secret, 'easyone') }
+
+        expect(events).to be_empty
+      end
+
+    end
+
+  end
+
+  describe 'a password field chosen as the label' do
+
+    let(:secret_field) { instance_double('Field', name: :secret, type: :password, write_only?: true, is_relationship?: false) }
+    let(:type)         { instance_double('ContentType', slug: 'accounts', label_field_name: :secret, fields: repository) }
+    let(:attributes)   { { secret: 'plain-secret-1', _slug: 'someone' } }
+
+    before do
+      content_entry.localized_attributes = {}
+      allow(type).to receive(:fields_by_name).and_return({ secret: secret_field }.with_indifferent_access)
+      allow(type).to receive(:persisted_field_names).and_return([])
+      allow(content_entry).to receive(:base_url).and_return('/assets')
+    end
+
+    it 'gives no label' do
+      expect(content_entry._label).to be_nil
+      expect(content_entry.to_liquid._label).to be_nil
+    end
+
+    it 'keeps the password out of the public serializations' do
+      expect(content_entry.to_hash['_label']).to be_nil
+      expect(content_entry.to_hash.to_s).not_to include('plain-secret-1')
+      expect(content_entry.as_json.to_s).not_to include('plain-secret-1')
+    end
+
   end
 
   def capture_unread_values

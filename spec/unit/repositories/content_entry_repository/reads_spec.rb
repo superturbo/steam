@@ -85,7 +85,7 @@ describe Locomotive::Steam::ContentEntryRepository do
     let(:site) { nil }
     let(:type) do
       build_content_type('Articles', label_field_name: :title, fields: _fields, fields_with_default: [],
-                         fields_by_name: { title: instance_double('Field', name: :title, type: :string) })
+                         fields_by_name: { title: instance_double('Field', name: :title, type: :string, write_only?: false) })
     end
     let(:entries) do
       [{ content_type_id: 1, _position: 0, _label: 'A B' },
@@ -118,10 +118,10 @@ describe Locomotive::Steam::ContentEntryRepository do
 
     let(:type) do
       build_content_type('Articles', label_field_name: :title, fields: _fields, fields_with_default: [],
-                         fields_by_name: { title:      instance_double('Field', name: :title, type: :string),
-                                           held_on:    instance_double('Field', name: :held_on, type: :date,
+                         fields_by_name: { title:      instance_double('Field', name: :title, type: :string, write_only?: false),
+                                           held_on:    instance_double('Field', name: :held_on, type: :date, write_only?: false,
                                                                        persisted_name: 'held_on'),
-                                           launched_at: instance_double('Field', name: :launched_at, type: :date_time,
+                                           launched_at: instance_double('Field', name: :launched_at, type: :date_time, write_only?: false,
                                                                         persisted_name: 'launched_at') })
     end
 
@@ -190,7 +190,7 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:type) do
         build_content_type('Articles', label_field_name: :title, fields: _fields, fields_with_default: [],
                            localized_names: %w(photo),
-                           fields_by_name: { photo: instance_double('Field', name: :photo, type: :file) })
+                           fields_by_name: { photo: instance_double('Field', name: :photo, type: :file, write_only?: false) })
       end
       let(:entries) { [{ content_type_id: 1, _position: 0, _label: 'Stored', photo: { en: 'photo.jpg' } }] }
 
@@ -216,8 +216,8 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:type) do
         build_content_type('Articles', label_field_name: :title, fields: _fields, fields_with_default: [],
                            localized_names: %w(held_on),
-                           fields_by_name: { title:   instance_double('Field', name: :title, type: :string),
-                                             held_on: instance_double('Field', name: :held_on, type: :date,
+                           fields_by_name: { title:   instance_double('Field', name: :title, type: :string, write_only?: false),
+                                             held_on: instance_double('Field', name: :held_on, type: :date, write_only?: false,
                                                                       persisted_name: 'held_on') })
       end
 
@@ -293,8 +293,8 @@ describe Locomotive::Steam::ContentEntryRepository do
 
       let(:fields) do
         {
-          title:    instance_double('TitleField', name: :title, type: :string),
-          category: instance_double('SelectField', name: :category, type: :select, localized: true, select_options: [])
+          title:    instance_double('TitleField', name: :title, type: :string, write_only?: false),
+          category: instance_double('SelectField', name: :category, type: :select, write_only?: false, localized: true, select_options: [])
         }
       end
       let(:type) { build_content_type('Articles', order_by: '_position asc', label_field_name: :title, localized_names: %w(title category_id), fields: _fields, fields_by_name: fields, fields_with_default: []) }

@@ -18,7 +18,7 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:type) do
         build_content_type('Articles', order_by: { _position: 'asc' }, label_field_name: :title,
                            fields: _fields, fields_with_default: [],
-                           fields_by_name: { title: instance_double('Field', name: :title, type: :string) })
+                           fields_by_name: { title: instance_double('Field', name: :title, type: :string, write_only?: false) })
       end
 
       let(:entries) do
@@ -43,7 +43,7 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:type) do
         build_content_type('Articles', order_by: { _slug: 'asc' }, label_field_name: :title,
                            fields: _fields, fields_with_default: [],
-                           fields_by_name: { title: instance_double('Field', name: :title, type: :string) })
+                           fields_by_name: { title: instance_double('Field', name: :title, type: :string, write_only?: false) })
       end
 
       let(:entries) do
@@ -68,7 +68,7 @@ describe Locomotive::Steam::ContentEntryRepository do
       let(:type) do
         build_content_type('Articles', order_by: { _position: 'asc' }, label_field_name: :title,
                            fields: _fields, fields_with_default: [],
-                           fields_by_name: { title: instance_double('Field', name: :title, type: :string) })
+                           fields_by_name: { title: instance_double('Field', name: :title, type: :string, write_only?: false) })
       end
 
       # Slug order would read alpha, mike, zulu.
@@ -96,8 +96,8 @@ describe Locomotive::Steam::ContentEntryRepository do
     let(:type) do
       build_content_type('Chapters', order_by: { part: 'asc' }, label_field_name: :title,
                          fields: _fields, fields_with_default: [],
-                         fields_by_name: { part:  instance_double('Field', name: :part,  type: :string),
-                                           title: instance_double('Field', name: :title, type: :string) })
+                         fields_by_name: { part:  instance_double('Field', name: :part,  type: :string, write_only?: false),
+                                           title: instance_double('Field', name: :title, type: :string, write_only?: false) })
     end
 
     let(:entries) do

@@ -35,7 +35,7 @@ describe Locomotive::Steam::ContentEntryRepository do
     let(:options_scope) { instance_double('Scope') }
     let(:option)        { instance_double('Option', _id: 42) }
     let(:options)       { instance_double('OptionRepository', scope: options_scope) }
-    let(:field)         { instance_double('SelectField', name: 'category', persisted_name: 'category_id', type: :select, localized?: false, select_options: options) }
+    let(:field)         { instance_double('SelectField', name: 'category', persisted_name: 'category_id', type: :select, write_only?: false, localized?: false, select_options: options) }
     let(:_fields)       { instance_double('Fields', selects: [field], required: [], belongs_to: [], many_to_many: [], dates_and_date_times: [], numbers: [], booleans: []) }
     let(:type)          { build_content_type('Articles', label_field_name: :title, fields: _fields, fields_by_name: {}, fields_with_default: []) }
 
@@ -106,7 +106,7 @@ describe Locomotive::Steam::ContentEntryRepository do
     context 'without an active locale' do
 
       let(:locale) { nil }
-      let(:field)  { instance_double('SelectField', name: 'category', persisted_name: 'category_id', type: :select, localized?: true, select_options: options) }
+      let(:field)  { instance_double('SelectField', name: 'category', persisted_name: 'category_id', type: :select, write_only?: false, localized?: true, select_options: options) }
 
       it 'resolves a scalar through the site default locale' do
         expect(repository.build(category: 'CMS')[:category_id]).to eq 42

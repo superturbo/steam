@@ -30,15 +30,9 @@ module Locomotive
       def sign_in(options, request)
         entry = entries.all(options.type, options.id_field => options.id).first
 
-        if entry && (entry.send(options.password_field).present?)
-          hashed_password = entry[:"#{options.password_field}_hash"]
-          password        = ::BCrypt::Engine.hash_secret(options.password, entry.send(options.password_field).try(:salt))
-          same_password   = secure_compare(password, hashed_password)
-
-          if same_password
-            notify(:signed_in, entry, request)
-            return [:signed_in, entry]
-          end
+        if entry&.password_matches?(options.password_field, options.password)
+          notify(:signed_in, entry, request)
+          return [:signed_in, entry]
         end
 
         :wrong_credentials
@@ -74,6 +68,7 @@ module Locomotive
       def reset_password(options, request)
         return :invalid_token       if options.reset_token.blank?
         return :password_too_short  if options.password.to_s.size < MIN_PASSWORD_LENGTH
+        return :invalid_password    unless ContentEntry.usable_password?(options.password)
 
         entry = entries.all(options.type, '_auth_reset_token' => options.reset_token).first
 
@@ -137,16 +132,6 @@ EMAIL
         email_service.send_email(email_options, context)
       end
 
-      # https://github.com/plataformatec/devise/blob/88724e10adaf9ffd1d8dbfbaadda2b9d40de756a/lib/devise.rb#L485
-      def secure_compare(a, b)
-        return false if a.blank? || b.blank? || a.bytesize != b.bytesize
-        l = a.unpack "C#{a.bytesize}"
-
-        res = 0
-        b.each_byte { |byte| res |= byte ^ l.shift }
-        res == 0
-      end
-
       # Module inject to the content entry to enable
       # related authentication methods.
       #
@@ -160,12 +145,15 @@ EMAIL
           if (name = self[:_password_field])
             password      = self[name]
             confirmation  = self["#{name}_confirmation"]
+            usable        = self.class.usable_password?(password)
 
             if password.to_s.size < Locomotive::Steam::AuthService::MIN_PASSWORD_LENGTH
               self.errors.add(name, :too_short, count: Locomotive::Steam::AuthService::MIN_PASSWORD_LENGTH)
+            elsif !usable
+              self.errors.add(name, :invalid)
             end
 
-            if !password.blank? && password != confirmation
+            if usable && password != confirmation
               self.errors.add("#{name}_confirmation", :confirmation, attribute: self._label_of(name))
             end
 

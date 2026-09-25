@@ -139,6 +139,20 @@ describe Locomotive::Steam::AuthService do
 
         end
 
+        ['      ', "\xFFeasyone".dup.force_encoding('UTF-8'), "easy\0one"].each do |password|
+          context "a password sign in would refuse: #{password.inspect}" do
+
+            let(:attributes) { { password: password, password_confirmation: password } }
+
+            it 'returns false without hashing it' do
+              expect(BCrypt::Password).not_to receive(:create)
+              is_expected.to eq false
+              expect(content_entry.errors[:password]).to eq(['is invalid'])
+            end
+
+          end
+        end
+
       end
 
     end
@@ -155,28 +169,32 @@ describe Locomotive::Steam::AuthService do
     end
 
     it "returns :wrong_credentials if the password doesn't the entry's password" do
-      entry = build_account('fakeone')
+      entry = account(BCrypt::Password.create('fakeone', cost: 4).to_s)
       expect(entries).to receive(:all).with('accounts', { 'email' => 'john@doe.net' }).and_return([entry])
       is_expected.to eq :wrong_credentials
     end
 
+    it "returns :wrong_credentials if the entry holds no password" do
+      [nil, ''].each do |stored|
+        allow(entries).to receive(:all).with('accounts', { 'email' => 'john@doe.net' }).and_return([account(stored)])
 
-    it "returns :wrong_credentials if the password is nil" do
-      entry = instance_double('Account', password: nil)
-      expect(entries).to receive(:all).with('accounts', { 'email' => 'john@doe.net' }).and_return([entry])
-      is_expected.to eq :wrong_credentials
-    end
-
-    it "returns :wrong_credentials if the password is blank" do
-      entry = instance_double('Account', password: '')
-      expect(entries).to receive(:all).with('accounts', { 'email' => 'john@doe.net' }).and_return([entry])
-      is_expected.to eq :wrong_credentials
+        expect(service.sign_in(auth_options, nil)).to eq :wrong_credentials
+      end
     end
 
     it "returns both :signed_in and the entry if the password matches the entry's password" do
-      entry = build_account('easyone')
+      entry = account(BCrypt::Password.create('easyone', cost: 4).to_s)
       expect(entries).to receive(:all).with('accounts', { 'email' => 'john@doe.net' }).and_return([entry])
       is_expected.to eq [:signed_in, entry]
+    end
+
+    def account(stored_hash)
+      field = instance_double('Field', name: :password, type: :password, write_only?: true)
+      type  = instance_double('ContentType', fields_by_name: { password: field }.with_indifferent_access)
+
+      Locomotive::Steam::ContentEntry.new(email: 'john@doe.net', password_hash: stored_hash).tap do |entry|
+        entry.content_type = type
+      end
     end
 
   end
@@ -191,7 +209,7 @@ describe Locomotive::Steam::AuthService do
     end
 
     it 'sends the instructions by email if an entry matches the email' do
-      entry = build_account('easyone', '42a')
+      entry = build_account('42a')
       expect(entries).to receive(:all).with('accounts', { 'email' => 'john@doe.net' }).and_return([entry])
       expect(entries).to receive(:update_decorated_entry)
       expect(emails).to receive(:send_email).with({
@@ -210,7 +228,7 @@ describe Locomotive::Steam::AuthService do
       let(:auth_options)  { instance_double('AuthOptions', _auth_options) }
 
       it 'also sends the instructions by email with a default email template' do
-        entry = build_account('easyone', '42a')
+        entry = build_account('42a')
         expect(entries).to receive(:all).with('accounts', { 'email' => 'john@doe.net' }).and_return([entry])
         expect(entries).to receive(:update_decorated_entry)
         expect(emails).to receive(:send_email).with({
@@ -255,6 +273,19 @@ EMAIL
 
     end
 
+    ['      ', "\xFFeasyone".dup.force_encoding('UTF-8'), "easy\0one", ['easyone']].each do |password|
+      context "a password sign in would refuse: #{password.inspect}" do
+
+        let(:_auth_options) { default_auth_options.merge({ password: password }) }
+
+        it 'writes nothing' do
+          expect(entries).not_to receive(:update_decorated_entry)
+          is_expected.to eq :invalid_password
+        end
+
+      end
+    end
+
     context 'expired auth token' do
 
       it 'returns :invalid_token' do
@@ -279,12 +310,10 @@ EMAIL
 
   end
 
-  def build_account(password = 'easyone', reset_token = nil)
-    encrypted_password = BCrypt::Password.create(password)
-    entry = instance_double('Account', password: BCrypt::Password.new(encrypted_password))
-    allow(entry).to receive(:[]).with(:password_hash).and_return(encrypted_password)
-    allow(entry).to receive(:[]).with('_auth_reset_token').and_return(reset_token)
-    entry
+  def build_account(reset_token)
+    instance_double('Account').tap do |entry|
+      allow(entry).to receive(:[]).with('_auth_reset_token').and_return(reset_token)
+    end
   end
 
 end

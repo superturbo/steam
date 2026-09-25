@@ -137,6 +137,8 @@ module Locomotive
         return nil if entry.nil?
 
         if field = content_type.fields_by_name[name]
+          return if field.write_only?
+
           value = entry.send(name)
 
           if %i(has_many many_to_many).include?(field.type) && conditions.present?
