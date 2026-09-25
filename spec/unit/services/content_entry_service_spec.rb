@@ -81,6 +81,41 @@ describe Locomotive::Steam::ContentEntryService do
 
   end
 
+  describe '#create an entry whose stored schema declares a password unique' do
+
+    let(:type_repository) { Locomotive::Steam::ContentTypeRepository.new(nil) }
+    let(:adapter)         { Locomotive::Steam::MemoryAdapter.new(nil) }
+    let(:fields)          { Locomotive::Steam::ContentTypeFieldRepository.new(adapter) }
+    let(:content_type) do
+      instance_double('ContentType', slug: 'accounts', fields: fields, label_field_name: :email,
+                                     fields_by_name: fields.all.index_by(&:name).with_indifferent_access,
+                                     persisted_field_names: ['email'])
+    end
+
+    before do
+      allow(adapter).to receive(:collection)
+        .and_return([{ name: 'email', type: 'email' }, { name: 'secret', type: 'password', unique: true }])
+      allow(type_repository).to receive(:by_slug).with('accounts').and_return(content_type)
+      allow(entry_repository).to receive(:content_type).and_return(content_type)
+      allow(entry_repository).to receive(:resolve_selects) { |attributes| attributes }
+      allow(entry_repository).to receive(:build) do |attributes|
+        Locomotive::Steam::ContentEntry.new(attributes).tap do |entry|
+          entry.content_type         = content_type
+          entry.localized_attributes = {}
+        end
+      end
+    end
+
+    it 'reaches create without reading the password' do
+      expect(entry_repository).to receive(:create)
+
+      entry = service.create('accounts', { email: 'john@doe.net', secret: 'easyone' })
+
+      expect(entry.errors).to be_empty
+    end
+
+  end
+
   describe '#validate' do
 
     let(:attributes)        { { title: 'Hello world' } }

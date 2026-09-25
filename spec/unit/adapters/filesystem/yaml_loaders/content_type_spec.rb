@@ -69,6 +69,55 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentType do
       end
     end
 
+    it 'refuses a unique password field' do
+      expect do
+        load_fields(<<~YAML)
+          fields:
+          - secret:
+              type: password
+              unique: true
+        YAML
+      end.to raise_error(Locomotive::Steam::UnsupportedSchemaError,
+                         /articles\.yml, field secret: a password field cannot be unique/) do |error|
+        expect(error.reason).to eq :unsupported_unique
+      end
+    end
+
+    { 'declared' => <<~DECLARED, 'first by default' => <<~FIRST }.each do |label, definition|
+      label_field_name: secret
+      fields:
+      - title:
+          type: string
+      - secret:
+          type: password
+    DECLARED
+      fields:
+      - secret:
+          type: password
+      - title:
+          type: string
+    FIRST
+      it "refuses a password label field, #{label}" do
+        expect { load_fields(definition) }
+          .to raise_error(Locomotive::Steam::UnsupportedSchemaError,
+                          /articles\.yml, field secret: a password field cannot be the label/) do |error|
+          expect(error.reason).to eq :unsupported_label
+        end
+      end
+    end
+
+    it 'loads a password field that is not the label' do
+      fields = load_fields(<<~YAML)
+        fields:
+        - title:
+            type: string
+        - secret:
+            type: password
+      YAML
+
+      expect(fields.map { |field| field[:name] }).to eq %w(title secret)
+    end
+
     it 'refuses an unknown field type, naming it' do
       expect do
         load_fields(<<~YAML)

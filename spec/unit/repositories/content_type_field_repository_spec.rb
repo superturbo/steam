@@ -46,6 +46,16 @@ describe Locomotive::Steam::ContentTypeFieldRepository do
 
     it { expect(subject.keys).to eq ['email'] }
 
+    context 'stored metadata declaring a password unique' do
+
+      let(:collection) { [{ name: 'email', type: 'email', unique: true }, { name: 'secret', type: 'password', unique: true }] }
+
+      it 'leaves out the write-only field' do
+        expect(subject.keys).to eq ['email']
+      end
+
+    end
+
   end
 
   describe '#default' do

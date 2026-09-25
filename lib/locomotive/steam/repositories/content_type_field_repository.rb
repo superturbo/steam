@@ -63,7 +63,7 @@ module Locomotive
       end
 
       def unique
-        query { where(unique: true) }.all.inject({}) do |memo, field|
+        query { where(unique: true) }.all.reject(&:write_only?).inject({}) do |memo, field|
           memo[field.name] = field
           memo
         end

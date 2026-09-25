@@ -20,6 +20,7 @@ module Locomotive
                 each_file do |filepath, slug|
                   attributes = _load(filepath)
                   attributes[:entries_custom_fields] = build_fields(attributes.delete(:fields), filepath)
+                  reject_write_only_label!(attributes, filepath)
                   array << { _id: slug.to_s, slug: slug }.merge(attributes)
                 end
               end
@@ -100,6 +101,24 @@ module Locomotive
                 raise Locomotive::Steam::UnsupportedSchemaError.new(:unsupported_required,
                   "#{filepath}, field #{attributes[:name]}: a #{attributes[:type]} field cannot be required")
               end
+
+              if attributes[:unique] && field.write_only?
+                raise Locomotive::Steam::UnsupportedSchemaError.new(:unsupported_unique,
+                  "#{filepath}, field #{attributes[:name]}: a #{attributes[:type]} field cannot be unique")
+              end
+            end
+
+            def reject_write_only_label!(attributes, filepath)
+              fields = attributes[:entries_custom_fields]
+              name   = (attributes[:label_field_name] || fields.first&.fetch(:name)).to_s
+              label  = fields.find { |field| field[:name] == name }
+              return unless label
+
+              field = Locomotive::Steam::ContentTypeField.new(type: label[:type])
+              return unless field.write_only?
+
+              raise Locomotive::Steam::UnsupportedSchemaError.new(:unsupported_label,
+                "#{filepath}, field #{name}: a #{label[:type]} field cannot be the label")
             end
 
             def build_select_options(options)
