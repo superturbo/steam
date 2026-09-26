@@ -41,6 +41,10 @@ module Locomotive::Steam
       ''
     end
 
+    def native_id?(_value)
+      false
+    end
+
     def make_id(id)
       id
     end

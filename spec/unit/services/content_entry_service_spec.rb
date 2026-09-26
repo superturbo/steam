@@ -13,7 +13,7 @@ describe Locomotive::Steam::ContentEntryService do
   describe '#update_decorated_entry' do
 
     let(:title_field)  { instance_double('Field', name: :title, type: :string, is_relationship?: false, write_only?: false) }
-    let(:fields)       { instance_double('Fields', json: [], selects: []) }
+    let(:fields)       { instance_double('Fields', json: [], selects: [], associations: []) }
     let(:content_type) do
       instance_double('ContentType', invalid_entry_names: [], slug: 'articles', fields: fields, label_field_name: :title,
                                      fields_by_name: { title: title_field }.with_indifferent_access,
@@ -30,6 +30,7 @@ describe Locomotive::Steam::ContentEntryService do
     before do
       allow(entry_repository).to receive(:content_type).and_return(content_type)
       allow(entry_repository).to receive(:resolve_selects) { |attributes| attributes }
+      allow(entry_repository).to receive(:resolve_belongs_to) { |attributes| attributes }
     end
 
     it 'keeps the decorator attached to the written entity' do
@@ -48,7 +49,7 @@ describe Locomotive::Steam::ContentEntryService do
   describe '#create an entry whose label field is a password' do
 
     let(:secret_field) { instance_double('Field', name: :secret, type: :password, write_only?: true, is_relationship?: false) }
-    let(:fields)       { instance_double('Fields', json: [], selects: []) }
+    let(:fields)       { instance_double('Fields', json: [], selects: [], associations: []) }
     let(:content_type) do
       instance_double('ContentType', invalid_entry_names: [], slug: 'accounts', fields: fields, label_field_name: :secret,
                                      fields_by_name: { secret: secret_field }.with_indifferent_access,
@@ -59,6 +60,7 @@ describe Locomotive::Steam::ContentEntryService do
       allow(type_repository).to receive(:by_slug).with('accounts').and_return(content_type)
       allow(entry_repository).to receive(:content_type).and_return(content_type)
       allow(entry_repository).to receive(:resolve_selects) { |attributes| attributes }
+      allow(entry_repository).to receive(:resolve_belongs_to) { |attributes| attributes }
       allow(entry_repository).to receive(:build) do |attributes|
         Locomotive::Steam::ContentEntry.new(attributes).tap do |entry|
           entry.content_type         = content_type
@@ -98,6 +100,7 @@ describe Locomotive::Steam::ContentEntryService do
       allow(type_repository).to receive(:by_slug).with('accounts').and_return(content_type)
       allow(entry_repository).to receive(:content_type).and_return(content_type)
       allow(entry_repository).to receive(:resolve_selects) { |attributes| attributes }
+      allow(entry_repository).to receive(:resolve_belongs_to) { |attributes| attributes }
       allow(entry_repository).to receive(:build) do |attributes|
         Locomotive::Steam::ContentEntry.new(attributes).tap do |entry|
           entry.content_type         = content_type
@@ -132,6 +135,7 @@ describe Locomotive::Steam::ContentEntryService do
       allow(type_repository).to receive(:look_for_unique_fields).and_return({})
       allow(entry_repository).to receive(:content_type).and_return(content_type)
       allow(entry_repository).to receive(:resolve_selects) { |attributes| attributes }
+      allow(entry_repository).to receive(:resolve_belongs_to) { |attributes| attributes }
       allow(entry_repository).to receive(:build) do |attributes|
         Locomotive::Steam::ContentEntry.new(attributes).tap do |entry|
           entry.content_type         = content_type
@@ -176,7 +180,7 @@ describe Locomotive::Steam::ContentEntryService do
     let(:secret_field) { instance_double('Field', name: :secret, type: :password, persisted_name: nil, write_only?: true, is_relationship?: false) }
     let(:price_field)  { instance_double('Field', name: :price, type: :money, persisted_name: 'price', write_only?: false, is_relationship?: false) }
     let(:tint_field)   { instance_double('Field', name: :tint, type: :color, persisted_name: 'tint', write_only?: false, is_relationship?: false) }
-    let(:fields)       { instance_double('Fields', json: [], selects: [], required: []) }
+    let(:fields)       { instance_double('Fields', json: [], selects: [], associations: [], required: []) }
     let(:content_type) do
       instance_double('ContentType', invalid_entry_names: [], slug: 'songs', fields: fields, label_field_name: :title,
                                      fields_by_name: { title: title_field, cover: cover_field, secret: secret_field,
@@ -189,6 +193,7 @@ describe Locomotive::Steam::ContentEntryService do
       allow(type_repository).to receive(:look_for_unique_fields).and_return({})
       allow(entry_repository).to receive(:content_type).and_return(content_type)
       allow(entry_repository).to receive(:resolve_selects) { |attributes| attributes }
+      allow(entry_repository).to receive(:resolve_belongs_to) { |attributes| attributes }
       allow(entry_repository).to receive(:build) do |attributes|
         Locomotive::Steam::ContentEntry.new(attributes).tap do |entry|
           entry.content_type         = content_type
@@ -237,7 +242,7 @@ describe Locomotive::Steam::ContentEntryService do
 
     context 'a required file' do
 
-      let(:fields) { instance_double('Fields', json: [], selects: [], required: [cover_field]) }
+      let(:fields) { instance_double('Fields', json: [], selects: [], associations: [], required: [cover_field]) }
 
       it 'is refused and still missing' do
         entry = service.create('songs', { title: 'Song', cover: upload })

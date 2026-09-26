@@ -92,6 +92,29 @@ module Locomotive
         end
       end
 
+      # A belongs_to named by its field takes an id or a slug, one named by its
+      # persisted key an id only. A value finding no entry or two different
+      # entries, a malformed value, or both forms at once fails validation.
+      def resolve_belongs_to(attributes)
+        content_type.association_fields.each_with_object(attributes.dup) do |field, memo|
+          next unless field.type == :belongs_to
+
+          name_keys = memo.keys.select { |key| key.to_s == field.name.to_s }
+          id_keys   = memo.keys.select { |key| key.to_s == field.persisted_name }
+
+          next if name_keys.empty? && id_keys.empty?
+
+          values = (name_keys + id_keys).map { |key| memo.delete(key) }
+
+          memo[field.persisted_name.to_sym] =
+            if values.size > 1
+              ContentEntry::INVALID_LINK_VALUE
+            else
+              link_value_to_id(field, values.first, by_name: name_keys.any?)
+            end
+        end
+      end
+
       def count(conditions = {})
         clauses, _ = query_parts(conditions)
         super() { clauses.each { |clause| where(clause) } }
@@ -227,6 +250,65 @@ module Locomotive
       INCREMENTABLE_FIELD_TYPES = %i(integer float).freeze
 
       private_constant :ORDERABLE_FIELD_TYPES, :ORDERABLE_SYSTEM_FIELDS, :INCREMENTABLE_FIELD_TYPES
+
+      def link_value_to_id(field, value, by_name:)
+        return if value.nil? || value == ''
+
+        # A stored schema may name a target type that no longer exists.
+        target_type = content_type_repository.find(field.target_id)
+        reference   = target_type && link_reference(value, target_type)
+
+        return ContentEntry::INVALID_LINK_VALUE if reference.nil?
+
+        spells_slug = by_name && (value.is_a?(String) || value.is_a?(Symbol))
+
+        id = find_link_target(target_type, reference, spells_slug: spells_slug)
+
+        id || ContentEntry::INVALID_LINK_VALUE
+      end
+
+      def link_reference(value, target_type)
+        entry = link_entry(value)
+
+        reference =
+          if value.is_a?(String) || value.is_a?(Symbol) then value.to_s
+          elsif entry                                     then entry_reference(entry, target_type)
+          elsif adapter.native_id?(value)                 then value.to_s
+          end
+
+        reference if reference&.valid_encoding?
+      end
+
+      # A decorator stands for the entry it wraps; nothing else passes for one.
+      def link_entry(value)
+        value = value.__getobj__ while value.is_a?(SimpleDelegator)
+
+        value if value.is_a?(ContentEntry)
+      end
+
+      # An entry names only an entry of the target type, in this site; one that
+      # names no site is no reference.
+      def entry_reference(entry, target_type)
+        return unless entry.content_type_id.to_s == target_type._id.to_s
+        return unless site && entry[:site_id].to_s == site._id.to_s
+
+        stored_link_id(entry._id).to_s
+      end
+
+      # Hidden entries are linkable: visibility governs publishing, not access.
+      def find_link_target(target_type, reference, spells_slug:)
+        target  = simple_clone.with(target_type)
+        by_id   = adapter.make_id(reference) ? target.all(_id: reference, _visible: nil) : []
+        by_slug = spells_slug ? target.all(_slug: reference, _visible: nil) : []
+        matches = (by_id + by_slug).uniq { |entry| entry._id.to_s }
+
+        stored_link_id(matches.first._id) if matches.size == 1
+      end
+
+      # Store a pulled entry by its portable slug.
+      def stored_link_id(id)
+        id.is_a?(Array) ? id.last : id
+      end
 
       # A default fills a field the attributes leave out. An explicit null is a
       # value, and a stored entry is never revisited, so the two stay apart.

@@ -56,6 +56,10 @@ module Locomotive::Steam
       Adapters::Query::Operators.key(name, operator)
     end
 
+    def native_id?(value)
+      value.is_a?(BSON::ObjectId)
+    end
+
     def make_id(id)
       return id if id.is_a?(BSON::ObjectId)
 

@@ -165,7 +165,8 @@ module Locomotive
           case field.type
           when *WRITTEN_BY_NAME           then [field.name.to_s]
           when :select                    then [field.name.to_s, field.persisted_name.to_s]
-          when :belongs_to, :many_to_many then [field.persisted_name.to_s]
+          when :belongs_to                then [field.name.to_s, field.persisted_name.to_s]
+          when :many_to_many              then [field.persisted_name.to_s]
           when :password                  then [field.name.to_s, "#{field.name}_confirmation"]
           else []
           end
@@ -182,12 +183,14 @@ module Locomotive
       end
 
       def prepare_attributes(_repository, attributes)
-        # An option name is data to look up, not text to render.
-        attributes = _repository.resolve_selects(attributes)
+        # Option names and link references are data to look up, not text to render.
+        attributes = _repository.resolve_belongs_to(_repository.resolve_selects(attributes))
 
         fields       = _repository.content_type.fields
+        links        = fields.associations.select { |field| field.type == :belongs_to }
         skipped_keys = fields.json.map { |field| field.name.to_s } +
-                       fields.selects.map { |field| field.persisted_name.to_s }
+                       fields.selects.map { |field| field.persisted_name.to_s } +
+                       links.map(&:persisted_name)
 
         # JSON is validated as data; HTML escaping belongs to rendering.
         attributes.each do |key, value|

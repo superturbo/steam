@@ -54,6 +54,7 @@ module Locomotive::Steam
     end
 
     INVALID_SELECT_VALUE = Object.new.freeze
+    INVALID_LINK_VALUE   = Object.new.freeze
 
     # Refused input survives repeated validation.
     def refuse_input(names)
@@ -67,7 +68,7 @@ module Locomotive::Steam
 
       report_refused_input
 
-      invalid = validate_select_fields
+      invalid = validate_select_fields + validate_link_fields
 
       validate_required_fields(invalid + normalize_fields)
 
@@ -200,6 +201,17 @@ module Locomotive::Steam
                  end
 
         next unless values.any? { |id| id.equal?(INVALID_SELECT_VALUE) }
+
+        errors.add(field.name.to_sym, :invalid)
+        invalid << field.name.to_sym
+      end
+    end
+
+    # An unresolved link is invalid, not missing as well.
+    def validate_link_fields
+      content_type.fields_by_name.each_value.with_object([]) do |field, invalid|
+        next unless field.type == :belongs_to
+        next unless attributes[field.persisted_name.to_sym].equal?(INVALID_LINK_VALUE)
 
         errors.add(field.name.to_sym, :invalid)
         invalid << field.name.to_sym

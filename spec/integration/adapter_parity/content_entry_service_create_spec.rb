@@ -7,7 +7,7 @@ require_relative '../../support/adapter_parity_context'
 
 describe 'Adapter parity' do
 
-  shared_examples_for 'the adapter parity dataset' do
+  shared_examples_for 'the adapter parity dataset' do |store|
 
     include_context 'adapter parity dataset access'
 
@@ -18,6 +18,287 @@ describe 'Adapter parity' do
       describe 'writing' do
 
         include_context 'adapter parity service writing'
+
+        describe 'linking a belongs_to by its name' do
+
+          let(:base) { { category: 'alpha' } }
+
+          # Hidden entries count too: a refused link must not hide a write.
+          def stored_count
+            service.all('specimens', _visible: nil).size
+          end
+
+          def id_of(type_slug, slug)
+            entries_of(type_slug).all(_slug: slug, _visible: nil).first._id
+          end
+
+          def create_with(input)
+            @created = (@created || 0) + 1
+            service.create('specimens', base.merge(name: "Linked #{@created}").merge(input), true)
+          end
+
+          def stored_maker_id(created)
+            stored_specimen(created['_id']).attributes[:maker_id]
+          end
+
+          def raw_entries
+            AdapterParityFixture.mongodb_client[AdapterParityFixture::MongoDBDocuments::CONTENT_ENTRIES_COLLECTION]
+          end
+
+          let(:writable_types) { %w(specimens submissions makers) }
+          let(:inserted_ids)   { [] }
+
+          # The shared cleanup misses a maker another site holds; drop what was inserted.
+          after { raw_entries.delete_many('_id' => { '$in' => inserted_ids }) if inserted_ids.any? }
+
+          def store_maker(id: nil, slug:, site_id: nil, visible: true)
+            if filesystem?
+              makers = entries_of('makers')
+              makers.create(makers.build({ name: "Maker #{slug}", _slug: slug, _visible: visible }
+                                           .merge(id ? { _id: id } : {})))
+            else
+              document = raw_entries.find(_id: id_of('makers', 'maker-two')).first
+              slugs    = slug.is_a?(Hash) ? slug : { 'en' => slug }
+              id ||= BSON::ObjectId.new
+              raw_entries.insert_one(document.merge('_id' => id, '_slug' => slugs, '_visible' => visible)
+                                             .merge(site_id ? { 'site_id' => site_id } : {}))
+              inserted_ids << id
+            end
+          end
+
+          def refuses(input, field)
+            entry = nil
+
+            expect { entry = create_with(input) }.not_to change { stored_count }
+
+            expect(entry['errors'][field]).to eq ['is invalid']
+          end
+
+          describe 'a belongs_to' do
+
+            it 'links the entry a slug names' do
+              expect(stored_maker_id(create_with(maker: 'maker-one'))).to eq id_of('makers', 'maker-one')
+            end
+
+            it 'links the entry an id names' do
+              maker_two = id_of('makers', 'maker-two')
+
+              expect(stored_maker_id(create_with(maker: maker_two.to_s))).to eq maker_two
+            end
+
+            it 'links one entry that a text names both by id and by slug' do
+              same = 'abcdefabcdefabcdefabcdef'
+              store_maker(id: (filesystem? ? nil : BSON::ObjectId.from_string(same)), slug: same)
+
+              expect(id_of('makers', same).to_s).to eq same
+              expect(stored_maker_id(create_with(maker: same))).to eq id_of('makers', same)
+            end
+
+            context 'given an id or an entry rather than text' do
+
+              # The Hex slug maker's slug spells the twin's id; only text may read it.
+              let(:hex) { '0123456789abcdef01234567' }
+
+              before do
+                id = filesystem? ? [hex, 'typed-twin'] : BSON::ObjectId.from_string(hex)
+                store_maker(id: id, slug: 'typed-twin')
+              end
+
+              def twin
+                entries_of('makers').all(_slug: 'typed-twin', _visible: nil).first
+              end
+
+              it 'links the entry an entry names, by its id alone' do
+                expect(stored_maker_id(create_with(maker: twin))).to eq(filesystem? ? 'typed-twin' : twin._id)
+              end
+
+              it 'refuses an entry of another type, even one whose id a maker shares' do
+                # This fixture entry uses its slug as its Filesystem ID, and so does the new maker.
+                store_maker(slug: 'topic-a') if filesystem?
+
+                refuses({ maker: entries_of('topics').by_slug('topic-a') }, 'maker')
+              end
+
+              it 'refuses an entry another site holds' do
+                maker = entries_of('makers').by_slug('maker-one').dup
+                maker[:site_id] = 'another-site'
+
+                refuses({ maker: maker }, 'maker')
+              end
+
+              it 'links the entry a decorated entry wraps' do
+                decorated = Locomotive::Steam::Decorators::I18nDecorator.new(twin, :en)
+
+                expect(stored_maker_id(create_with(maker: decorated))).to eq(filesystem? ? 'typed-twin' : twin._id)
+              end
+
+              it 'refuses an object that only looks like an entry' do
+                impostor = Struct.new(:content_type_id).new(type_repository.by_slug('makers')._id)
+
+                refuses({ maker: impostor }, 'maker')
+              end
+
+              it 'refuses an entry that names no site' do
+                orphan = Locomotive::Steam::ContentEntry.new(_id: twin._id, name: 'Orphan')
+                orphan.content_type = type_repository.by_slug('makers')
+
+                refuses({ maker: orphan }, 'maker')
+              end
+
+              # Only MongoDB issues an id object of its own.
+              if store == :mongodb
+                it 'links the entry a store id names, by its id alone' do
+                  expect(stored_maker_id(create_with(maker: BSON::ObjectId.from_string(hex)))).to eq twin._id
+                end
+              end
+
+            end
+
+            it 'refuses a text naming one entry by id and another by slug' do
+              hex = '0123456789abcdef01234567'
+              # A Wagon pull gives a Filesystem entry a [remote id, slug] identity.
+              store_maker(id: (filesystem? ? [hex, 'id-twin'] : BSON::ObjectId.from_string(hex)), slug: 'id-twin')
+
+              refuses({ maker: hex }, 'maker')
+            end
+
+            # Wagon pull can give a Filesystem entry a composite identity.
+            if store == :filesystem
+              it 'links a pulled entry by either part of its identity and stores its slug' do
+                store_maker(id: ['5f1111111111111111111111', 'pulled-maker'], slug: 'pulled-maker')
+
+                ['pulled-maker', '5f1111111111111111111111'].each do |reference|
+                  expect(stored_maker_id(create_with(maker: reference))).to eq 'pulled-maker'
+                end
+                expect(stored_maker_id(create_with(maker_id: '5f1111111111111111111111'))).to eq 'pulled-maker'
+              end
+            end
+
+            it 'links a hidden target' do
+              store_maker(slug: 'hidden-maker', visible: false)
+
+              expect(stored_maker_id(create_with(maker: 'hidden-maker'))).to eq id_of('makers', 'hidden-maker')
+            end
+
+            # Only MongoDB keeps several sites in one store.
+            if store == :mongodb
+              it 'refuses a target another site holds' do
+                store_maker(slug: 'foreign-maker', site_id: BSON::ObjectId.new)
+
+                refuses({ maker: 'foreign-maker' }, 'maker')
+              end
+            end
+
+            [/maker-one/, 42, 1.5, true, "\xFFmaker".dup.force_encoding('UTF-8')].each do |value|
+              it "refuses #{value.inspect} without an error" do
+                refuses({ maker: value }, 'maker')
+              end
+            end
+
+            it 'reads a number as no reference, even where a slug spells it' do
+              store_maker(slug: '42')
+
+              refuses({ maker: 42 }, 'maker')
+              expect(stored_maker_id(create_with(maker: '42'))).to eq id_of('makers', '42')
+            end
+
+            it 'reads a symbol as the text it spells' do
+              expect(stored_maker_id(create_with(maker: :'maker-one'))).to eq id_of('makers', 'maker-one')
+            end
+
+            it 'links the name a form sends as a text key' do
+              form    = { 'name' => 'Form link', 'category' => 'alpha', 'maker' => 'maker-one' }
+              created = service.create('specimens', form, true)
+
+              expect(stored_maker_id(created)).to eq id_of('makers', 'maker-one')
+            end
+
+            it 'refuses the same name given as a symbol and as a text key' do
+              refuses({ maker: 'maker-one', 'maker' => 'maker-two' }, 'maker')
+            end
+
+            it 'moves the link on a successful update' do
+              created = create_with(maker: 'maker-one')
+
+              updated = service.update('specimens', created['_id'], { maker: 'maker-two' }, true)
+
+              expect(updated['errors']).to be_blank
+              expect(stored_specimen(created['_id']).attributes[:maker_id]).to eq id_of('makers', 'maker-two')
+            end
+
+            it 'keeps the stored link when an update is refused' do
+              created = create_with(maker: 'maker-one')
+
+              updated = service.update('specimens', created['_id'], { maker: 'no-such-maker' }, true)
+
+              expect(updated['errors']['maker']).to eq ['is invalid']
+              expect(stored_specimen(created['_id']).attributes[:maker_id]).to eq id_of('makers', 'maker-one')
+            end
+
+            it 'links a slug that holds an ampersand and stores its id as given' do
+              store_maker(slug: 'r&d-maker')
+
+              expect(stored_maker_id(create_with(maker: 'r&d-maker'))).to eq id_of('makers', 'r&d-maker')
+            end
+
+            it 'refuses a name no entry of the target type holds' do
+              refuses({ maker: 'no-such-maker' }, 'maker')
+              refuses({ maker: 'topic-a' }, 'maker')
+            end
+
+            it 'refuses the name and the id of the same link in one write' do
+              refuses({ maker: 'maker-one', maker_id: id_of('makers', 'maker-one') }, 'maker')
+            end
+
+            it 'refuses a list for a single link' do
+              refuses({ maker: ['maker-one'] }, 'maker')
+            end
+
+            it 'reads the slug in the locale that writes' do
+              store_maker(slug: { 'en' => 'en-slug-maker', 'fr' => 'fr-slug-maker' })
+
+              refuses({ maker: 'fr-slug-maker' }, 'maker')
+
+              created = service_in(:fr).create('specimens', base.merge(name: 'Linked fr', maker: 'fr-slug-maker'), true)
+              expect(stored_maker_id(created)).to eq id_of('makers', 'en-slug-maker')
+            end
+
+            [nil, ''].each do |blank|
+              it "clears the link given #{blank.inspect}" do
+                created = create_with(maker: 'maker-one')
+
+                service.update('specimens', created['_id'], { maker: blank })
+
+                expect(stored_specimen(created['_id']).attributes[:maker_id]).to be_nil
+              end
+            end
+
+          end
+
+          describe 'an id alias' do
+
+            it 'links the entry its id names' do
+              maker_one = id_of('makers', 'maker-one')
+
+              expect(stored_maker_id(create_with(maker_id: maker_one))).to eq maker_one
+            end
+
+            it 'refuses an id no entry holds' do
+              refuses({ maker_id: 'no-such-maker' }, 'maker')
+            end
+
+            it 'reads its value as an id, never as a slug' do
+              if filesystem?
+                # This fixture entry uses its slug as its Filesystem ID.
+                expect(stored_maker_id(create_with(maker_id: 'maker-two'))).to eq id_of('makers', 'maker-two')
+              else
+                refuses({ maker_id: 'maker-two' }, 'maker')
+              end
+            end
+
+          end
+
+        end
 
         describe 'refusing public input' do
 
@@ -39,7 +320,6 @@ describe 'Adapter parity' do
             'a reset token'              => { _auth_reset_token: 'token-secret-1' },
             'a reset moment'             => { _auth_reset_sent_at: '2020-01-01T00:00:00Z' },
             'an undeclared name'         => { colour: 'red' },
-            'a belongs_to by its name'   => { maker: 'maker-one' },
             'a many_to_many by its name' => { topics: ['topic-a'] }
           }.each do |label, input|
             it "refuses #{label} and writes nothing" do
@@ -352,7 +632,7 @@ describe 'Adapter parity' do
     before(:all) { AdapterParityFixture.seed_mongodb! }
     after(:all)  { AdapterParityFixture.cleanup! }
 
-    it_should_behave_like 'the adapter parity dataset' do
+    it_should_behave_like 'the adapter parity dataset', :mongodb do
       let(:adapter)  { AdapterParityFixture.mongodb_adapter }
 
       def filesystem?; false; end
@@ -362,7 +642,7 @@ describe 'Adapter parity' do
 
   context 'Filesystem' do
 
-    it_should_behave_like 'the adapter parity dataset' do
+    it_should_behave_like 'the adapter parity dataset', :filesystem do
       let(:adapter) { AdapterParityFixture.filesystem_adapter }
 
       def filesystem?; true; end

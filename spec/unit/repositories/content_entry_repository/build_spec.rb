@@ -6,6 +6,27 @@ describe Locomotive::Steam::ContentEntryRepository do
 
   include_context 'content entry repository'
 
+  describe '#resolve_belongs_to against a stored schema whose target type is gone' do
+
+    let(:maker) { instance_double('Field', name: :maker, type: :belongs_to, persisted_name: 'maker_id', target_id: 'gone') }
+    let(:type)  { build_content_type('Articles', association_fields: [maker]) }
+
+    before do
+      allow(content_type_repository).to receive(:find).with('gone').and_return(nil)
+      repository.with(type)
+    end
+
+    it 'reports the link as invalid instead of raising' do
+      expect(repository.resolve_belongs_to(maker: 'acme')[:maker_id])
+        .to equal Locomotive::Steam::ContentEntry::INVALID_LINK_VALUE
+    end
+
+    it 'still clears the link' do
+      expect(repository.resolve_belongs_to(maker: nil)).to eq(maker_id: nil)
+    end
+
+  end
+
   describe '#build system fields' do
 
     before { repository.with(type) }

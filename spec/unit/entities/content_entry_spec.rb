@@ -99,6 +99,31 @@ describe Locomotive::Steam::ContentEntry do
 
     end
 
+    context 'a required belongs_to' do
+
+      let(:field) { instance_double('Field', name: :maker, type: :belongs_to, write_only?: false, persisted_name: 'maker_id') }
+
+      context 'linked' do
+
+        let(:attributes) { { maker_id: 'maker-one' } }
+
+        it { is_expected.to eq true }
+
+      end
+
+      context 'given a reference that found no entry' do
+
+        let(:attributes) { { maker_id: Locomotive::Steam::ContentEntry::INVALID_LINK_VALUE } }
+
+        it 'is invalid, not missing as well' do
+          subject
+          expect(content_entry.errors[:maker]).to eq ['is invalid']
+        end
+
+      end
+
+    end
+
     context 'a number field' do
 
       let(:field)           { instance_double('Field', name: :score, type: :integer, write_only?: false, persisted_name: :score) }
