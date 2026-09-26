@@ -37,6 +37,15 @@ describe 'Authentication' do
         expect(last_response.location).to eq '/account/me'
       end
 
+      it 'creates the account a lookup by its email finds' do
+        params[:auth_entry][:email] = 'matt.cameron@soundgarden.band'
+        sign_up(params)
+
+        accounts = last_request.env['steam.services'].content_entry
+                     .all('accounts', 'email' => 'matt.cameron@soundgarden.band', '_visible' => nil)
+        expect(accounts.size).to eq 1
+      end
+
       it 'displays the profile page as described in the params' do
         params[:auth_entry][:email] = 'chris.cornell@soundgarden.band'
         sign_up(params, true)
@@ -82,6 +91,33 @@ describe 'Authentication' do
           expect(last_response.body).to include 'is invalid'
         end
 
+      end
+
+      %w(_auth_reset_token password_hash).each do |name|
+        context "with #{name} in the entry" do
+
+          before do
+            params[:auth_entry][:email] = "#{name}@soundgarden.band"
+            params[:auth_entry][name.to_sym] = 'token-secret-1'
+          end
+
+          it 'renders the sign up page and creates no account' do
+            sign_up(params)
+            expect(last_response.status).to eq 200
+            expect(last_response.body).to include '/account/sign-up'
+
+            accounts = last_request.env['steam.services'].content_entry
+                         .all('accounts', 'email' => "#{name}@soundgarden.band", '_visible' => nil)
+            expect(accounts).to be_empty
+
+            post '/account/sign-in', {
+              auth_action: 'sign_in', auth_content_type: 'accounts', auth_id_field: 'email',
+              auth_password_field: 'password', auth_id: "#{name}@soundgarden.band", auth_password: 'easyone',
+              auth_callback: '/account/me' }
+            expect(last_response.body).to include 'Your email and/or password are incorrect'
+          end
+
+        end
       end
 
       def sign_up(params, follow_redirect = false)

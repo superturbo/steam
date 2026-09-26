@@ -55,8 +55,17 @@ module Locomotive::Steam
 
     INVALID_SELECT_VALUE = Object.new.freeze
 
+    # Refused input survives repeated validation.
+    def refuse_input(names)
+      @refused_input = names
+
+      report_refused_input
+    end
+
     def valid?
       errors.clear
+
+      report_refused_input
 
       invalid = validate_select_fields
 
@@ -156,7 +165,11 @@ module Locomotive::Steam
 
     private
 
-    # Invalid input remains in the attributes.
+    def report_refused_input
+      Array(@refused_input).each { |name| errors.add(name, :invalid) }
+    end
+
+    # Invalid field values remain in attributes for form re-rendering.
     def normalize_fields
       content_type.fields_by_name.each_value.with_object([]) do |field, invalid|
         name = field.persisted_name

@@ -19,6 +19,163 @@ describe 'Adapter parity' do
 
         include_context 'adapter parity service writing'
 
+        describe 'refusing public input' do
+
+          let(:writable) { { name: 'Refused', category: 'alpha', topic_ids: [] } }
+
+          # Include makers in cleanup if the rejected has_many write slips through.
+          let(:writable_types) { %w(specimens submissions makers) }
+
+          # Hidden entries count too: a refused visibility must not hide a write.
+          def stored_count(type_slug = 'specimens')
+            service.all(type_slug, _visible: nil).size
+          end
+
+          { 'the visibility'             => { _visible: false },
+            'the position'               => { _position: 3 },
+            'a belongs_to position'      => { position_in_maker: 2 },
+            'a creation moment'          => { created_at: '2020-01-01T00:00:00Z' },
+            'an update moment'           => { updated_at: '2020-01-01T00:00:00Z' },
+            'a reset token'              => { _auth_reset_token: 'token-secret-1' },
+            'a reset moment'             => { _auth_reset_sent_at: '2020-01-01T00:00:00Z' },
+            'an undeclared name'         => { colour: 'red' },
+            'a belongs_to by its name'   => { maker: 'maker-one' },
+            'a many_to_many by its name' => { topics: ['topic-a'] }
+          }.each do |label, input|
+            it "refuses #{label} and writes nothing" do
+              entry = nil
+
+              expect { entry = service.create('specimens', writable.merge(input), true) }
+                .not_to change { stored_count }
+
+              expect(entry['errors'][input.keys.first.to_s]).to eq ['is invalid']
+            end
+          end
+
+          it 'refuses a system name however its key is spelled' do
+            [{ '_visible' => false }, { _visible: false }].each do |input|
+              entry = service.create('specimens', writable.transform_keys(&:to_s).merge(input), true)
+
+              expect(entry['errors']['_visible']).to eq ['is invalid']
+            end
+
+            expect(service.all('specimens', _visible: nil).map(&:name)).not_to include 'Refused'
+          end
+
+          it 'hands back an entry without the refused value' do
+            entry = service.create('specimens', writable.merge(_visible: false), true)
+
+            expect(entry['_visible']).to be true
+          end
+
+          it 'keeps a refused value out of the log' do
+            logged = []
+            allow(Locomotive::Common::Logger).to receive(:error) { |message| logged << message }
+
+            service.create('specimens', writable.merge(_auth_reset_token: 'token-secret-1'))
+
+            expect(logged.join).to include '_auth_reset_token'
+            expect(logged.join).not_to include 'token-secret-1'
+          end
+
+          it 'keeps the refusal through another validation' do
+            entry = service.create('specimens', writable.merge(_visible: false))
+
+            expect(entry.valid?).to be false
+            expect(entry.errors['_visible']).to eq ['is invalid']
+          end
+
+          it 'reports a key that is no field name as refused input' do
+            entry = service.create('specimens', writable.merge('<b>odd</b>' => 'x'), true)
+
+            expect(entry['errors'].keys).to eq ['_input']
+          end
+
+          it 'reports a key that is no valid text as refused input' do
+            entry = service.create('specimens', writable.merge("\xFFodd".dup.force_encoding('UTF-8') => 'x'), true)
+
+            expect(entry['errors'].keys).to eq ['_input']
+          end
+
+          it 'treats nil as empty attributes' do
+            entry = nil
+
+            expect { entry = service.create('specimens', nil, true) }.to change { stored_count }.by(1)
+
+            expect(entry['errors']).to be_blank
+          end
+
+          it 'still accepts a slug and the SEO attributes' do
+            created = service.create('specimens', writable.merge(_slug: 'seo-custom', seo_title: 'Seo title'))
+
+            expect(created.errors).to be_empty
+            expect(service.find('specimens', 'seo-custom')).not_to be_nil
+          end
+
+          [['name'], 'name', false].each do |input|
+            it "refuses #{input.inspect} as a whole and writes nothing" do
+              entry = nil
+
+              expect { entry = service.create('specimens', input, true) }.not_to change { stored_count }
+
+              expect(entry['errors']).to eq('_input' => ['is invalid'])
+            end
+          end
+
+          it 'refuses a has_many on the entry that owns it' do
+            specimen = entries_of('specimens').by_slug('scalars')
+            entry    = nil
+
+            expect { entry = service.create('makers', { name: 'Refused maker', specimens: [specimen._id] }, true) }
+              .not_to change { stored_count('makers') }
+
+            expect(entry['errors']['specimens']).to eq ['is invalid']
+          end
+
+          it 'builds an entry without the refused value' do
+            entry = service.build('specimens', writable.merge(_visible: false, _auth_reset_token: 'token-secret-1'))
+
+            expect(entry[:_visible]).to be true
+            expect(entry.attributes).not_to have_key(:_auth_reset_token)
+          end
+
+          it 'reports the refusal on a built entry at once and after validation' do
+            entry = service.build('specimens', writable.merge(_visible: false))
+
+            expect(entry.errors['_visible']).to eq ['is invalid']
+
+            entry.valid?
+
+            expect(entry.errors['_visible']).to eq ['is invalid']
+          end
+
+          describe 'through an action' do
+
+            let(:context) { ::Liquid::Context.new({}, {}, { session: {}, cookies: {} }) }
+            let(:actions) do
+              Locomotive::Steam::ActionService.new(instance_double('Site', as_json: {}), nil, content_entry: service)
+            end
+
+            it 'hands the refusal back to createEntry and writes nothing' do
+              script = "return createEntry('specimens', { name: 'Acted', category: 'alpha', topic_ids: [], " \
+                       "_visible: false }).errors;"
+
+              errors = nil
+
+              expect { errors = actions.run(script, {}, context) }.not_to change { stored_count }
+              expect(errors).to eq('_visible' => ['is invalid'])
+            end
+
+            it 'refuses a list given to createEntry' do
+              errors = actions.run("return createEntry('specimens', ['name']).errors;", {}, context)
+
+              expect(errors).to eq('_input' => ['is invalid'])
+            end
+
+          end
+
+        end
+
         it 'creates an entry a later read can see' do
           entry = nil
 

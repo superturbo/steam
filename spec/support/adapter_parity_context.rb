@@ -91,17 +91,18 @@ RSpec.shared_context 'adapter parity service writing' do
   let(:writable_types) { %w(specimens submissions) }
 
   let(:original_ids) do
-    writable_types.to_h { |type| [type, service.all(type).map(&:_id)] }
+    writable_types.to_h { |type| [type, entries_of(type).all(_visible: nil).map(&:_id)] }
   end
 
   before { original_ids }
 
-  # A failed create may leave a persisted entry, so remove everything
-  # added here.
+  # Cleanup uses the repository so hidden entries are removed too.
   after do
     writable_types.each do |type|
-      service.all(type).each do |entry|
-        service.delete(type, entry._id) unless original_ids.fetch(type).include?(entry._id)
+      repository = entries_of(type)
+
+      repository.all(_visible: nil).each do |entry|
+        repository.delete(entry) unless original_ids.fetch(type).include?(entry._id)
       end
     end
   end

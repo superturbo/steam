@@ -31,6 +31,50 @@ describe 'Adapter parity' do
           expect(service.find('submissions', created._id).name).to eq 'Grace'
         end
 
+        it 'refuses system input without touching the entry' do
+          created = service.create('submissions', valid)
+
+          updated = service.update('submissions', created._id, { name: 'Grace', _visible: false }, true)
+
+          expect(updated['errors']['_visible']).to eq ['is invalid']
+          expect(updated['_visible']).to be true
+          stored = service.find('submissions', created._id)
+          expect(stored.name).to eq 'Ada'
+          expect(stored._visible).to be true
+        end
+
+        it 'hands the refusal back to updateEntry without touching the entry' do
+          created = service.create('submissions', valid)
+          context = ::Liquid::Context.new({}, {}, { session: {}, cookies: {} })
+          actions = Locomotive::Steam::ActionService.new(instance_double('Site', as_json: {}), nil, content_entry: service)
+
+          errors = actions.run("return updateEntry('submissions', '#{created._id}', " \
+                               "{ name: 'Grace', _position: 9 }).errors;", {}, context)
+
+          expect(errors).to eq('_position' => ['is invalid'])
+          expect(service.find('submissions', created._id).name).to eq 'Ada'
+        end
+
+        it 'treats nil as empty attributes' do
+          created = service.create('submissions', valid)
+
+          updated = service.update('submissions', created._id, nil, true)
+
+          expect(updated['errors']).to be_blank
+          expect(service.find('submissions', created._id).name).to eq 'Ada'
+        end
+
+        ['Grace', false].each do |input|
+          it "refuses #{input.inspect} as a whole without touching the entry" do
+            created = service.create('submissions', valid)
+
+            updated = service.update('submissions', created._id, input, true)
+
+            expect(updated['errors']).to eq('_input' => ['is invalid'])
+            expect(service.find('submissions', created._id).name).to eq 'Ada'
+          end
+        end
+
         it 'leaves the entry alone when the store refuses the write' do
           created = service.create('submissions', valid)
 

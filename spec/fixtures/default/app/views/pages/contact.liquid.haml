@@ -16,6 +16,9 @@ position: 4
 {% if message.errors %}
 .text
   %p Form with errors
+  {% for error in message.errors %}
+  %p {{ error[0] | escape }}: {{ error[1] | join: ', ' | escape }}
+  {% endfor %}
 {% endif %}
 
 %form#contactform{ :name => 'contact', :action => '{{ contents.messages.public_submission_url }}.json', :method => 'post' }

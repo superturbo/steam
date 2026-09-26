@@ -58,6 +58,17 @@ describe 'ContactForm' do
 
       end
 
+      context 'with system input' do
+
+        let(:params) { { 'entry' => { 'name' => 'John', 'email' => 'j@doe.net', 'message' => 'Bla bla', '_visible' => 'false' } } }
+
+        it 'refuses it' do
+          expect(response.status).to eq 422
+          expect(entry['errors']['_visible']).to eq ['is invalid']
+        end
+
+      end
+
       context 'when valid' do
 
         it 'returns a success status' do
@@ -84,6 +95,19 @@ describe 'ContactForm' do
 
         it 'displays errors' do
           expect(response.body.to_s).to include "can't be blank"
+        end
+
+        context 'with system input' do
+
+          let(:params) { {
+            'entry' => { 'name' => 'John', 'email' => 'j@doe.net', 'message' => 'Bla bla', '_visible' => 'false' },
+            'error_callback' => '/contact' } }
+
+          it 'displays the refusal' do
+            expect(response.status).to eq 200
+            expect(response.body.to_s).to include '_visible: is invalid'
+          end
+
         end
 
         context 'redirects outside the site' do

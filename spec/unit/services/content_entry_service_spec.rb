@@ -15,7 +15,7 @@ describe Locomotive::Steam::ContentEntryService do
     let(:title_field)  { instance_double('Field', name: :title, type: :string, is_relationship?: false, write_only?: false) }
     let(:fields)       { instance_double('Fields', json: [], selects: []) }
     let(:content_type) do
-      instance_double('ContentType', slug: 'articles', fields: fields, label_field_name: :title,
+      instance_double('ContentType', invalid_entry_names: [], slug: 'articles', fields: fields, label_field_name: :title,
                                      fields_by_name: { title: title_field }.with_indifferent_access,
                                      persisted_field_names: [:title])
     end
@@ -50,7 +50,7 @@ describe Locomotive::Steam::ContentEntryService do
     let(:secret_field) { instance_double('Field', name: :secret, type: :password, write_only?: true, is_relationship?: false) }
     let(:fields)       { instance_double('Fields', json: [], selects: []) }
     let(:content_type) do
-      instance_double('ContentType', slug: 'accounts', fields: fields, label_field_name: :secret,
+      instance_double('ContentType', invalid_entry_names: [], slug: 'accounts', fields: fields, label_field_name: :secret,
                                      fields_by_name: { secret: secret_field }.with_indifferent_access,
                                      persisted_field_names: [])
     end
@@ -87,7 +87,7 @@ describe Locomotive::Steam::ContentEntryService do
     let(:adapter)         { Locomotive::Steam::MemoryAdapter.new(nil) }
     let(:fields)          { Locomotive::Steam::ContentTypeFieldRepository.new(adapter) }
     let(:content_type) do
-      instance_double('ContentType', slug: 'accounts', fields: fields, label_field_name: :email,
+      instance_double('ContentType', invalid_entry_names: [], slug: 'accounts', fields: fields, label_field_name: :email,
                                      fields_by_name: fields.all.index_by(&:name).with_indifferent_access,
                                      persisted_field_names: ['email'])
     end
@@ -112,6 +112,139 @@ describe Locomotive::Steam::ContentEntryService do
       entry = service.create('accounts', { email: 'john@doe.net', secret: 'easyone' })
 
       expect(entry.errors).to be_empty
+    end
+
+  end
+
+  describe '#create against a stored schema no loader checked' do
+
+    let(:adapter)      { Locomotive::Steam::MemoryAdapter.new(nil) }
+    let(:fields)       { Locomotive::Steam::ContentTypeFieldRepository.new(adapter) }
+    let(:content_type) { Locomotive::Steam::ContentType.new(slug: 'accounts', label_field_name: 'email', entries_custom_fields: fields) }
+
+    before do
+      allow(adapter).to receive(:collection).and_return([
+        { name: 'email', type: 'string' }, { name: '_visible', type: 'string' },
+        { name: 'secret', type: 'password' }, { name: 'secret_hash', type: 'string' },
+        { name: 'created_by_id', type: 'string' }
+      ])
+      allow(type_repository).to receive(:by_slug).with('accounts').and_return(content_type)
+      allow(type_repository).to receive(:look_for_unique_fields).and_return({})
+      allow(entry_repository).to receive(:content_type).and_return(content_type)
+      allow(entry_repository).to receive(:resolve_selects) { |attributes| attributes }
+      allow(entry_repository).to receive(:build) do |attributes|
+        Locomotive::Steam::ContentEntry.new(attributes).tap do |entry|
+          entry.content_type         = content_type
+          entry.localized_attributes = {}
+        end
+      end
+    end
+
+    it 'refuses a declared field that claims a reserved name' do
+      expect(entry_repository).not_to receive(:create)
+
+      entry = service.create('accounts', { email: 'john@doe.net', _visible: 'false' })
+
+      expect(entry.errors[:_visible]).to eq ['is invalid']
+      expect(entry.attributes).not_to have_key(:_visible)
+    end
+
+    it 'refuses a declared field that claims an attribute the Engine keeps' do
+      expect(entry_repository).not_to receive(:create)
+
+      entry = service.create('accounts', { email: 'john@doe.net', created_by_id: 'forged' })
+
+      expect(entry.errors[:created_by_id]).to eq ['is invalid']
+      expect(entry.attributes).not_to have_key(:created_by_id)
+    end
+
+    it 'refuses every input of the fields whose names collide' do
+      expect(entry_repository).not_to receive(:create)
+
+      entry = service.create('accounts', { email: 'john@doe.net', secret: 'easyone1', secret_hash: 'forged' })
+
+      expect(entry.errors.to_hash.keys).to match_array %w(secret secret_hash)
+      expect(entry.attributes.keys).to eq ['email']
+    end
+
+  end
+
+  describe '#create an entry with an uploaded file' do
+
+    let(:title_field)  { instance_double('Field', name: :title, type: :string, persisted_name: 'title', write_only?: false, is_relationship?: false) }
+    let(:cover_field)  { instance_double('Field', name: :cover, type: :file, persisted_name: 'cover', write_only?: false, is_relationship?: false) }
+    let(:secret_field) { instance_double('Field', name: :secret, type: :password, persisted_name: nil, write_only?: true, is_relationship?: false) }
+    let(:price_field)  { instance_double('Field', name: :price, type: :money, persisted_name: 'price', write_only?: false, is_relationship?: false) }
+    let(:tint_field)   { instance_double('Field', name: :tint, type: :color, persisted_name: 'tint', write_only?: false, is_relationship?: false) }
+    let(:fields)       { instance_double('Fields', json: [], selects: [], required: []) }
+    let(:content_type) do
+      instance_double('ContentType', invalid_entry_names: [], slug: 'songs', fields: fields, label_field_name: :title,
+                                     fields_by_name: { title: title_field, cover: cover_field, secret: secret_field,
+                                                       price: price_field, tint: tint_field }.with_indifferent_access,
+                                     persisted_field_names: ['title'])
+    end
+
+    before do
+      allow(type_repository).to receive(:by_slug).with('songs').and_return(content_type)
+      allow(type_repository).to receive(:look_for_unique_fields).and_return({})
+      allow(entry_repository).to receive(:content_type).and_return(content_type)
+      allow(entry_repository).to receive(:resolve_selects) { |attributes| attributes }
+      allow(entry_repository).to receive(:build) do |attributes|
+        Locomotive::Steam::ContentEntry.new(attributes).tap do |entry|
+          entry.content_type         = content_type
+          entry.localized_attributes = {}
+        end
+      end
+    end
+
+    let(:upload) { { filename: 'cover.png', tempfile: 'an uploaded file' } }
+
+    it 'refuses it before it reaches the entry' do
+      expect(entry_repository).not_to receive(:create)
+
+      entry = service.create('songs', { title: 'Song', cover: upload })
+
+      expect(entry.errors[:cover]).to eq ['is invalid']
+      expect(entry.attributes).not_to have_key(:cover)
+    end
+
+    it 'refuses a password hash before it reaches the entry' do
+      expect(entry_repository).not_to receive(:create)
+
+      entry = service.create('songs', { title: 'Song', secret_hash: '$2a$04$' + 'a' * 53 })
+
+      expect(entry.errors[:secret_hash]).to eq ['is invalid']
+      expect(entry.attributes).not_to have_key(:secret_hash)
+    end
+
+    it 'writes a color by its name' do
+      expect(entry_repository).to receive(:create)
+
+      entry = service.create('songs', { title: 'Song', tint: '#ff0000' })
+
+      expect(entry.errors).to be_empty
+      expect(entry.attributes[:tint]).to eq '#ff0000'
+    end
+
+    it 'refuses a field of a type this host does not write' do
+      expect(entry_repository).not_to receive(:create)
+
+      entry = service.create('songs', { title: 'Song', price: '9.99' })
+
+      expect(entry.errors[:price]).to eq ['is invalid']
+      expect(entry.attributes).not_to have_key(:price)
+    end
+
+    context 'a required file' do
+
+      let(:fields) { instance_double('Fields', json: [], selects: [], required: [cover_field]) }
+
+      it 'is refused and still missing' do
+        entry = service.create('songs', { title: 'Song', cover: upload })
+
+        expect(entry.errors[:cover]).to eq ['is invalid', "can't be blank"]
+      end
+
     end
 
   end
