@@ -47,7 +47,7 @@ module Locomotive::Steam
 
         cast_value(name)
       elsif attributes.include?(name)
-        self[name]
+        unresolved_input?(self[name]) ? nil : self[name]
       else
         super
       end
@@ -168,6 +168,14 @@ module Locomotive::Steam
 
     def report_refused_input
       Array(@refused_input).each { |name| errors.add(name, :invalid) }
+    end
+
+    # A field holding unresolved input in any locale reads as no value under
+    # either name, so no locale stands in for a refused one.
+    def unresolved_input?(value)
+      values = value.respond_to?(:translations) ? value.translations.values : [value]
+
+      values.any? { |each| each.equal?(INVALID_SELECT_VALUE) || each.equal?(INVALID_LINK_VALUE) }
     end
 
     # Invalid field values remain in attributes for form re-rendering.
@@ -352,9 +360,13 @@ module Locomotive::Steam
     # Reading an option resolves its label; the entry goes on holding the id it
     # was given, which is the only part a store takes.
     def _cast_select(field)
+      _value = @attributes[:"#{field.name}_id"]
+
+      return if unresolved_input?(_value)
+
       options = field.select_options
 
-      if (_value = @attributes[:"#{field.name}_id"]).respond_to?(:translations)
+      if _value.respond_to?(:translations)
         # the field is localized, so get the labels in all the locales
         # (2 different locales might point to different options)
         if _value.default

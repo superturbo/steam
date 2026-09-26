@@ -1045,7 +1045,7 @@ describe Locomotive::Steam::ContentEntry do
 
         context 'the attribute has values in all the locales' do
 
-          let(:attribute) { instance_double('FieldValue', default: nil, translations: true) }
+          let(:attribute) { instance_double('FieldValue', default: nil, translations: { 'en' => 41, 'fr' => 42 }) }
 
           before do
             expect(attribute).to receive(:duplicate).with(:my_field).and_return(translations)
@@ -1058,7 +1058,7 @@ describe Locomotive::Steam::ContentEntry do
 
         context 'the attribute has the same value in all the locales' do
 
-          let(:attribute) { instance_double('FieldValue', default: 42, translations: true) }
+          let(:attribute) { instance_double('FieldValue', default: 42, translations: {}) }
 
           before { expect(translations).to receive(:duplicate).with(:my_field).and_return(translations) }
           before { expect(options).to receive(:by_id_or_name).with(42).and_return(option) }

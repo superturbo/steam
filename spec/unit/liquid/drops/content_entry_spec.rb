@@ -117,6 +117,7 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntry do
 
       before do
         allow(entry).to receive(:category).and_return('Test')
+        allow(author).to receive(:to_liquid) { described_class.new(author) }
       end
 
       subject { drop.to_hash.stringify_keys }
@@ -128,6 +129,14 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntry do
         end
 
         it { is_expected.to eq('id' => 1, '_id' => 1, 'title' => 'Hello world', 'picture' => 'http://assets.dev/foo.png?42', 'picture_url' => 'http://assets.dev/foo.png?42', 'category_id' => 42, 'category' => 'Test', 'author_id' => 64, 'author' => 'john-doe') }
+
+        context 'the id finds no entry' do
+
+          before { allow(author).to receive(:to_liquid).and_return(nil) }
+
+          it { expect(subject['author']).to be_nil }
+
+        end
 
       end
 
@@ -156,6 +165,7 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntry do
     before do
       allow(entry).to receive(:to_hash).and_return({ '_id' => 1, 'title' => 'Hello world', 'picture' => picture_field, 'category_id' => 42, 'author_id' => 64 })
       allow(entry).to receive(:category).and_return('Test')
+      allow(author).to receive(:to_liquid) { described_class.new(author) }
     end
 
     subject { drop.as_json }

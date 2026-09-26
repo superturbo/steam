@@ -246,6 +246,14 @@ describe 'Adapter parity' do
               refuses({ maker: 'topic-a' }, 'maker')
             end
 
+            it 'hands back and logs a refused link as no value' do
+              logged = []
+              allow(Locomotive::Common::Logger).to receive(:error) { |message| logged << message }
+
+              expect(create_with(maker: 'no-such-maker')['maker_id']).to be_nil
+              expect(logged.join).to match(/"maker_id"\s*=>\s*nil/)
+            end
+
             it 'refuses the name and the id of the same link in one write' do
               refuses({ maker: 'maker-one', maker_id: id_of('makers', 'maker-one') }, 'maker')
             end
@@ -504,6 +512,34 @@ describe 'Adapter parity' do
             .not_to change { service.all('specimens').size }
 
           expect(entry['errors']['category']).to be_present
+        end
+
+        it 'hands back an unknown option as no value' do
+          entry = service.create('specimens', { name: 'Bogus option', topic_ids: [], category: 'bogus', tier: 'bogus' }, true)
+
+          expect(entry.values_at('category_id', 'tier_id')).to eq [nil, nil]
+        end
+
+        it 'hands back no locale of an option one locale refused, under either name' do
+          entry = service_in('fr').build('specimens', name: 'Mixed option', topic_ids: [],
+                                                      tier: { 'en' => 'Gold', 'fr' => 'bogus' })
+
+          expect(entry.valid?).to eq false
+          expect([entry.__getobj__.tier, entry.__getobj__.tier_id]).to eq [nil, nil]
+          expect(entry.as_json['tier_id']).to be_nil
+          expect(entry.__with_locale__('en') { entry.as_json['tier_id'] }).to be_nil
+          expect(entry.valid?).to eq false
+          expect(entry.errors[:tier]).to eq ['is invalid']
+        end
+
+        it 'keeps the stored option when an update refuses one in another locale' do
+          created = service.create('specimens', { name: 'Stored option', topic_ids: [], tier: 'Gold' }, true)
+
+          updated = service_in('fr').update('specimens', created['_id'], { tier: 'bogus' }, true)
+
+          expect(updated['errors']['tier']).to eq ['is invalid']
+          expect(updated['tier_id']).to be_nil
+          expect(stored_specimen(created['_id']).attributes[:tier_id]['en'].to_s).to eq option_id(:tier, 'Gold').to_s
         end
 
         it 'writes a lone value into the locale the entry is created in' do

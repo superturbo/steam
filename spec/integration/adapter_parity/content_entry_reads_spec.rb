@@ -212,6 +212,54 @@ describe 'Adapter parity' do
 
       end
 
+      describe "reading an entry drop's hash" do
+
+        include_context 'adapter parity service access'
+
+        let(:context) { ::Liquid::Context.new({}, {}, { locale: AdapterParityFixture::LOCALE }) }
+
+        def hash_of(entry)
+          entry.to_liquid.tap { |drop| drop.context = context }.to_hash
+        end
+
+        def with_missing_maker(entry)
+          entry.tap { entry[:maker_id] = filesystem? ? 'no-such-maker' : BSON::ObjectId.new }
+        end
+
+        def rendered_json(entry)
+          output = ::Liquid::Template.parse('{{ entry | json }}')
+                     .render!(::Liquid::Context.new({ 'entry' => entry.to_liquid }, {}, context.registers))
+
+          JSON.parse(output)
+        end
+
+        it 'names a linked entry by its slug' do
+          expect(hash_of(specimens.by_slug('scalars'))['maker']).to eq 'maker-one'
+        end
+
+        it 'reads a link whose id finds no entry as no entry' do
+          expect(hash_of(with_missing_maker(specimens.by_slug('scalars')))).to include('maker' => nil)
+        end
+
+        it 'renders a link whose id finds no entry through the json filter' do
+          expect(rendered_json(with_missing_maker(specimens.by_slug('scalars')))).to include('maker' => nil)
+        end
+
+        it 'leaves a refused link out' do
+          entry = service.build('specimens', name: 'Refused link', maker: 'no-such-maker')
+
+          expect(hash_of(entry)).to include('maker_id' => nil)
+          expect(hash_of(entry)).not_to have_key('maker')
+        end
+
+        it 'renders a refused link through the json filter' do
+          entry = service.build('specimens', name: 'Refused link', maker: 'no-such-maker')
+
+          expect(rendered_json(entry)).to include('maker_id' => nil)
+        end
+
+      end
+
     end
 
   end
