@@ -79,6 +79,12 @@ describe 'Liquid adapter parity' do
       expect(render_liquid(source)).to eq '[All missing][Arrays][Embedded][Explicit nils][Scalars][Zero]'
     end
 
+    it 'renders the label of the option an entry holds' do
+      source = '{% for entry in contents.specimens %}[{{ entry.category }}|{{ entry.tier }}]{% endfor %}'
+
+      expect(render_liquid(source)).to eq '[|][beta|Silver][|Gold][|][alpha|Gold][|]'
+    end
+
     describe 'a window of many_to_many owners' do
 
       it 'renders every list in its owner sequence' do

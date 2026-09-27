@@ -1168,6 +1168,66 @@ describe Locomotive::Steam::ContentEntry do
       expect(described_class.new(title: 'x').respond_to?(:title)).to be true
     end
 
+    it 'knows no select before the entry has a content type' do
+      expect(described_class.new(category_id: 42).respond_to?(:category)).to be false
+    end
+
+    context 'a declared select' do
+
+      let(:options)  { instance_double('SelectOptions') }
+      let(:category) { instance_double('Field', name: :category, type: :select, write_only?: false, select_options: options) }
+      let(:picture)  { instance_double('Field', name: :picture, type: :file, write_only?: false) }
+      let(:title)    { instance_double('Field', name: :title, type: :string, write_only?: false, is_relationship?: false) }
+      let(:label)    { Locomotive::Steam::Models::I18nField.new(:name, { 'en' => 'Alpha', 'fr' => 'Alpha fr' }) }
+
+      before do
+        allow(type).to receive(:fields_by_name).and_return({ title: title, category: category, picture: picture }.with_indifferent_access)
+        allow(options).to receive(:by_id_or_name).with(42).and_return(instance_double('SelectOption', name: label))
+        content_entry.localized_attributes = { category: true, picture: true }
+      end
+
+      def decorated
+        Locomotive::Steam::Decorators::I18nDecorator.new(content_entry, 'fr', 'en')
+      end
+
+      context 'held by its option id' do
+
+        let(:attributes) { { title: 'Hello world', category_id: 42 } }
+
+        it { expect(content_entry.respond_to?(:category)).to be true }
+
+        it 'reads the option label in the locale of its decorator' do
+          expect(decorated.category).to eq 'Alpha fr'
+        end
+
+        it 'serializes the option label in the locale of its decorator' do
+          allow(type).to receive(:persisted_field_names).and_return(%w(title category_id))
+
+          expect(decorated.to_hash).to include('category' => 'Alpha fr', 'category_id' => 42)
+        end
+
+      end
+
+      context 'never held' do
+
+        it 'answers for neither the select nor a file the entry never held' do
+          expect(content_entry.respond_to?(:category)).to be false
+          expect(content_entry.respond_to?(:picture)).to be false
+          expect(decorated.category).to be_nil
+        end
+
+      end
+
+      context 'held as unresolved input' do
+
+        let(:attributes) { { title: 'Hello world', category_id: Locomotive::Steam::ContentEntry::INVALID_SELECT_VALUE } }
+
+        it { expect(decorated.category).to be_nil }
+
+      end
+
+    end
+
   end
 
   describe '#password_matches?' do

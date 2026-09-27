@@ -137,6 +137,11 @@ module Locomotive::Steam
       super
     end
 
+    # A select answers for the option id it holds, as its reader does.
+    def respond_to_missing?(name, include_private = false)
+      (attributes.include?("#{name}_id") && select_field?(name)) || super
+    end
+
     def _label
       name = content_type.label_field_name
 
@@ -381,6 +386,12 @@ module Locomotive::Steam
       return false unless content_type
 
       content_type.fields_by_name[name]&.write_only?
+    end
+
+    def select_field?(name)
+      return false unless content_type
+
+      content_type.fields_by_name[name]&.type == :select
     end
 
     # Rejects a hash this bcrypt engine cannot verify.
