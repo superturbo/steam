@@ -4,20 +4,14 @@ module Locomotive
       module Filters
         module Json
 
+          # When serialization gives valid JSON, the output is safe as a value
+          # inside an HTML script element, whatever the host's JSON escaping settings.
           def json(input, fields = [])
             if fields && fields.is_a?(String)
               fields = fields.split(',').map(&:strip)
             end
 
-            if input.is_a?(Hash)
-              object_to_json(input, fields)
-            elsif input.respond_to?(:each)
-              '[' + input.map do |object|
-                fields.size == 1 ? object[fields.first].to_json : object_to_json(object, fields)
-              end.join(',') + ']'
-            else
-              object_to_json(input, fields)
-            end
+            ERB::Util.json_escape(serialize_json(input, fields))
           end
 
           # without the leading and trailing braces/brackets
@@ -31,6 +25,18 @@ module Locomotive
           end
 
           protected
+
+          def serialize_json(input, fields)
+            if input.is_a?(Hash)
+              object_to_json(input, fields)
+            elsif input.respond_to?(:each)
+              '[' + input.map do |object|
+                fields.size == 1 ? object[fields.first].to_json : object_to_json(object, fields)
+              end.join(',') + ']'
+            else
+              object_to_json(input, fields)
+            end
+          end
 
           def object_to_json(input, fields)
             if input.respond_to?(:as_json)
