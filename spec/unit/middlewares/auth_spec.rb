@@ -37,6 +37,22 @@ describe Locomotive::Steam::Middlewares::Auth::AuthOptions do
 
   end
 
+  describe '#password_field' do
+
+    it 'names no field a visitor left out, so the type chooses its own' do
+      expect(options.password_field).to be_nil
+    end
+
+    context 'a visitor naming one' do
+
+      let(:params) { { auth_password_field: 'secret' } }
+
+      it { expect(options.password_field).to eq :secret }
+
+    end
+
+  end
+
 end
 
 describe Locomotive::Steam::Middlewares::Auth do
@@ -70,6 +86,23 @@ describe Locomotive::Steam::Middlewares::Auth do
       expect(assigns['auth_invalid_recaptcha_code']).to eq('auth_invalid_recaptcha_code')
       expect(assigns['recaptcha_invalid']).to eq(true)
       expect(auth_service).not_to have_received(:sign_up)
+    end
+
+  end
+
+  describe 'reset_password of a type whose password field has another name' do
+
+    let(:form)         { { auth_action: 'reset_password', auth_content_type: 'accounts', auth_reset_token: '42', auth_callback: '/me' } }
+    let(:content_type) { instance_double('ContentType', slug: 'accounts', recaptcha_required?: false) }
+    let(:entry)        { instance_double('Account', _id: 42, content_type: content_type) }
+
+    before { allow(auth_service).to receive(:reset_password).and_return([:secret_reset, entry]) }
+
+    it 'signs the visitor in and follows the callback' do
+      code, headers = middleware.call(rack_env)
+
+      expect(session[:authenticated_entry_id]).to eq '42'
+      expect([code, headers['location']]).to eq [301, '/me']
     end
 
   end

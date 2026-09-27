@@ -325,6 +325,36 @@ describe 'Authentication' do
 
     end
 
+    context 'through the form the page renders' do
+
+      let(:email) { 'kim.reset@soundgarden.band' }
+
+      it 'resets the password with the fields the form sends' do
+        post '/account/sign-up', {
+          auth_action: 'sign_up', auth_content_type: 'accounts', auth_password_field: 'password',
+          auth_callback: '/account/me',
+          auth_entry: { name: 'Kim', email: email, password: 'easyone', password_confirmation: 'easyone' } }
+        clear_cookies
+
+        post '/account/forgot-password', {
+          auth_action: 'forgot_password', auth_content_type: 'accounts', auth_id_field: 'email', auth_id: email,
+          auth_reset_password_url: 'http://acme.com/account/reset-password',
+          auth_email_handle: 'reset_password_instructions' }
+        token = last_request.env['steam.services'].content_entry
+                  .all('accounts', 'email' => email, '_visible' => nil).first['_auth_reset_token']
+
+        get "/account/reset-password?auth_reset_token=#{token}"
+        fields = last_response.body.scan(/<input type="hidden" name="(\w+)" value="([^"]*)"/).to_h
+
+        post '/account/reset-password', fields.merge('auth_password' => new_password)
+
+        expect(last_response.status).to eq 301
+        follow_redirect!
+        expect(last_response.body).to include "My name is Kim and I'm logged in!"
+      end
+
+    end
+
     context 'with a valid token' do
 
       let(:token) { '420000000000000' }

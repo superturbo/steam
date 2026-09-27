@@ -3,7 +3,9 @@ require 'spec_helper'
 describe Locomotive::Steam::AuthService do
 
   let(:site)            { instance_double('CurrentSite') }
-  let(:entries)         { instance_double('ContentService', locale: 'en') }
+  let(:password_field)  { instance_double('Field', name: 'password') }
+  let(:account_type)    { instance_double('ContentType', password_fields: [password_field]) }
+  let(:entries)         { instance_double('ContentService', locale: 'en', get_type: account_type) }
   let(:emails)          { instance_double('EmailService') }
   let(:service)         { described_class.new(site, entries, emails) }
   let(:liquid_context)  { {} }
@@ -136,17 +138,6 @@ describe Locomotive::Steam::AuthService do
           expect(content_entry[:password]).to eq 'easyone'
         end
 
-        context 'the chosen field is not declared a password' do
-
-          let(:password) { Locomotive::Steam::ContentTypeField.new(name: 'password', type: 'string') }
-
-          it 'returns false' do
-            is_expected.to eq false
-            expect(content_entry.errors[:password]).to eq(['is invalid'])
-          end
-
-        end
-
         context 'the password is less than 6 characters' do
 
           let(:attributes) { { password: 'easy', password_confirmation: 'easy' } }
@@ -195,6 +186,52 @@ describe Locomotive::Steam::AuthService do
 
       end
 
+    end
+
+  end
+
+  describe 'an auth type without one password field a visitor may name' do
+
+    let(:auth_options) do
+      instance_double('AuthOptions', default_auth_options.merge(entry: nil, disable_email: true))
+    end
+
+    shared_examples 'refusing every action' do
+      it 'writes nothing and answers each action with its refusal' do
+        expect(entries).not_to receive(:create)
+        expect(entries).not_to receive(:all)
+        expect(entries).not_to receive(:update_decorated_entry)
+        allow(entries).to receive(:build).and_return(nil)
+
+        expect(service.sign_up(auth_options, liquid_context)).to eq [:invalid_entry, nil]
+        expect(service.sign_in(auth_options, nil)).to eq :wrong_credentials
+        expect(service.forgot_password(auth_options, liquid_context)).to eq :wrong_email
+        expect(service.reset_password(auth_options, nil)).to eq :invalid_token
+      end
+    end
+
+    context 'an unknown type' do
+      let(:account_type) { nil }
+      include_examples 'refusing every action'
+    end
+
+    context 'a type with no password field' do
+      let(:account_type) { instance_double('ContentType', password_fields: []) }
+      include_examples 'refusing every action'
+    end
+
+    context 'a type with two password fields' do
+      let(:account_type) do
+        instance_double('ContentType', password_fields: [password_field, instance_double('Field', name: 'recovery')])
+      end
+      include_examples 'refusing every action'
+    end
+
+    context 'a visitor naming another field' do
+      let(:auth_options) do
+        instance_double('AuthOptions', default_auth_options.merge(entry: nil, disable_email: true, password_field: 'email'))
+      end
+      include_examples 'refusing every action'
     end
 
   end

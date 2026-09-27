@@ -14,13 +14,16 @@ module Locomotive
       # The Engine writes the entry without the block below, so the password is
       # checked before any write.
       def sign_up(options, context, request = nil)
-        password = sign_up_password(options)
+        field    = password_field(options)
+        password = field && sign_up_password(options, field)
 
-        return [:invalid_entry, refused_sign_up(options, password)] unless ContentEntry.storable_password?(password)
+        unless field && ContentEntry.storable_password?(password)
+          return [:invalid_entry, refused_sign_up(options, field, password)]
+        end
 
         entry = entries.create(options.type, options.entry) do |_entry|
           _entry.extend(ContentEntryAuth)
-          _entry.password_field = options.password_field.to_sym
+          _entry.password_field = field
         end
 
         if entry.errors.empty?
@@ -33,9 +36,10 @@ module Locomotive
       end
 
       def sign_in(options, request)
-        entry = entries.all(options.type, options.id_field => options.id).first
+        field = password_field(options)
+        entry = field && entries.all(options.type, options.id_field => options.id).first
 
-        if entry&.password_matches?(options.password_field, options.password)
+        if entry&.password_matches?(field, options.password)
           notify(:signed_in, entry, request)
           return [:signed_in, entry]
         end
@@ -51,7 +55,8 @@ module Locomotive
 
       # options is an instance of the AuthOptions class
       def forgot_password(options, context)
-        entry = entries.all(options.type, options.id_field => options.id).first
+        field = password_field(options)
+        entry = field && entries.all(options.type, options.id_field => options.id).first
 
         if entry.nil?
           :"wrong_#{options.id_field}"
@@ -66,12 +71,14 @@ module Locomotive
 
           send_reset_password_instructions(options, context)
 
-          :"reset_#{options.password_field}_instructions_sent"
+          :"reset_#{field}_instructions_sent"
         end
       end
 
       def reset_password(options, request)
-        return :invalid_token       if options.reset_token.blank?
+        field = password_field(options)
+
+        return :invalid_token       if options.reset_token.blank? || field.nil?
         return :password_too_short  if options.password.to_s.size < ContentEntry::MIN_PASSWORD_LENGTH
         return :invalid_password    unless ContentEntry.storable_password?(options.password)
 
@@ -83,13 +90,13 @@ module Locomotive
 
           if sent_at >= now
             entries.update_decorated_entry(entry, {
-              "#{options.password_field}_hash" => BCrypt::Password.create(options.password),
+              "#{field}_hash"       => BCrypt::Password.create(options.password),
               '_auth_reset_token'   => nil,
               '_auth_reset_sent_at' => nil
             })
             notify(:reset_password, entry, request)
 
-            return [:"#{options.password_field}_reset", entry]
+            return [:"#{field}_reset", entry]
           end
         end
 
@@ -107,20 +114,29 @@ module Locomotive
 
       private
 
-      def sign_up_password(options)
-        options.entry.with_indifferent_access[options.password_field] if options.entry.is_a?(Hash)
+      # An auth type declares one password field; a visitor may name it, never another.
+      def password_field(options)
+        fields = entries.get_type(options.type)&.password_fields || []
+        return unless fields.one?
+
+        name = fields.first.name.to_sym
+        name if options.password_field.nil? || options.password_field.to_sym == name
       end
 
-      def refused_sign_up(options, password)
+      def sign_up_password(options, field)
+        options.entry.with_indifferent_access[field] if options.entry.is_a?(Hash)
+      end
+
+      def refused_sign_up(options, field, password)
         entry = entries.build(options.type, options.entry)
         return unless entry
 
-        field = options.password_field.to_sym
+        name = field || (options.password_field || :password).to_sym
 
-        if ContentEntry.blank_password?(password) && password.to_s.size < ContentEntry::MIN_PASSWORD_LENGTH
-          entry.errors.add(field, :too_short, count: ContentEntry::MIN_PASSWORD_LENGTH)
+        if field && ContentEntry.blank_password?(password) && password.to_s.size < ContentEntry::MIN_PASSWORD_LENGTH
+          entry.errors.add(name, :too_short, count: ContentEntry::MIN_PASSWORD_LENGTH)
         else
-          entry.errors.add(field, :invalid)
+          entry.errors.add(name, :invalid)
         end
 
         entry
@@ -169,10 +185,7 @@ EMAIL
 
           confirmation = :"#{password_field}_confirmation"
 
-          # Sign-up must target a declared password field.
-          if !content_type.fields_by_name[password_field]&.write_only?
-            errors.add(password_field, :invalid)
-          elsif self[confirmation].nil?
+          if self[confirmation].nil?
             errors.add(confirmation, :confirmation, attribute: _label_of(password_field))
           end
 

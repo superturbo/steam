@@ -1,0 +1,12 @@
+name: Keyrings
+slug: keyrings
+label_field_name: email
+order_by: created_at
+fields:
+- email:
+    type: email
+    required: true
+- pin:
+    type: password
+- recovery:
+    type: password

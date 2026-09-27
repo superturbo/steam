@@ -87,7 +87,8 @@ module Locomotive::Steam
 
         status, entry = services.auth.reset_password(options, request)
 
-        if status == :password_reset
+        # Reset success status depends on the password field.
+        if entry
           store_authenticated(entry)
           redirect_to options.callback || mounted_on
         end
@@ -139,7 +140,7 @@ module Locomotive::Steam
         end
 
         def password_field
-          params[:auth_password_field].try(:to_sym) || :password
+          params[:auth_password_field].try(:to_sym)
         end
 
         def id
