@@ -11,7 +11,13 @@ module Locomotive
         entries.find(type, id)
       end
 
+      # The Engine writes the entry without the block below, so the password is
+      # checked before any write.
       def sign_up(options, context, request = nil)
+        password = sign_up_password(options)
+
+        return [:invalid_entry, refused_sign_up(options, password)] unless ContentEntry.storable_password?(password)
+
         entry = entries.create(options.type, options.entry) do |_entry|
           _entry.extend(ContentEntryAuth)
           _entry.password_field = options.password_field.to_sym
@@ -101,6 +107,25 @@ module Locomotive
 
       private
 
+      def sign_up_password(options)
+        options.entry.with_indifferent_access[options.password_field] if options.entry.is_a?(Hash)
+      end
+
+      def refused_sign_up(options, password)
+        entry = entries.build(options.type, options.entry)
+        return unless entry
+
+        field = options.password_field.to_sym
+
+        if ContentEntry.blank_password?(password) && password.to_s.size < ContentEntry::MIN_PASSWORD_LENGTH
+          entry.errors.add(field, :too_short, count: ContentEntry::MIN_PASSWORD_LENGTH)
+        else
+          entry.errors.add(field, :invalid)
+        end
+
+        entry
+      end
+
       def send_welcome_email(options, context)
         return if options.disable_email
 
@@ -138,22 +163,16 @@ EMAIL
 
         attr_accessor :password_field
 
-        # Sign-up asks for the password and the confirmation a write may omit.
+        # Sign-up asks for the confirmation a write may omit.
         def valid?
           super
 
-          password     = self[password_field]
           confirmation = :"#{password_field}_confirmation"
-          missing      = ContentEntry.blank_password?(password)
 
           # Sign-up must target a declared password field.
           if !content_type.fields_by_name[password_field]&.write_only?
             errors.add(password_field, :invalid)
-          elsif missing && password.to_s.size < ContentEntry::MIN_PASSWORD_LENGTH
-            errors.add(password_field, :too_short, count: ContentEntry::MIN_PASSWORD_LENGTH)
-          elsif missing
-            errors.add(password_field, :invalid)
-          elsif ContentEntry.usable_password?(password) && self[confirmation].nil?
+          elsif self[confirmation].nil?
             errors.add(confirmation, :confirmation, attribute: _label_of(password_field))
           end
 

@@ -91,6 +91,25 @@ describe Locomotive::Steam::AuthService do
 
     end
 
+    { nil => 'is too short (minimum is 6 characters)', '' => 'is too short (minimum is 6 characters)',
+      '   ' => 'is too short (minimum is 6 characters)', '      ' => 'is invalid',
+      ['easyone'] => 'is invalid', "easy\0one" => 'is invalid', 'ą' * 37 => 'is invalid' }.each do |password, message|
+      context "without a usable password: #{password.inspect}" do
+
+        let(:entry_attributes) { { email: 'chris@soundgarden.band', password: password } }
+        let(:built)            { Locomotive::Steam::ContentEntry.new({}) }
+
+        it 'refuses it before any host writes the entry' do
+          expect(entries).not_to receive(:create)
+          expect(entries).to receive(:build).with('accounts', entry_attributes).and_return(built)
+
+          is_expected.to eq [:invalid_entry, built]
+          expect(built.errors[:password]).to eq [message]
+        end
+
+      end
+    end
+
     describe Locomotive::Steam::AuthService::ContentEntryAuth do
 
       let(:repository)     { instance_double('FieldRepository', all: nil, required: [], selects: []) }
@@ -128,17 +147,6 @@ describe Locomotive::Steam::AuthService do
 
         end
 
-        context 'the password is missing' do
-
-          let(:attributes) { {} }
-
-          it 'returns false' do
-            is_expected.to eq false
-            expect(content_entry.errors[:password]).to eq(['is too short (minimum is 6 characters)'])
-          end
-
-        end
-
         context 'the password is less than 6 characters' do
 
           let(:attributes) { { password: 'easy', password_confirmation: 'easy' } }
@@ -172,7 +180,7 @@ describe Locomotive::Steam::AuthService do
 
         end
 
-        ['      ', "\xFFeasyone".dup.force_encoding('UTF-8'), "easy\0one"].each do |password|
+        ["\xFFeasyone".dup.force_encoding('UTF-8'), "easy\0one"].each do |password|
           context "a password sign in would refuse: #{password.inspect}" do
 
             let(:attributes) { { password: password, password_confirmation: password } }

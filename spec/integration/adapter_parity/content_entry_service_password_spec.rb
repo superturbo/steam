@@ -139,6 +139,16 @@ describe 'Adapter parity' do
             expect(stored_password?(entry._id, 'easyone')).to eq true
           end
 
+          it 'refuses a sign-up without a password, writing nothing' do
+            status = entry = nil
+
+            expect { status, entry = sign_up('submissions', 'secret', valid) }
+              .not_to change { stored_count }
+
+            expect(status).to eq :invalid_entry
+            expect(entry.errors[:secret]).to eq ['is too short (minimum is 6 characters)']
+          end
+
           it 'refuses a field the schema does not declare a password, writing nothing' do
             status = entry = nil
             input  = { email: 'ada@example.com', passcode: 'easyone', passcode_confirmation: 'easyone' }
