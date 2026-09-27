@@ -3,8 +3,7 @@ module Locomotive
 
     class AuthService
 
-      MIN_PASSWORD_LENGTH   = 6
-      RESET_TOKEN_LIFETIME  = 1 * 3600 # 6 hours in seconds
+      RESET_TOKEN_LIFETIME  = 1 * 3600 # 1 hour in seconds
 
       attr_accessor_initialize :site, :entries, :email_service
 
@@ -15,7 +14,7 @@ module Locomotive
       def sign_up(options, context, request = nil)
         entry = entries.create(options.type, options.entry) do |_entry|
           _entry.extend(ContentEntryAuth)
-          _entry[:_password_field] = options.password_field.to_sym
+          _entry.password_field = options.password_field.to_sym
         end
 
         if entry.errors.empty?
@@ -67,8 +66,8 @@ module Locomotive
 
       def reset_password(options, request)
         return :invalid_token       if options.reset_token.blank?
-        return :password_too_short  if options.password.to_s.size < MIN_PASSWORD_LENGTH
-        return :invalid_password    unless ContentEntry.usable_password?(options.password)
+        return :password_too_short  if options.password.to_s.size < ContentEntry::MIN_PASSWORD_LENGTH
+        return :invalid_password    unless ContentEntry.storable_password?(options.password)
 
         entry = entries.all(options.type, '_auth_reset_token' => options.reset_token).first
 
@@ -137,40 +136,28 @@ EMAIL
       #
       module ContentEntryAuth
 
-        # Taking the password removes it from the entry, so asking a second time
-        # must not read what is no longer there as an empty password.
+        attr_accessor :password_field
+
+        # Sign-up asks for the password and the confirmation a write may omit.
         def valid?
           super
 
-          if (name = self[:_password_field])
-            password      = self[name]
-            confirmation  = self["#{name}_confirmation"]
-            usable        = self.class.usable_password?(password)
+          password     = self[password_field]
+          confirmation = :"#{password_field}_confirmation"
+          missing      = ContentEntry.blank_password?(password)
 
-            if password.to_s.size < Locomotive::Steam::AuthService::MIN_PASSWORD_LENGTH
-              self.errors.add(name, :too_short, count: Locomotive::Steam::AuthService::MIN_PASSWORD_LENGTH)
-            elsif !usable
-              self.errors.add(name, :invalid)
-            end
-
-            if usable && password != confirmation
-              self.errors.add("#{name}_confirmation", :confirmation, attribute: self._label_of(name))
-            end
-
-            set_password(password) if self.errors.empty?
+          # Sign-up must target a declared password field.
+          if !content_type.fields_by_name[password_field]&.write_only?
+            errors.add(password_field, :invalid)
+          elsif missing && password.to_s.size < ContentEntry::MIN_PASSWORD_LENGTH
+            errors.add(password_field, :too_short, count: ContentEntry::MIN_PASSWORD_LENGTH)
+          elsif missing
+            errors.add(password_field, :invalid)
+          elsif ContentEntry.usable_password?(password) && self[confirmation].nil?
+            errors.add(confirmation, :confirmation, attribute: _label_of(password_field))
           end
 
-          self.errors.empty?
-        end
-
-        private
-
-        def set_password(password)
-          self[:"#{self[:_password_field]}_hash"] = BCrypt::Password.create(password)
-
-          name = self.attributes.delete(:_password_field)
-
-          self.attributes.delete_if { |_name| _name == name || _name == "#{name}_confirmation" }
+          errors.empty?
         end
 
       end

@@ -12,3 +12,5 @@ fields:
 - message:
     type: text
     required: true
+- secret:
+    type: password

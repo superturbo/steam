@@ -12,12 +12,23 @@ module Locomotive::Steam
     REQUIRED_FROM_ATTRIBUTES = %i(belongs_to many_to_many file).freeze
     READ_THROUGH_GRAMMAR     = %i(integer float boolean string text email color date date_time json).freeze
     PASSWORD_VERSIONS        = %w(2a 2b 2x 2y).freeze
+    MIN_PASSWORD_LENGTH      = 6
+    MAX_PASSWORD_BYTES       = 72 # bcrypt reads no further
 
     private_constant :NIL_IS_THE_ONLY_BLANK, :REQUIRED_FROM_ATTRIBUTES, :READ_THROUGH_GRAMMAR,
-                     :PASSWORD_VERSIONS
+                     :PASSWORD_VERSIONS, :MAX_PASSWORD_BYTES
 
     def self.usable_password?(value)
       value.is_a?(String) && value.valid_encoding? && !value.blank? && !value.include?("\0")
+    end
+
+    def self.storable_password?(value)
+      usable_password?(value) && value.bytesize <= MAX_PASSWORD_BYTES
+    end
+
+    # No password given: a write leaves the stored one as it is.
+    def self.blank_password?(value)
+      value.nil? || (value.is_a?(String) && value.valid_encoding? && value.blank?)
     end
 
     # Positional locale preserves calls such as change(title: 'x').
@@ -70,9 +81,30 @@ module Locomotive::Steam
 
       invalid = validate_select_fields + validate_link_fields
 
+      validate_password_fields
       validate_required_fields(invalid + normalize_fields)
 
       errors.empty?
+    end
+
+    def hash_passwords
+      password_fields.each do |field|
+        password = attributes[field.name.to_sym]
+
+        next unless self.class.storable_password?(password)
+
+        self[:"#{field.name}_hash"] = BCrypt::Password.create(password).to_s
+      end
+
+      forget_password_text
+    end
+
+    # Drop password input after hashing and ignore legacy plaintext on load.
+    def forget_password_text
+      password_fields.each do |field|
+        attributes.delete(field.name.to_sym)
+        attributes.delete(:"#{field.name}_confirmation")
+      end
     end
 
     def content_type
@@ -168,6 +200,32 @@ module Locomotive::Steam
 
     def report_refused_input
       Array(@refused_input).each { |name| errors.add(name, :invalid) }
+    end
+
+    def password_fields
+      content_type.fields_by_name.each_value.select(&:write_only?)
+    end
+
+    # A confirmation is checked when given; sign-up asks for one.
+    def validate_password_fields
+      password_fields.each do |field|
+        name     = field.name.to_sym
+        password = attributes[name]
+
+        next if self.class.blank_password?(password)
+
+        if !self.class.storable_password?(password)
+          errors.add(name, :invalid)
+        elsif password.size < MIN_PASSWORD_LENGTH
+          errors.add(name, :too_short, count: MIN_PASSWORD_LENGTH)
+        else
+          confirmation = attributes[:"#{name}_confirmation"]
+
+          next if confirmation.nil? || confirmation == password
+
+          errors.add(:"#{name}_confirmation", :confirmation, attribute: _label_of(name))
+        end
+      end
     end
 
     # A field holding unresolved input in any locale reads as no value under

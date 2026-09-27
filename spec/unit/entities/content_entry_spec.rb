@@ -1187,6 +1187,17 @@ describe Locomotive::Steam::ContentEntry do
       expect(content_entry.password_matches?('secret', 'easyone')).to be true
     end
 
+    context 'a hash made from a password longer than a write accepts' do
+
+      let(:long)   { 'ą' * 40 }
+      let(:stored) { BCrypt::Password.create(long, cost: 4).to_s }
+
+      it 'answers true for that password' do
+        expect(content_entry.password_matches?(:secret, long)).to be true
+      end
+
+    end
+
     it 'answers false for any other candidate' do
       ['wrong', "\xFFeasyone".dup.force_encoding('UTF-8')].each do |candidate|
         expect(content_entry.password_matches?(:secret, candidate)).to be false

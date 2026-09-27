@@ -41,7 +41,10 @@ module Locomotive
         default_attribute :content_type, -> (repository) { repository.content_type }
         default_attribute :site,         -> (repository) { repository.site }
 
-        after_load { |entity, _| Locomotive::Steam::ContentFieldValues.deserialize_entry(entity) }
+        after_load do |entity, _|
+          Locomotive::Steam::ContentFieldValues.deserialize_entry(entity)
+          entity.forget_password_text
+        end
       end
 
       # this is the starting point of all the next methods.
@@ -175,6 +178,8 @@ module Locomotive
       def create(entity)
         raise InvalidEntry.new(entity) unless entity.valid?
 
+        entity.hash_passwords
+
         # One instant fills the moments the caller left out; a spelled-out
         # moment normalizes the same way, and an explicit null stays a null.
         now = Adapters::TimePrecision.utc_ms
@@ -191,6 +196,8 @@ module Locomotive
 
       def update(entity)
         raise InvalidEntry.new(entity) unless entity.valid?
+
+        entity.hash_passwords
 
         # Steam owns updated_at; whatever the caller put there loses.
         entity[:updated_at] = Adapters::TimePrecision.utc_ms

@@ -1,0 +1,12 @@
+name: Members
+slug: members
+label_field_name: email
+order_by: created_at
+fields:
+- email:
+    type: email
+    required: true
+- passcode:
+    type: string
+- passcode_confirmation:
+    type: string

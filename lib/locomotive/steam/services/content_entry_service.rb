@@ -188,11 +188,13 @@ module Locomotive
 
         fields       = _repository.content_type.fields
         links        = fields.associations.select { |field| field.type == :belongs_to }
+        passwords    = _repository.content_type.fields_by_name.each_value.select(&:write_only?)
         skipped_keys = fields.json.map { |field| field.name.to_s } +
                        fields.selects.map { |field| field.persisted_name.to_s } +
-                       links.map(&:persisted_name)
+                       links.map(&:persisted_name) +
+                       passwords.flat_map { |field| [field.name.to_s, "#{field.name}_confirmation"] }
 
-        # JSON is validated as data; HTML escaping belongs to rendering.
+        # JSON is validated as data, a password as typed; HTML escaping belongs to rendering.
         attributes.each do |key, value|
           next unless value.is_a?(String)
           next if skipped_keys.include?(key.to_s)

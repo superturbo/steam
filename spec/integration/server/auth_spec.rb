@@ -46,6 +46,31 @@ describe 'Authentication' do
         expect(accounts.size).to eq 1
       end
 
+      it 'stores the password as its hash alone' do
+        params[:auth_entry][:email] = 'kim.thayil@soundgarden.band'
+        sign_up(params)
+
+        account = last_request.env['steam.services'].content_entry
+                    .all('accounts', 'email' => 'kim.thayil@soundgarden.band', '_visible' => nil).first
+
+        expect(account.attributes.keys).not_to include('password', 'password_confirmation', '_password_field')
+        expect(BCrypt::Password.new(account.attributes['password_hash']).is_password?('easyone')).to eq true
+      end
+
+      it 'signs in with the password it was given, markup included' do
+        params[:auth_entry].merge!(email: 'ben.shepherd@soundgarden.band',
+                                   password: 'a<b&c>d!', password_confirmation: 'a<b&c>d!')
+        sign_up(params)
+        clear_cookies
+
+        post '/account/sign-in', {
+          auth_action: 'sign_in', auth_content_type: 'accounts', auth_id_field: 'email',
+          auth_password_field: 'password', auth_id: 'ben.shepherd@soundgarden.band', auth_password: 'a<b&c>d!',
+          auth_callback: '/account/me' }
+        expect(last_response.status).to eq 301
+        expect(last_response.location).to eq '/account/me'
+      end
+
       it 'displays the profile page as described in the params' do
         params[:auth_entry][:email] = 'chris.cornell@soundgarden.band'
         sign_up(params, true)

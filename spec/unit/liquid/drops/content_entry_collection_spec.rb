@@ -308,7 +308,7 @@ describe Locomotive::Steam::Liquid::Drops::ContentEntryCollection do
     end
     let(:field) do
       instance_double('BelongsToField', name: 'maker', persisted_name: 'maker_id',
-                      type: :belongs_to, target_id: '42')
+                      type: :belongs_to, target_id: '42', write_only?: false)
     end
     let(:type) do
       build_content_type('Articles', label_field_name: :title,

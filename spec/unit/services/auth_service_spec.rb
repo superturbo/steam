@@ -93,27 +93,50 @@ describe Locomotive::Steam::AuthService do
 
     describe Locomotive::Steam::AuthService::ContentEntryAuth do
 
-      let(:repository)  { instance_double('FieldRepository', all: nil, required: [], selects: []) }
-      let(:type)        { instance_double('ContentType', slug: 'accounts', label_field_name: :title, fields: repository, fields_by_name: {}) }
-      let(:attributes)  { { password: 'easyone', password_confirmation: 'easyone' } }
-      let(:content_entry) { Locomotive::Steam::ContentEntry.new(attributes).tap { |e| e.content_type = type } }
+      let(:repository)     { instance_double('FieldRepository', all: nil, required: [], selects: []) }
+      let(:password)       { Locomotive::Steam::ContentTypeField.new(name: 'password', type: 'password') }
+      let(:fields_by_name) { { password: password }.with_indifferent_access }
+      let(:type)           { instance_double('ContentType', slug: 'accounts', label_field_name: :title, fields: repository, fields_by_name: fields_by_name, field_label_of: 'password') }
+      let(:attributes)     { { password: 'easyone', password_confirmation: 'easyone' } }
+      let(:content_entry)  { Locomotive::Steam::ContentEntry.new(attributes).tap { |e| e.content_type = type } }
 
-      before { content_entry.extend(described_class) }
+      before do
+        content_entry.extend(described_class)
+        content_entry.password_field = :password
+      end
 
       describe '#valid?' do
-
-        before { content_entry[:_password_field] = 'password' }
 
         subject { content_entry.valid? }
 
         it { is_expected.to eq true }
 
-        it 'encrypts the password since there is no error' do
-          expect(BCrypt::Password).to receive(:create).with('easyone').and_return('42a')
-          subject
-          expect(content_entry[:password_hash]).to eq '42a'
-          expect(content_entry.attributes[:password]).to eq nil
-          expect(content_entry.attributes[:password_confirmation]).to eq nil
+        it 'leaves the password for the write to hash' do
+          expect(BCrypt::Password).not_to receive(:create)
+          is_expected.to eq true
+          expect(content_entry[:password]).to eq 'easyone'
+        end
+
+        context 'the chosen field is not declared a password' do
+
+          let(:password) { Locomotive::Steam::ContentTypeField.new(name: 'password', type: 'string') }
+
+          it 'returns false' do
+            is_expected.to eq false
+            expect(content_entry.errors[:password]).to eq(['is invalid'])
+          end
+
+        end
+
+        context 'the password is missing' do
+
+          let(:attributes) { {} }
+
+          it 'returns false' do
+            is_expected.to eq false
+            expect(content_entry.errors[:password]).to eq(['is too short (minimum is 6 characters)'])
+          end
+
         end
 
         context 'the password is less than 6 characters' do
@@ -129,8 +152,18 @@ describe Locomotive::Steam::AuthService do
 
         context "the password doesn't match the confirmation" do
 
-          let(:type)        { instance_double('ContentType', slug: 'accounts', label_field_name: :title, fields: repository, fields_by_name: {}, field_label_of: 'password') }
-          let(:attributes)  { { password: 'easyone', password_confirmation: 'oneeasy' } }
+          let(:attributes) { { password: 'easyone', password_confirmation: 'oneeasy' } }
+
+          it 'returns false' do
+            is_expected.to eq false
+            expect(content_entry.errors[:password_confirmation]).to eq(["doesn't match password"])
+          end
+
+        end
+
+        context 'the confirmation is missing' do
+
+          let(:attributes) { { password: 'easyone' } }
 
           it 'returns false' do
             is_expected.to eq false
@@ -144,8 +177,7 @@ describe Locomotive::Steam::AuthService do
 
             let(:attributes) { { password: password, password_confirmation: password } }
 
-            it 'returns false without hashing it' do
-              expect(BCrypt::Password).not_to receive(:create)
+            it 'returns false' do
               is_expected.to eq false
               expect(content_entry.errors[:password]).to eq(['is invalid'])
             end
@@ -284,6 +316,17 @@ EMAIL
         end
 
       end
+    end
+
+    context 'a password longer than bcrypt reads, counted in bytes' do
+
+      let(:_auth_options) { default_auth_options.merge({ password: 'ą' * 37 }) }
+
+      it 'writes nothing' do
+        expect(entries).not_to receive(:update_decorated_entry)
+        is_expected.to eq :invalid_password
+      end
+
     end
 
     context 'expired auth token' do
