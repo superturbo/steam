@@ -33,7 +33,8 @@ require_relative '../lib/locomotive/steam'
 require_relative 'support'
 
 Locomotive::Steam.configure do |config|
-  config.mode = :test
+  config.mode                 = :test
+  config.image_resizer_secret = 'steam spec key'
 end
 
 RSpec.configure do |config|

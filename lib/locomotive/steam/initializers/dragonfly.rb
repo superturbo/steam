@@ -9,6 +9,7 @@ module Locomotive
         def run
           # need to be called outside of the configure method
           imagemagick_commands = find_imagemagick_commands
+          key = signing_key
 
           ::Dragonfly.app(:steam).configure do
             if imagemagick_commands
@@ -21,7 +22,7 @@ module Locomotive
 
             verify_urls true
 
-            secret Locomotive::Steam.configuration.image_resizer_secret
+            secret key
 
             url_format '/steam/dynamic/:job/:sha/:basename.:ext'
 
@@ -31,6 +32,21 @@ module Locomotive
           end
 
           ::Dragonfly.logger = Locomotive::Common::Logger
+        end
+
+        def signing_key
+          configuration = Locomotive::Steam.configuration
+          key = configuration.image_resizer_secret
+
+          unless key.nil? || key.is_a?(String)
+            raise ArgumentError, "Steam needs the image_resizer_secret as text, got #{key.class}."
+          end
+
+          return key unless key.blank? || key == 'please change it'
+          return SecureRandom.hex(32) if configuration.mode == :test
+
+          raise ArgumentError, 'Steam needs an image_resizer_secret outside test mode; ' \
+                               "a blank value or 'please change it' is not one."
         end
 
         def find_imagemagick_commands

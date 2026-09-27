@@ -135,13 +135,13 @@ describe Locomotive::Steam::Liquid::Tags::Editable::File do
     context 'resize image' do
 
       let(:source) { "{% block header %}{% editable_file banner, hint: 'some text', resize: '500x100#' %}http://www.placehold.it/500x500{% endeditable_file %}{% endblock %}" }
-      it { is_expected.to eq '/steam/dynamic/W1siZnUiLCJodHRwOi8vd3d3LnBsYWNlaG9sZC5pdC81MDB4NTAwIl0sWyJwIiwidGh1bWIiLCI1MDB4MTAwIyJdXQ/1c79f4581f33aae4/500x500' }
+      it { is_expected.to eq '/steam/dynamic/W1siZnUiLCJodHRwOi8vd3d3LnBsYWNlaG9sZC5pdC81MDB4NTAwIl0sWyJwIiwidGh1bWIiLCI1MDB4MTAwIyJdXQ/154b0ae907e87734/500x500' }
 
       context 'live editing on' do
 
         let(:live_editing) { true }
 
-        it { is_expected.to eq '<span class="locomotive-block-anchor" data-element-id="header" style="visibility: hidden"></span>/steam/dynamic/W1siZnUiLCJodHRwOi8vd3d3LnBsYWNlaG9sZC5pdC81MDB4NTAwIl0sWyJwIiwidGh1bWIiLCI1MDB4MTAwIyJdXQ/1c79f4581f33aae4/500x500?editable-path=header--banner' }
+        it { is_expected.to eq '<span class="locomotive-block-anchor" data-element-id="header" style="visibility: hidden"></span>/steam/dynamic/W1siZnUiLCJodHRwOi8vd3d3LnBsYWNlaG9sZC5pdC81MDB4NTAwIl0sWyJwIiwidGh1bWIiLCI1MDB4MTAwIyJdXQ/154b0ae907e87734/500x500?editable-path=header--banner' }
 
       end
     end

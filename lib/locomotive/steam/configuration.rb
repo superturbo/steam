@@ -64,12 +64,11 @@ module Locomotive
       #
       attr_accessor :asset_path
       
-      # Dragonfly needs it to generate the protective SHA.
+      # Signs the resize URLs, e.g. a key from `openssl rand -hex 32`.
       #
-      # default: 'please change it'
+      # default: nil (required outside test mode)
       #
       attr_accessor :image_resizer_secret
-      def image_resizer_secret; @image_resizer_secret.nil? ? 'please change it' : @image_resizer_secret; end
 
       # Enable the Cross-site request forgery protection for POST requests.
       #
