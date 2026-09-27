@@ -430,9 +430,11 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
       let(:field)         { instance_double('Field', name: 'password', type: :password) }
       let(:content_type)  { instance_double('Accounts', slug: 'accounts', select_fields: [], association_fields: [], file_fields: [], password_fields: [field], fields_by_name: {}) }
 
-      it 'adds a new attribute for the hashed password' do
-        expect(subject.first[:password_hash]).not_to eq 'easyone'
-        expect(subject.first[:password]).to eq nil
+      it 'replaces the password with a hash that verifies it' do
+        john = subject.detect { |attributes| attributes[:_label] == 'John' }
+
+        expect(BCrypt::Password.new(john[:password_hash]).is_password?('easyone')).to eq true
+        expect(john.key?(:password)).to be false
       end
 
       context 'the entry never names the password' do
@@ -445,15 +447,35 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
 
       end
 
-      context 'the entry names the password with an explicit null' do
+      [nil, '', '   '].each do |blank|
+        context "the entry gives no password: #{blank.inspect}" do
 
-        before { allow(loader).to receive(:_load).and_return([{ 'One' => { password: nil } }]) }
+          before { allow(loader).to receive(:_load).and_return([{ 'One' => { password: blank } }]) }
 
-        it 'keeps the null hash instead of hashing an empty secret' do
-          expect(subject.first.key?(:password_hash)).to be true
-          expect(subject.first[:password_hash]).to be_nil
+          it 'holds neither the text nor a hash' do
+            expect(subject.first.keys).not_to include(:password, :password_hash)
+          end
+
         end
+      end
 
+      { [1]                                      => [:wrong_type, 'expected a password, got Array'],
+        123                                      => [:wrong_type, 'expected a password, got Integer'],
+        "\xFFeasyone".dup.force_encoding('UTF-8') => [:invalid_encoding, 'invalid encoding'],
+        "easy\0one"                               => [:invalid_password, 'a password holds no NUL character'] }
+        .each do |password, (reason, message)|
+        context "the entry gives #{password.inspect}" do
+
+          before { allow(loader).to receive(:_load).and_return([{ 'One' => { password: password } }]) }
+
+          it 'raises with the file, entry and field spelled out' do
+            expect { subject }.to raise_error(Locomotive::Steam::ContentFieldValues::ParseError,
+                                              /accounts\.yml, entry One, field password: #{Regexp.escape(message)}/) do |error|
+              expect(error.reason).to eq reason
+            end
+          end
+
+        end
       end
 
     end

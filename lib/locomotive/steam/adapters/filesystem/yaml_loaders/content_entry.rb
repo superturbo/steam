@@ -26,7 +26,7 @@ module Locomotive
                   modify_for_selects(_attributes, label)
                   modify_for_associations(_attributes)
                   modify_for_files(_attributes)
-                  modify_for_passwords(_attributes)
+                  modify_for_passwords(_attributes, label)
                   modify_for_values(_attributes, label)
 
                   list << _attributes
@@ -222,14 +222,33 @@ module Locomotive
               end
             end
 
-            def modify_for_passwords(attributes)
+            # Blank YAML passwords add no hash.
+            def modify_for_passwords(attributes, label)
               content_type.password_fields.each do |field|
                 next unless attributes.key?(field.name.to_sym)
 
                 password = attributes.delete(field.name.to_sym)
-                attributes[:"#{field.name}_hash"] =
-                  password.nil? ? nil : BCrypt::Password.create(password)
+                next if Locomotive::Steam::ContentEntry.blank_password?(password)
+
+                check_password!(password, field, label)
+                attributes[:"#{field.name}_hash"] = BCrypt::Password.create(password)
               end
+            end
+
+            def check_password!(password, field, label)
+              reason, message = password_problem(password)
+              return unless reason
+
+              raise Locomotive::Steam::ContentFieldValues::ParseError.new(
+                reason,
+                "#{File.join(path, "#{content_type_slug}.yml")}, entry #{label}, field #{field.name}: #{message}")
+            end
+
+            def password_problem(password)
+              return [:wrong_type, "expected a password, got #{password.class}"] unless password.is_a?(String)
+              return [:invalid_encoding, 'invalid encoding'] unless password.valid_encoding?
+
+              [:invalid_password, 'a password holds no NUL character'] if password.include?("\0")
             end
 
             def file_size(path)

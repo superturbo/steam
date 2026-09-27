@@ -12,7 +12,7 @@ module Locomotive::Steam
     class ParseError < StandardError
 
       REASONS = %i(invalid_boolean invalid_date invalid_encoding invalid_json
-                   invalid_json_name invalid_json_value invalid_number
+                   invalid_json_name invalid_json_value invalid_number invalid_password
                    invalid_password_hash json_too_deep numeric_text_too_long
                    outside_numeric_bounds unknown_select_option
                    wrong_stored_type wrong_type).freeze
