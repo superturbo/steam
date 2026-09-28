@@ -14,7 +14,6 @@ group :development do
   gem 'puma',               '~> 8.0'
   gem 'haml',               '~> 6.4'
 
-  gem 'rack', '~> 3.0'
   gem 'rack-mini-profiler', '~> 4.0'
   gem 'flamegraph'
   gem 'stackprof' # ruby 2.1+ only

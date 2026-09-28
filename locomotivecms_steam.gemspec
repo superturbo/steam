@@ -25,9 +25,10 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'json',                   '>= 2.20', '< 3'
   spec.add_dependency 'liquid',                 '~> 5.13.0'
 
+  spec.add_dependency 'rack',                   '~> 3.0'
   spec.add_dependency 'rack-session',           '~> 2.1'
   spec.add_dependency 'rack_csrf',              '~> 2.6'
-  spec.add_dependency 'dragonfly',              '~> 1.4.0'
+  spec.add_dependency 'dragonfly',              '~> 1.4.2'
   spec.add_dependency 'moneta',                 '~> 1.6.0'
 
   spec.add_dependency 'execjs',                 '~> 2.9'
