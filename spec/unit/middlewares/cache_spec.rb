@@ -76,6 +76,10 @@ describe Locomotive::Steam::Middlewares::Cache do
 
         end
 
+        it 'sends no last modification date' do
+          expect(send_request[:env].keys.grep(/last_modified/)).to be_empty
+        end
+
         describe 'the site administrator sets a custom cache control and vary' do
 
           let(:site) { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_control: 'max-age=600, s-maxage=600, public, must-revalidate', cache_vary: 'Cookie') }
@@ -116,13 +120,14 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       end
 
-      context 'based on the Last-Modified' do
+      context 'based on If-Modified-Since alone' do
 
-        let(:modified_at) { now }
+        let(:modified_at) { now.httpdate }
 
-        it 'returns a 304 (Not modified) without no cache headers' do
-          expect(subject.first).to eq 304
-          expect(subject.last['cache-control']).to eq nil
+        before { allow(cache).to receive(:read).with(cache_key).and_return(Marshal.dump([200, {}, ['Hello world!']])) }
+
+        it 'serves the page, since the site date does not follow a Steam upgrade' do
+          expect(subject.first).to eq 200
         end
 
       end
@@ -150,6 +155,10 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       it 'tells the the CDN to not cache the page' do
         is_expected.to eq ['max-age=0, private, must-revalidate', nil]
+      end
+
+      it 'sends no vary header at all' do
+        expect(send_request[:headers]).to eq('cache-control' => 'max-age=0, private, must-revalidate')
       end
 
     end

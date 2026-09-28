@@ -22,7 +22,7 @@ module Locomotive::Steam
           # TODO: only for debugging
           # log("HTTP keys: #{env.select { |key, _| key.starts_with?('HTTP_') }}".light_blue)
 
-          # Test if the ETag or Last Modified has been modified. If not, return a 304 response
+          # A client holding the current ETag gets a 304 response
           if stale?(key)
             render_response(nil, 304, nil)
             return
@@ -32,7 +32,6 @@ module Locomotive::Steam
           env['steam.cache_control']        = cache_control
           env['steam.cache_vary']           = cache_vary
           env['steam.cache_etag']           = key
-          env['steam.cache_last_modified']  = site.last_modified_at.httpdate
 
           # retrieve the response from the cache.
           # This is useful if no CDN is being used.
@@ -40,7 +39,8 @@ module Locomotive::Steam
 
           unless CACHEABLE_RESPONSE_CODES.include?(code.to_i)
             env['steam.cache_control'] = headers['cache-control'] = NO_CACHE_CONTROL
-            env['steam.cache_vary'] = headers['Vary'] = nil
+            env['steam.cache_vary'] = nil
+            headers.delete('vary')
           end
 
           # we don't want to render twice the page
@@ -103,8 +103,7 @@ module Locomotive::Steam
       end
 
       def stale?(key)
-        env['HTTP_IF_NONE_MATCH'] == key ||
-        env['HTTP_IF_MODIFIED_SINCE'] == site.last_modified_at.httpdate
+        env['HTTP_IF_NONE_MATCH'] == key
       end
 
       def cache
