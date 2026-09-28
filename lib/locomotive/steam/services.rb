@@ -111,7 +111,7 @@ module Locomotive
         end
 
         register :image_resizer do
-          Steam::ImageResizerService.new(::Dragonfly.app(:steam), configuration.asset_path)
+          Steam::ImageResizerService.new(::Dragonfly.app(:steam))
         end
 
         register :translator do

@@ -1,9 +1,12 @@
+require_relative 'image_resizer_service/local_sources'
+require_relative 'image_resizer_service/remote_sources'
+
 module Locomotive
   module Steam
 
     class ImageResizerService
 
-      attr_accessor_initialize :resizer, :asset_path
+      attr_accessor_initialize :resizer
 
       def resize(source, geometry, convert_args = "")
         return get_url_or_path(source) if disabled? || geometry.blank?
@@ -16,6 +19,9 @@ module Locomotive
           Locomotive::Common::Logger.error "Unable to resize on the fly: #{source.inspect}"
           nil
         end
+      rescue ::Dragonfly::Job::Fetch::NotFound => e
+        Locomotive::Common::Logger.error "Unable to resize on the fly: #{e.message}"
+        nil
       end
 
       def disabled?
@@ -29,11 +35,19 @@ module Locomotive
         url_or_path = get_url_or_path(source)
 
         if url_or_path =~ Steam::IsHTTP
-          resizer.fetch_url(url_or_path)
+          remote_source(url_or_path)
         elsif url_or_path
-          path = url_or_path.sub(/(\?.*)$/, '')
-          resizer.fetch_file(File.join(asset_path || '', path))
+          local_source(url_or_path.sub(/(\?.*)$/, ''))
         end
+      end
+
+      def local_source(path)
+        resizer.fetch_file(LocalSources.new.path_for(path))
+      end
+
+      def remote_source(url)
+        RemoteSources.new.check(url)
+        resizer.fetch_url(url)
       end
 
       def get_url_or_path(source)

@@ -3,8 +3,10 @@ require 'spec_helper'
 describe Locomotive::Steam::ImageResizerService do
 
   let(:resizer) { nil }
-  let(:path)    { nil }
-  let(:service) { described_class.new(resizer, path) }
+  let(:service) { described_class.new(resizer) }
+  let(:public)  { File.expand_path('../../fixtures/default/public', __dir__) }
+
+  before { allow(Locomotive::Steam.configuration).to receive(:asset_path).and_return(public) }
 
   describe '#resize' do
 
@@ -21,6 +23,26 @@ describe Locomotive::Steam::ImageResizerService do
 
       let(:resizer) { Dragonfly.app(:steam) }
 
+      before { allow(Locomotive::Steam.configuration).to receive(:image_resizer_remote_source_prefix).and_return('http://upload.wikimedia.org/wikipedia/') }
+
+      it 'keeps the URL of a trusted remote image in the job' do
+        job   = subject[%r{/steam/dynamic/([^/]+)/}, 1]
+        steps = JSON.parse(Base64.urlsafe_decode64(job + '=' * (-job.size % 4)))
+
+        expect(steps.first).to eq ['fu', input]
+      end
+
+      describe 'a remote image outside the trusted sources' do
+
+        let(:input) { 'http://169.254.169.254/latest/meta-data/banner.png' }
+
+        it 'signs nothing and logs why' do
+          expect(Locomotive::Common::Logger).to receive(:error).with(/is not from a trusted resize source/)
+          is_expected.to eq nil
+        end
+
+      end
+
       describe 'no imagemagick' do
         before { expect(resizer.plugins).to receive(:[]).with(:imagemagick).and_return(nil) }
         it { is_expected.to eq 'http://upload.wikimedia.org/wikipedia/en/thumb/b/b5/Metropolitan_railway_steam_locomotive_2781022036.png/240px-Metropolitan_railway_steam_locomotive_2781022036.png' }
@@ -35,29 +57,55 @@ describe Locomotive::Steam::ImageResizerService do
 
       describe 'a local asset' do
 
-        let(:input)  { '/sites/42/theme/images/banner.png' }
-        it { is_expected.to match /\/steam\/dynamic\/.*\/banner.png/ }
+        let(:input)  { '/images/nav_on.png' }
+        it { is_expected.to match /\/steam\/dynamic\/.*\/nav_on.png/ }
+
+        it 'signs the fetch_file job it signed before, so its URL stays the same' do
+          expect(subject).to eq resizer.fetch_file(File.join(public, '/images/nav_on.png')).thumb(geometry).url
+        end
+
+      end
+
+      describe 'a local path holding a NUL' do
+
+        let(:input) { "/images/nav_on.png\0.png" }
+
+        it 'signs nothing and logs why' do
+          expect(Locomotive::Common::Logger).to receive(:error).with(/is not found/)
+          is_expected.to eq nil
+        end
+
+      end
+
+      describe 'a local file outside the asset path' do
+
+        let(:input) { '/../config/site.yml' }
+
+        it 'signs nothing and logs why' do
+          expect(Locomotive::Common::Logger).to receive(:error).with(/is outside the asset path/)
+          is_expected.to eq nil
+        end
 
       end
 
       describe 'a hash' do
 
-        let(:input) { { 'url' => '/sites/42/theme/images/banner.png' } }
-        it { is_expected.to match /\/steam\/dynamic\/.*\/banner.png/ }
+        let(:input) { { 'url' => '/images/nav_on.png' } }
+        it { is_expected.to match /\/steam\/dynamic\/.*\/nav_on.png/ }
 
       end
 
       describe 'an object responding to the url method (Carrierwave uploaded file)' do
 
-        let(:input)  { instance_double('UploadedFile', url: '/sites/42/theme/acme.png') }
-        it { is_expected.to match /\/steam\/dynamic\/.*\/acme.png/ }
+        let(:input)  { instance_double('UploadedFile', url: '/images/photo_frame.png') }
+        it { is_expected.to match /\/steam\/dynamic\/.*\/photo_frame.png/ }
 
       end
 
       describe 'an url with a timestamp' do
 
-        let(:input)  { '/sites/42/theme/images/banner.png?24e29997bcb00e97d8252cdd29d14e2d' }
-        it { is_expected.to match /\/steam\/dynamic\/.*\/[a-z0-9]+\/banner.png/ }
+        let(:input)  { '/images/nav_on.png?24e29997bcb00e97d8252cdd29d14e2d' }
+        it { is_expected.to match /\/steam\/dynamic\/.*\/[a-z0-9]+\/nav_on.png/ }
 
       end
 
@@ -88,12 +136,12 @@ describe Locomotive::Steam::ImageResizerService do
       end
 
       describe 'additional filters' do
-        let(:input)  { '/sites/42/theme/images/banner.png' }
+        let(:input)  { '/images/nav_on.png' }
         let (:filters) { [{"quality" => 70, "auto_orient" => true, "filters" => "-swirl 180"}] }
 
         subject { service.resize(input, geometry, filters) }
 
-        it { is_expected.to match /\/steam\/dynamic\/.*\/banner.png/ }
+        it { is_expected.to match /\/steam\/dynamic\/.*\/nav_on.png/ }
       end
 
     end

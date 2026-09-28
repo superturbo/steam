@@ -58,17 +58,24 @@ module Locomotive
       attr_accessor :serve_assets
       def serve_assets; @serve_assets.nil? ? true : @serve_assets; end
 
-      # Path to the assets (if Steam serves the assets).
+      # Root directory for local resize sources.
+      # Steam also serves assets from it when serve_assets is enabled.
       #
       # default: nil
       #
       attr_accessor :asset_path
-      
+
       # Signs the resize URLs, e.g. a key from `openssl rand -hex 32`.
       #
       # default: nil (required outside test mode)
       #
       attr_accessor :image_resizer_secret
+
+      # Public URL prefix of remote resize sources (not a storage API endpoint), e.g. 'https://cdn.example.com/sites/'.
+      #
+      # default: nil (no remote source)
+      #
+      attr_accessor :image_resizer_remote_source_prefix
 
       # Enable the Cross-site request forgery protection for POST requests.
       #
@@ -99,7 +106,7 @@ module Locomotive
       #
       attr_accessor :log_file
 
-      # Log level 
+      # Log level
       #
       # default: ::Logger::DEBUG
       #

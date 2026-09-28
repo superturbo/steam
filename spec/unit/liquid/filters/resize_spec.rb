@@ -27,6 +27,8 @@ describe Locomotive::Steam::Liquid::Filters::Resize do
 
       let(:geometry) { '30x40#' }
 
+      before { allow(Locomotive::Steam.configuration).to receive(:image_resizer_remote_source_prefix).and_return('http://upload.wikimedia.org/wikipedia/') }
+
       it { is_expected.to match /\/steam\/dynamic\/.*\/240px-Metropolitan_railway_steam_locomotive_2781022036.png/ }
 
       describe 'when imagemagick is not available' do

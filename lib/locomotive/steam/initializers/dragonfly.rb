@@ -10,6 +10,11 @@ module Locomotive
           # need to be called outside of the configure method
           imagemagick_commands = find_imagemagick_commands
           key = signing_key
+          check_remote_source_prefix
+
+          # Clear earlier rules before installing source checks.
+          ::Dragonfly.app(:steam).server.fetch_file_whitelist.patterns.clear
+          ::Dragonfly.app(:steam).server.fetch_url_whitelist.patterns.clear
 
           ::Dragonfly.app(:steam).configure do
             if imagemagick_commands
@@ -20,15 +25,15 @@ module Locomotive
               ::Dragonfly::ImageMagick::Commands.convert(content, args)
             end
 
+            fetch_file_whitelist [Locomotive::Steam::ImageResizerService::LocalSources.new]
+
+            fetch_url_whitelist [Locomotive::Steam::ImageResizerService::RemoteSources.new]
+
             verify_urls true
 
             secret key
 
             url_format '/steam/dynamic/:job/:sha/:basename.:ext'
-
-            fetch_file_whitelist /public/
-
-            fetch_url_whitelist /.+/
           end
 
           ::Dragonfly.logger = Locomotive::Common::Logger
@@ -47,6 +52,14 @@ module Locomotive
 
           raise ArgumentError, 'Steam needs an image_resizer_secret outside test mode; ' \
                                "a blank value or 'please change it' is not one."
+        end
+
+        def check_remote_source_prefix
+          prefix = Locomotive::Steam.configuration.image_resizer_remote_source_prefix
+          return if prefix.nil? || ImageResizerService::RemoteSources.prefix?(prefix)
+
+          raise ArgumentError, 'Steam needs image_resizer_remote_source_prefix as an http or https URL prefix ' \
+                               'without a user, a query or a fragment.'
         end
 
         def find_imagemagick_commands

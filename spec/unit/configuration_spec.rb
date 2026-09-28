@@ -12,6 +12,17 @@ describe Locomotive::Steam::Configuration do
 
   end
 
+  describe 'the trusted remote resize source prefix' do
+
+    it { expect(subject.image_resizer_remote_source_prefix).to eq nil }
+
+    it 'takes a URL prefix' do
+      subject.image_resizer_remote_source_prefix = 'https://cdn.example.com/sites/'
+      expect(subject.image_resizer_remote_source_prefix).to eq 'https://cdn.example.com/sites/'
+    end
+
+  end
+
   describe 'assign a different value' do
 
     before { subject.mode = :test }

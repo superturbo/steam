@@ -40,6 +40,80 @@ describe 'Resize jobs' do
       expect(last_response.body).to eq File.binread(image)
     end
 
+    it 'serves a resized image from a trusted remote source' do
+      server = TCPServer.new('127.0.0.1', 0)
+      port   = server.addr[1]
+      Thread.new do
+        client = server.accept
+        client.gets("\r\n\r\n")
+        body = File.binread(image)
+        client.write("HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: #{body.bytesize}\r\nConnection: close\r\n\r\n#{body}")
+        client.close
+      rescue IOError, SystemCallError
+      end
+      allow(configuration).to receive(:image_resizer_remote_source_prefix).and_return("http://127.0.0.1:#{port}/sites/")
+
+      url = Locomotive::Steam::ImageResizerService.new(resizer).resize("http://127.0.0.1:#{port}/sites/1/banner.png", '4x4')
+      get url
+
+      expect(last_response.status).to eq 200
+      expect(last_response.content_type).to eq 'image/png'
+    ensure
+      server&.close
+    end
+
+    [
+      'http://other.example.com/sites/1/banner.png',
+      'https://cdn.example.com/sites/1/banner.png',
+      'http://cdn.example.com:8080/sites/1/banner.png',
+      'http://cdn.example.com/sites-x/banner.png',
+      'http://169.254.169.254/latest/meta-data/banner.png'
+    ].each do |source|
+      it "refuses a signed fetch_url job for #{source}" do
+        allow(configuration).to receive(:image_resizer_remote_source_prefix).and_return('http://cdn.example.com/sites/')
+
+        get resizer.fetch_url(source).url
+
+        expect(last_response.status).to eq 403
+      end
+    end
+
+    it 'reads no file outside the asset path, even for a job it signed' do
+      Dir.mktmpdir('public') do |outside|
+        File.write(File.join(outside, 'secret.png'), 'secret')
+
+        get resizer.fetch_file(File.join(outside, 'secret.png')).url
+
+        expect(last_response.status).to eq 403
+        expect(last_response.body).not_to include 'secret'
+      end
+    end
+
+    it 'reads no file a link points out to after the URL was issued' do
+      Dir.mktmpdir do |root|
+        Dir.mktmpdir do |outside|
+          allow(configuration).to receive(:asset_path).and_return(root)
+          FileUtils.cp(image, File.join(root, 'banner.png'))
+          File.write(File.join(outside, 'secret.png'), 'secret')
+          link = File.join(root, 'current.png')
+          File.symlink(File.join(root, 'banner.png'), link)
+
+          url = Locomotive::Steam::ImageResizerService.new(resizer).resize('/current.png', '4x4')
+          expect(url).to start_with '/steam/dynamic/'
+
+          File.unlink(link)
+          File.symlink(File.join(outside, 'secret.png'), link)
+
+          get url
+          expect(last_response.status).to eq 403
+          expect(last_response.body).not_to include 'secret'
+
+          head url
+          expect(last_response.status).to eq 403
+        end
+      end
+    end
+
     it 'refuses a job signed with the public placeholder' do
       expect_any_instance_of(Dragonfly::Job).not_to receive(:apply)
 

@@ -115,4 +115,64 @@ describe Locomotive::Steam::Initializers::Dragonfly do
 
   end
 
+  describe 'the trusted remote resize source prefix' do
+
+    let(:configuration) { Locomotive::Steam.configuration }
+
+    [nil, 'https://cdn.example.com/sites/', 'http://bucket.s3.amazonaws.com'].each do |value|
+      it "starts with #{value.inspect}" do
+        allow(configuration).to receive(:image_resizer_remote_source_prefix).and_return(value)
+
+        expect { initializer.run }.not_to raise_error
+      end
+    end
+
+    [
+      ['https://cdn.example.com/sites/'], 'ftp://cdn.example.com/', 'cdn.example.com/sites/', 'https:///sites/',
+      'https://user:secret@cdn.example.com/', 'https://cdn.example.com/?a=1', 'https://cdn.example.com/#top',
+      'https://cdn example.com/', '', 1
+    ].each do |value|
+      it "refuses to start with #{value.inspect}" do
+        allow(configuration).to receive(:image_resizer_remote_source_prefix).and_return(value)
+
+        expect { initializer.run }.to raise_error(ArgumentError, /image_resizer_remote_source_prefix/)
+      end
+    end
+
+  end
+
+  describe 'fetch_url jobs' do
+
+    let(:app) { ::Dragonfly.app(:steam) }
+
+    it 'serves none, whatever an earlier configuration allowed' do
+      app.configure { fetch_url_whitelist [/.+/] }
+      initializer.run
+
+      status, _headers, _body = app.call(Rack::MockRequest.env_for(app.fetch_url('http://cdn.example.com/a.png').url))
+
+      expect(status).to eq 403
+    end
+
+  end
+
+  describe 'fetch_file jobs' do
+
+    let(:app)   { ::Dragonfly.app(:steam) }
+    let(:image) { File.expand_path('../../fixtures/default/public/images/nav_on.png', __dir__) }
+
+    it 'serves none outside the asset path, whatever an earlier configuration allowed' do
+      Dir.mktmpdir do |root|
+        allow(Locomotive::Steam.configuration).to receive(:asset_path).and_return(root)
+        app.configure { fetch_file_whitelist [/public/] }
+        initializer.run
+
+        status, _headers, _body = app.call(Rack::MockRequest.env_for(app.fetch_file(image).url))
+
+        expect(status).to eq 403
+      end
+    end
+
+  end
+
 end
