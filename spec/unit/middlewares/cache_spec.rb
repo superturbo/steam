@@ -96,7 +96,7 @@ describe Locomotive::Steam::Middlewares::Cache do
 
           subject { send_request[:env]['steam.cache_etag'] }
 
-          it { is_expected.to eq cache_key }
+          it { is_expected.to eq %(W/"#{cache_key}") }
 
         end
 
@@ -133,13 +133,107 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       subject { [send_request[:code], send_request[:headers]] }
 
-      context 'based on the ETag' do
+      let(:stored_etag)    { %(W/"#{cache_key}") }
+      let(:stored_code)    { 200 }
+      let(:stored_headers) do
+        { 'cache-control' => 'max-age=0, s-maxage=3600, public, must-revalidate', 'vary' => 'Accept-Language', 'etag' => stored_etag,
+          'expires' => 'Sat, 26 Sep 2015 23:00:00 GMT', 'content-location' => '/hello-world', 'date' => now.httpdate }
+      end
 
-        let(:etag) { cache_key }
+      context 'with a stored copy' do
 
-        it 'returns a 304 (Not modified) without no cache headers' do
-          expect(subject.first).to eq 304
-          expect(subject.last['cache-control']).to eq nil
+        before do
+          stored = [stored_code, { 'content-type' => 'text/html', 'x-own' => '1' }.merge(stored_headers), ['Hello world!']]
+          allow(cache).to receive(:read).with(cache_key).and_return(Marshal.dump(stored))
+        end
+
+        {
+          'its ETag'                       => ->(tag) { tag },
+          'its ETag without W/'            => ->(tag) { tag.delete_prefix('W/') },
+          'its ETag among others'          => ->(tag) { %("other", W/"x", #{tag}) },
+          'its ETag among empty items'     => ->(tag) { %(, #{tag} ,) },
+          'any ETag'                       => ->(_)   { '*' },
+          'any ETag, padded'               => ->(_)   { ' * ' }
+        }.each do |name, if_none_match|
+
+          context "and a request naming #{name}" do
+
+            let(:etag) { if_none_match.call(stored_etag) }
+
+            it 'answers 304 with the validator and policy the stored copy carries' do
+              expect(subject).to eq [304, stored_headers]
+            end
+
+          end
+
+        end
+
+        {
+          'another ETag'                   => ->(_)   { '"other"' },
+          'its ETag without quotes'        => ->(tag) { tag.delete_prefix('W/').delete('"') },
+          'its ETag inside other text'     => ->(tag) { %(garbage#{tag.delete_prefix('W/')}) },
+          'its ETag after an invalid item' => ->(tag) { %(garbage"other", #{tag}) },
+          'any ETag among others'          => ->(_)   { '*, "other"' }
+        }.each do |name, if_none_match|
+
+          context "and a request naming #{name}" do
+
+            let(:etag) { if_none_match.call(stored_etag) }
+
+            it 'serves the stored copy' do
+              expect(subject.first).to eq 200
+            end
+
+          end
+
+        end
+
+        context 'whose ETag holds a comma and a request naming it' do
+
+          let(:stored_etag) { 'W/"a,b"' }
+          let(:etag)        { stored_etag }
+
+          it 'serves the stored copy, since such tags are not supported' do
+            expect(subject.first).to eq 200
+          end
+
+        end
+
+        context 'that is not a 200 and a request naming its ETag' do
+
+          let(:stored_code) { 404 }
+          let(:etag)        { stored_etag }
+
+          it 'serves the stored copy' do
+            expect(subject.first).to eq 404
+          end
+
+        end
+
+      end
+
+      context 'without a stored copy' do
+
+        before do
+          allow(cache).to receive(:read).with(cache_key).and_return(nil)
+          allow(cache).to receive(:write)
+        end
+
+        {
+          'the current ETag' => ->(tag) { tag },
+          'any ETag'         => ->(_)   { '*' }
+        }.each do |name, if_none_match|
+
+          context "and a request naming #{name}" do
+
+            let(:etag) { if_none_match.call(stored_etag) }
+
+            it 'renders the page, since no shared copy proves it' do
+              expect(subject.first).to eq 200
+            end
+
+          end
+
         end
 
       end
@@ -161,7 +255,7 @@ describe Locomotive::Steam::Middlewares::Cache do
     context 'a visitor with a session' do
 
       let(:session) { { 'authenticated_entry_id' => '42' } }
-      let(:etag)    { cache_key }
+      let(:etag)    { %(W/"#{cache_key}") }
 
       it 'neither reads nor writes the shared copy and keeps the page private' do
         response = send_request

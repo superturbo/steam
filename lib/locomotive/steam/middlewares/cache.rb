@@ -17,28 +17,21 @@ module Locomotive::Steam
 
       NO_STORE_CACHE_CONTROL    = 'no-store'.freeze
 
+      NOT_MODIFIED_HEADERS      = %w(cache-control content-location date etag expires vary).freeze
+
+      ENTITY_TAG                = %r{\A(?:W/)?"[^"]*"\z}
+
       def _call
         if cacheable?
           key = cache_key
 
-          # A client holding the current ETag gets a 304 response
-          if stale?(key)
-            render_response(nil, 304, nil)
-            return
-          end
-
           # we have to tell the CDN (or any proxy) what the expiration & validation strategy are
           env['steam.cache_control']        = cache_control
           env['steam.cache_vary']           = cache_vary
-          env['steam.cache_etag']           = key
-
-          # retrieve the response from the cache.
-          response = fetch_cached_response(key)
-
-          keep_private(response) unless CACHEABLE_RESPONSE_CODES.include?(response.first.to_i)
+          env['steam.cache_etag']           = %(W/"#{key}")
 
           # we don't want to render twice the page
-          @next_response = response
+          @next_response = fetch_cached_response(key)
         else
           env['steam.cache_control']  = private_cache_control
 
@@ -55,18 +48,37 @@ module Locomotive::Steam
         log("Cache key = #{key.inspect}")
         if marshaled = cache.read(key)
           log('Cache HIT')
-          Marshal.load(marshaled)
+          stored = Marshal.load(marshaled)
+          not_modified?(stored) ? not_modified(stored) : stored
         else
           log('Cache MISS')
           self.next.tap do |response|
             # Rendering may create a session. Check again before storing.
-            if session.present?
-              keep_private(response)
-            elsif CACHEABLE_RESPONSE_CODES.include?(response.first.to_i)
+            if session.blank? && CACHEABLE_RESPONSE_CODES.include?(response.first.to_i)
               cache.write(key, marshal(response))
+            else
+              keep_private(response)
             end
           end
         end
+      end
+
+      # Only a stored 200 answers 304. A tag with a comma inside its quotes matches nothing.
+      def not_modified?(response)
+        code, headers = response
+        return false unless code.to_i == 200
+
+        if_none_match = env['HTTP_IF_NONE_MATCH'].to_s.strip
+        return true if if_none_match == '*'
+
+        tags = if_none_match.split(',').map(&:strip).reject(&:empty?)
+        return false unless tags.all?(ENTITY_TAG)
+
+        tags.map { |tag| tag.delete_prefix('W/') }.include?(headers['etag']&.delete_prefix('W/'))
+      end
+
+      def not_modified(response)
+        [304, response[1].slice(*NOT_MODIFIED_HEADERS), []]
       end
 
       def cacheable?
@@ -129,10 +141,6 @@ module Locomotive::Steam
         _headers = headers.reject { |key, val| !val.respond_to?(:to_str) }
 
         Marshal.dump([code, _headers, body])
-      end
-
-      def stale?(key)
-        env['HTTP_IF_NONE_MATCH'] == key
       end
 
       def cache

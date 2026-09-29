@@ -6,6 +6,8 @@ describe 'Page cache' do
 
   let(:store) { ActiveSupport::Cache::MemoryStore.new }
 
+  let(:not_modified_headers) { %w(cache-control content-location date etag expires vary) }
+
   def app
     run_server
   end
@@ -85,6 +87,69 @@ describe 'Page cache' do
     get '/about-us', {}, 'HTTP_IF_NONE_MATCH' => etag
 
     expect(last_response.status).to eq 200
+  end
+
+  it 'answers 304 for the stored copy, repeating the validator and caching headers of its 200' do
+    get '/about-us'
+    ok = last_response.headers.to_h
+
+    get '/about-us', {}, 'HTTP_IF_NONE_MATCH' => ok['etag']
+
+    expect(ok['etag']).to match(%r{\AW/"\h{32}"\z})
+    expect(ok).not_to have_key('date')
+    expect(last_response.status).to eq 304
+    expect(last_response.headers.to_h).to eq ok.slice(*not_modified_headers)
+  end
+
+  it 'answers a HEAD request holding the ETag with the same 304' do
+    get '/about-us'
+    ok = last_response.headers.to_h
+
+    head '/about-us', {}, 'HTTP_IF_NONE_MATCH' => ok['etag']
+
+    expect(last_response.status).to eq 304
+    expect(last_response.headers.to_h).to eq ok.slice(*not_modified_headers)
+    expect(last_response.body).to be_empty
+  end
+
+  it 'renders the page for the current ETag once the stored copy is gone' do
+    get '/about-us'
+    etag = last_response.headers['etag']
+    store.clear
+
+    get '/about-us', {}, 'HTTP_IF_NONE_MATCH' => etag
+
+    expect(last_response.status).to eq 200
+    expect(last_response.body).to include '</html>'
+  end
+
+  describe 'behind the conditional GET middlewares of the Rails default stack' do
+
+    def app
+      steam = run_server
+      Rack::Builder.new do
+        use Rack::Lint
+        use Rack::Head
+        use Rack::ConditionalGet
+        use Rack::ETag, 'no-cache'
+        run steam
+      end.to_app
+    end
+
+    it 'keeps the ETag Steam sends and answers 304 for it, with or without W/' do
+      get '/about-us'
+      ok   = last_response.headers.to_h
+      etag = ok['etag']
+      expect(etag).to match(%r{\AW/"\h{32}"\z})
+
+      get '/about-us', {}, 'HTTP_IF_NONE_MATCH' => etag
+      expect(last_response.status).to eq 304
+      expect(last_response.headers.to_h).to eq ok.slice(*not_modified_headers)
+
+      get '/about-us', {}, 'HTTP_IF_NONE_MATCH' => etag.delete_prefix('W/')
+      expect(last_response.status).to eq 304
+    end
+
   end
 
 end
