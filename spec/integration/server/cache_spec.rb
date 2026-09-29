@@ -201,6 +201,33 @@ describe 'Page cache' do
       expect(last_response.status).to eq 304
     end
 
+    context 'with an empty store and the same key, as after a deploy' do
+
+      it 'answers an ETag whose page now renders differently with the new page' do
+        get '/about-us'
+        etag = last_response.headers['etag']
+        store.clear
+        allow(Locomotive::Steam.configuration).to receive(:asset_host).and_return('https://cdn.example.com')
+
+        get '/about-us', {}, 'HTTP_IF_NONE_MATCH' => etag
+
+        expect(last_response.status).to eq 200
+        expect(last_response.body).to include 'https://cdn.example.com/'
+        expect(last_response.headers['etag']).not_to eq etag
+      end
+
+      it 'answers an ETag whose page renders the same with a 304' do
+        get '/about-us'
+        etag = last_response.headers['etag']
+        store.clear
+
+        get '/about-us', {}, 'HTTP_IF_NONE_MATCH' => etag
+
+        expect(last_response.status).to eq 304
+      end
+
+    end
+
   end
 
 end

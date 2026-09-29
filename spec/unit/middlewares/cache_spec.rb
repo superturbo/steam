@@ -78,15 +78,15 @@ describe Locomotive::Steam::Middlewares::Cache do
     # same formula as Cache#cache_key
     let(:cache_key) { Digest::MD5.hexdigest("#{Locomotive::Steam::VERSION}/site/42/#{now.strftime('%s.%N')}/url/http://models.example.com/") }
 
-    describe 'the key' do
+    describe 'the key the store is read with' do
 
-      before do
-        allow(cache).to receive(:read).and_return(nil)
-        allow(cache).to receive(:write)
-      end
+      before { allow(cache).to receive(:write) }
 
-      def etag_of(env = {})
-        send_request(env)[:env]['steam.cache_etag']
+      def key_of(env = {})
+        read = nil
+        allow(cache).to receive(:read) { |key| read = key; nil }
+        send_request(env)
+        read
       end
 
       def site_changed_at(time)
@@ -94,37 +94,99 @@ describe Locomotive::Steam::Middlewares::Cache do
       end
 
       it 'tells apart two site changes within the same second' do
-        expect(etag_of('steam.site' => site_changed_at(now + 0.001.seconds))).not_to eq etag_of
+        expect(key_of('steam.site' => site_changed_at(now + 0.001.seconds))).not_to eq key_of
       end
 
       it 'is the same for one moment in any time type or zone' do
         moment = now.to_time.utc
-        etags  = [moment, moment.getlocal('+03:00'), moment.in_time_zone('Vilnius'), moment.to_datetime].map do |time|
-          etag_of('steam.site' => site_changed_at(time))
+        keys  = [moment, moment.getlocal('+03:00'), moment.in_time_zone('Vilnius'), moment.to_datetime].map do |time|
+          key_of('steam.site' => site_changed_at(time))
         end
 
-        expect(etags.uniq).to eq [etag_of]
+        expect(keys.uniq).to eq [key_of]
       end
 
       it 'tells apart the same path under another mount point' do
-        expect(etag_of('SCRIPT_NAME' => '/locomotive/acme/preview')).not_to eq etag_of
+        expect(key_of('SCRIPT_NAME' => '/locomotive/acme/preview')).not_to eq key_of
       end
 
       it 'tells apart the same path with another query' do
-        expect(etag_of('QUERY_STRING' => 'page=2')).not_to eq etag_of
+        expect(key_of('QUERY_STRING' => 'page=2')).not_to eq key_of
       end
 
       it 'tells apart the same path over another scheme' do
-        expect(etag_of('rack.url_scheme' => 'https', 'HTTPS' => 'on')).not_to eq etag_of
+        expect(key_of('rack.url_scheme' => 'https', 'HTTPS' => 'on')).not_to eq key_of
       end
 
       it 'tells apart the same path on another host or port' do
-        expect(etag_of('HTTP_HOST' => 'sample.example.com')).not_to eq etag_of
-        expect(etag_of('HTTP_HOST' => 'models.example.com:8080')).not_to eq etag_of
+        expect(key_of('HTTP_HOST' => 'sample.example.com')).not_to eq key_of
+        expect(key_of('HTTP_HOST' => 'models.example.com:8080')).not_to eq key_of
       end
 
       it 'is the same for GET and HEAD' do
-        expect(etag_of(method: 'HEAD')).to eq etag_of
+        expect(key_of(method: 'HEAD')).to eq key_of
+      end
+
+    end
+
+    describe 'the ETag of a page rendered for the store' do
+
+      let(:rendered)     { 'Hello world!' }
+      let(:app)          { ->(env) { [code, {}, [rendered]] } }
+      let(:content_etag) { %(W/"#{Digest::SHA256.hexdigest(rendered)[0, 32]}") }
+
+      before do
+        allow(cache).to receive(:read).and_return(nil)
+        allow(cache).to receive(:write)
+      end
+
+      it 'digests the rendered page, as Rack::ETag does, and is stored with it' do
+        expect(cache).to receive(:write).with(cache_key, Marshal.dump([200, { 'etag' => content_etag }, [rendered]]))
+        expect(send_request[:headers]['etag']).to eq content_etag
+      end
+
+      context 'rendered three times under the same key, the second time differently' do
+
+        let(:renders) { ['Hello world!', 'Hello again!', 'Hello world!'] }
+        let(:app)     { ->(env) { [200, {}, [renders.shift]] } }
+
+        it 'changes with the page, not with the key' do
+          etags = Array.new(3) { send_request[:headers]['etag'] }
+
+          expect(etags[1]).not_to eq etags[0]
+          expect(etags[2]).to eq etags[0]
+        end
+
+      end
+
+      context 'when the render sets an ETag of its own' do
+
+        let(:app) { ->(env) { [200, { 'etag' => '"own"' }, [rendered]] } }
+
+        it 'keeps it' do
+          expect(send_request[:headers]['etag']).to eq '"own"'
+        end
+
+      end
+
+      context 'when the page is empty' do
+
+        let(:app) { ->(env) { [200, {}, ['']] } }
+
+        it 'adds none' do
+          expect(send_request[:headers]).not_to have_key('etag')
+        end
+
+      end
+
+      context 'for a HEAD request' do
+
+        let(:method) { 'HEAD' }
+
+        it 'adds none, since the GET page is not known and a template can render HEAD differently' do
+          expect(send_request[:headers]).not_to have_key('etag')
+        end
+
       end
 
     end
@@ -137,18 +199,10 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       context 'the cache is empty' do
 
-        before { expect(cache).to receive(:write).with(cache_key, Marshal.dump([200, {}, ["Hello world!"]])) }
+        before { expect(cache).to receive(:write).with(cache_key, Marshal.dump([200, { 'etag' => %(W/"#{Digest::SHA256.hexdigest('Hello world!')[0, 32]}") }, ["Hello world!"]])) }
 
         it 'tells the CDN to cache the page and also cache it internally' do
           is_expected.to eq ['max-age=0, s-maxage=3600, public, must-revalidate', 'Accept-Language']
-        end
-
-        describe 'ETag' do
-
-          subject { send_request[:env]['steam.cache_etag'] }
-
-          it { is_expected.to eq %(W/"#{cache_key}") }
-
         end
 
         it 'sends no last modification date' do
@@ -313,7 +367,7 @@ describe Locomotive::Steam::Middlewares::Cache do
 
         expect(response[:code]).to eq 200
         expect([response[:env]['steam.cache_control'], response[:env]['steam.cache_vary']]).to eq ['max-age=0, private, must-revalidate', nil]
-        expect(response[:env]['steam.cache_etag']).to be_nil
+        expect(response[:headers]).not_to have_key('etag')
       end
 
     end
@@ -445,8 +499,7 @@ describe Locomotive::Steam::Middlewares::Cache do
       let(:app) do
         ->(env) do
           env['rack.session']['csrf.token'] = 'visitor token'
-          headers = { 'cache-control' => env['steam.cache_control'], 'vary' => env['steam.cache_vary'],
-                      'etag' => env['steam.cache_etag'] }
+          headers = { 'cache-control' => env['steam.cache_control'], 'vary' => env['steam.cache_vary'] }
           [200, headers, ['visitor token']]
         end
       end
@@ -483,7 +536,7 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       before do
         expect(cache).to receive(:read).with(cache_key).and_return(nil)
-        expect(cache).to receive(:write).with(cache_key, Marshal.dump([200, {}, ['Hello world!']]))
+        expect(cache).to receive(:write).with(cache_key, Marshal.dump([200, { 'etag' => %(W/"#{Digest::SHA256.hexdigest('Hello world!')[0, 32]}") }, ['Hello world!']]))
       end
 
       it { is_expected.to eq ['max-age=0, s-maxage=3600, public, must-revalidate', 'Accept-Language'] }

@@ -25,10 +25,9 @@ module Locomotive::Steam
         if cacheable?
           key = cache_key
 
-          # we have to tell the CDN (or any proxy) what the expiration & validation strategy are
+          # tell the CDN (or any proxy) how long it may keep the page and what the page varies on
           env['steam.cache_control']        = cache_control
           env['steam.cache_vary']           = cache_vary
-          env['steam.cache_etag']           = %(W/"#{key}")
 
           # we don't want to render twice the page
           @next_response = fetch_cached_response(key)
@@ -58,6 +57,7 @@ module Locomotive::Steam
               keep_private(response)
             elsif request.get?
               # A template can tell HEAD from GET, so only a GET response is stored.
+              add_etag(response)
               cache.write(key, marshal(response))
             end
           end
@@ -76,6 +76,16 @@ module Locomotive::Steam
         return false unless tags.all?(ENTITY_TAG)
 
         tags.map { |tag| tag.delete_prefix('W/') }.include?(headers['etag']&.delete_prefix('W/'))
+      end
+
+      # Same digest as Rack::ETag.
+      def add_etag(response)
+        _, headers, body = response
+        return if headers.key?('etag')
+
+        digest = nil
+        body.each { |part| (digest ||= Digest::SHA256.new) << part unless part.empty? }
+        headers['etag'] = %(W/"#{digest.hexdigest[0, 32]}") if digest
       end
 
       def not_modified(response)
@@ -115,9 +125,8 @@ module Locomotive::Steam
         headers = response[1]
 
         env['steam.cache_control'] = headers['cache-control'] = private_cache_control(headers['cache-control'])
-        headers.delete('etag') if headers['etag'] == env['steam.cache_etag']
         headers.delete('vary') if headers['vary'] == env['steam.cache_vary']
-        env['steam.cache_vary'] = env['steam.cache_etag'] = nil
+        env['steam.cache_vary'] = nil
       end
 
       # Replace shared-cache directives, preserving no-store and no-transform.

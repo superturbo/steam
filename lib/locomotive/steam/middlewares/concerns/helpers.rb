@@ -9,8 +9,7 @@ module Locomotive::Steam
 
         CACHE_HEADERS     = {
           'steam.cache_control'       => 'cache-control',
-          'steam.cache_vary'          => 'vary',
-          'steam.cache_etag'          => 'etag'
+          'steam.cache_vary'          => 'vary'
         }.freeze
 
         def html?
