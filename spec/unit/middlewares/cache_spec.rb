@@ -17,6 +17,7 @@ describe Locomotive::Steam::Middlewares::Cache do
   let(:path)            { 'hello-world' }
   let(:page)            { instance_double('Page') }
   let(:cache)           { instance_double('CacheService', ) }
+  let(:session)         { nil }
   let(:app)             { ->(env) { [code, {}, ['Hello world!']] } }
   let(:middleware)      { described_class.new(app) }
 
@@ -29,8 +30,31 @@ describe Locomotive::Steam::Middlewares::Cache do
 
     let(:site) { instance_double('Site', cache_enabled: false) }
 
-    it 'tells the the CDN to not cache the page' do
+    it 'tells the CDN to not cache the page' do
       is_expected.to eq ['max-age=0, private, must-revalidate', nil]
+    end
+
+  end
+
+  describe 'caching is disabled for the site and the render writes to the session' do
+
+    let(:site)    { instance_double('Site', cache_enabled: false) }
+    let(:session) { {} }
+    let(:app)     { ->(env) { env['rack.session']['csrf.token'] = 't'; [200, { 'cache-control' => 'public, max-age=600' }, ['t']] } }
+
+    it 'keeps the response private' do
+      expect(send_request[:headers]['cache-control']).to eq 'max-age=0, private, must-revalidate'
+    end
+
+  end
+
+  describe 'caching is disabled for a page configured no-store' do
+
+    let(:site) { instance_double('Site', cache_enabled: true, cache_control: nil) }
+    let(:page) { instance_double('Page', cache_enabled: false, cache_control: 'no-store') }
+
+    it 'keeps no-store' do
+      is_expected.to eq ['no-store', nil]
     end
 
   end
@@ -40,7 +64,7 @@ describe Locomotive::Steam::Middlewares::Cache do
     let(:site) { instance_double('Site', cache_enabled: true) }
     let(:page) { instance_double('Page', cache_enabled: false) }
 
-    it 'tells the the CDN to not cache the page' do
+    it 'tells the CDN to not cache the page' do
       is_expected.to eq ['max-age=0, private, must-revalidate', nil]
     end
 
@@ -134,11 +158,185 @@ describe Locomotive::Steam::Middlewares::Cache do
 
     end
 
+    context 'a visitor with a session' do
+
+      let(:session) { { 'authenticated_entry_id' => '42' } }
+      let(:etag)    { cache_key }
+
+      it 'neither reads nor writes the shared copy and keeps the page private' do
+        response = send_request
+
+        expect(response[:code]).to eq 200
+        expect([response[:env]['steam.cache_control'], response[:env]['steam.cache_vary']]).to eq ['max-age=0, private, must-revalidate', nil]
+        expect(response[:env]['steam.cache_etag']).to be_nil
+      end
+
+    end
+
+    context 'a visitor with a session on a page configured No-Store' do
+
+      let(:page)    { instance_double('Page', cache_enabled: true, cache_control: 'No-Store', cache_vary: nil) }
+      let(:session) { { 'authenticated_entry_id' => '42' } }
+
+      it 'keeps no-store, which is stricter than private, whatever its case' do
+        expect(send_request[:env]['steam.cache_control']).to eq 'no-store'
+      end
+
+    end
+
+    context 'a visitor with a session on a site configured with another directive holding no-store' do
+
+      let(:site)    { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_control: 'x-no-store, public', cache_vary: nil) }
+      let(:session) { { 'authenticated_entry_id' => '42' } }
+
+      it 'keeps the response private only' do
+        expect(send_request[:env]['steam.cache_control']).to eq 'max-age=0, private, must-revalidate'
+      end
+
+    end
+
+    context 'a render that writes to the session on a site configured no-store' do
+
+      let(:site)    { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_control: 'no-store', cache_vary: nil) }
+      let(:session) { {} }
+      let(:app)     { ->(env) { env['rack.session']['csrf.token'] = 't'; [200, { 'cache-control' => env['steam.cache_control'] }, ['t']] } }
+
+      before { expect(cache).to receive(:read).with(cache_key).and_return(nil) }
+
+      it 'keeps no-store, which is stricter than private' do
+        expect(cache).not_to receive(:write)
+        expect(send_request[:headers]['cache-control']).to eq 'no-store'
+      end
+
+    end
+
+    context 'a visitor with a session on a site configured no-store with another directive' do
+
+      let(:site)    { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_control: 'no-store, no-transform', cache_vary: nil) }
+      let(:session) { { 'authenticated_entry_id' => '42' } }
+
+      it 'keeps no-store and no-transform' do
+        expect(send_request[:env]['steam.cache_control']).to eq 'no-store, no-transform'
+      end
+
+    end
+
+    context 'a visitor with a session on a site configured for public caching with no-transform' do
+
+      let(:site)    { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_control: 'public, s-maxage=600, no-transform', cache_vary: nil) }
+      let(:session) { { 'authenticated_entry_id' => '42' } }
+
+      it 'keeps no-transform only' do
+        expect(send_request[:env]['steam.cache_control']).to eq 'max-age=0, private, must-revalidate, no-transform'
+      end
+
+    end
+
+    context 'a visitor with a session on a site whose no-cache argument quotes no-store' do
+
+      let(:site)    { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_control: 'no-cache="set-cookie,no-store,x"', cache_vary: nil) }
+      let(:session) { { 'authenticated_entry_id' => '42' } }
+
+      it 'reads no no-store directive' do
+        expect(send_request[:env]['steam.cache_control']).to eq 'max-age=0, private, must-revalidate'
+      end
+
+    end
+
+    context 'a visitor whose session the render clears before answering for public caching' do
+
+      let(:session) { { 'authenticated_entry_id' => '42' } }
+      let(:app)     { ->(env) { env['rack.session'].clear; [200, { 'cache-control' => 'public, max-age=600' }, ['page']] } }
+
+      it 'keeps the response private, since it was rendered for that session' do
+        expect(send_request[:headers]['cache-control']).to eq 'max-age=0, private, must-revalidate'
+      end
+
+    end
+
+    context 'a visitor with a session whose response sets cache-control of its own' do
+
+      let(:session) { { 'authenticated_entry_id' => '42' } }
+      let(:app)     { ->(env) { [200, { 'cache-control' => 'public, max-age=600' }, ['page']] } }
+
+      it 'keeps the response private' do
+        expect(send_request[:headers]['cache-control']).to eq 'max-age=0, private, must-revalidate'
+      end
+
+    end
+
+    context 'a render that writes to the session and answers no-store itself' do
+
+      let(:session) { {} }
+      let(:app)     { ->(env) { env['rack.session']['csrf.token'] = 't'; [200, { 'cache-control' => 'private, No-Store' }, ['t']] } }
+
+      before { expect(cache).to receive(:read).with(cache_key).and_return(nil) }
+
+      it 'keeps no-store' do
+        expect(cache).not_to receive(:write)
+        expect(send_request[:headers]['cache-control']).to eq 'no-store'
+      end
+
+    end
+
+    context 'a render that writes to the session and sets headers of its own' do
+
+      let(:session) { {} }
+      let(:app)     { ->(env) { env['rack.session']['csrf.token'] = 't'; [200, { 'etag' => 'W/"own"', 'vary' => 'Cookie', 'x-own' => '1' }, ['t']] } }
+
+      before { expect(cache).to receive(:read).with(cache_key).and_return(nil) }
+
+      it 'keeps an etag and vary other than the ones Steam set for the shared copy' do
+        expect(cache).not_to receive(:write)
+        expect(send_request[:headers]).to eq('cache-control' => 'max-age=0, private, must-revalidate', 'etag' => 'W/"own"',
+                                             'vary' => 'Cookie', 'x-own' => '1')
+      end
+
+    end
+
+    context 'a render that writes to the session' do
+
+      let(:session) { {} }
+      let(:app) do
+        ->(env) do
+          env['rack.session']['csrf.token'] = 'visitor token'
+          headers = { 'cache-control' => env['steam.cache_control'], 'vary' => env['steam.cache_vary'],
+                      'etag' => env['steam.cache_etag'] }
+          [200, headers, ['visitor token']]
+        end
+      end
+
+      before { expect(cache).to receive(:read).with(cache_key).and_return(nil) }
+
+      it 'serves the page to this visitor only' do
+        expect(cache).not_to receive(:write)
+
+        response = send_request
+
+        expect(response[:headers]).to eq('cache-control' => 'max-age=0, private, must-revalidate')
+        expect(response[:env]['steam.cache_control']).to eq 'max-age=0, private, must-revalidate'
+      end
+
+    end
+
+    context 'a render that leaves the session empty' do
+
+      let(:session) { {} }
+
+      before do
+        expect(cache).to receive(:read).with(cache_key).and_return(nil)
+        expect(cache).to receive(:write).with(cache_key, Marshal.dump([200, {}, ['Hello world!']]))
+      end
+
+      it { is_expected.to eq ['max-age=0, s-maxage=3600, public, must-revalidate', 'Accept-Language'] }
+
+    end
+
     context 'the request is a POST' do
 
       let(:method) { 'POST' }
 
-      it 'tells the the CDN to not cache the page' do
+      it 'tells the CDN to not cache the page' do
         is_expected.to eq ['max-age=0, private, must-revalidate', nil]
       end
 
@@ -150,10 +348,10 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       before do
         allow(cache).to receive(:read).and_return(nil)
-        allow(cache).to receive(:write).and_return(true)
+        expect(cache).not_to receive(:write)
       end
 
-      it 'tells the the CDN to not cache the page' do
+      it 'tells the CDN to not cache the page, and stores nothing' do
         is_expected.to eq ['max-age=0, private, must-revalidate', nil]
       end
 
@@ -167,7 +365,7 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       let(:live_editing) { true }
 
-      it 'tells the the CDN to not cache the page' do
+      it 'tells the CDN to not cache the page' do
         is_expected.to eq ['max-age=0, private, must-revalidate', nil]
       end
 
@@ -185,6 +383,7 @@ describe Locomotive::Steam::Middlewares::Cache do
       'steam.path'              => path,
       'steam.locale'            => 'en',
       'steam.live_editing'      => live_editing,
+      'rack.session'            => session,
       'steam.services'          => instance_double('Services', cache: cache)
     )
 

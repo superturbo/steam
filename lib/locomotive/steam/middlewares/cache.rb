@@ -15,12 +15,11 @@ module Locomotive::Steam
 
       NO_CACHE_CONTROL          = 'max-age=0, private, must-revalidate'.freeze
 
+      NO_STORE_CACHE_CONTROL    = 'no-store'.freeze
+
       def _call
         if cacheable?
           key = cache_key
-
-          # TODO: only for debugging
-          # log("HTTP keys: #{env.select { |key, _| key.starts_with?('HTTP_') }}".light_blue)
 
           # A client holding the current ETag gets a 304 response
           if stale?(key)
@@ -34,19 +33,19 @@ module Locomotive::Steam
           env['steam.cache_etag']           = key
 
           # retrieve the response from the cache.
-          # This is useful if no CDN is being used.
-          code, headers, _ = response = fetch_cached_response(key)
+          response = fetch_cached_response(key)
 
-          unless CACHEABLE_RESPONSE_CODES.include?(code.to_i)
-            env['steam.cache_control'] = headers['cache-control'] = NO_CACHE_CONTROL
-            env['steam.cache_vary'] = nil
-            headers.delete('vary')
-          end
+          keep_private(response) unless CACHEABLE_RESPONSE_CODES.include?(response.first.to_i)
 
           # we don't want to render twice the page
           @next_response = response
         else
-          env['steam.cache_control']  = NO_CACHE_CONTROL
+          env['steam.cache_control']  = private_cache_control
+
+          # Keep session responses private even if rendering overrides Cache-Control.
+          had_session = session.present?
+          response    = self.next
+          keep_private(response) if had_session || session.present?
         end
       end
 
@@ -60,14 +59,19 @@ module Locomotive::Steam
         else
           log('Cache MISS')
           self.next.tap do |response|
-            # cache the HTML for further validations (+ optimization)
-            cache.write(key, marshal(response))
+            # Rendering may create a session. Check again before storing.
+            if session.present?
+              keep_private(response)
+            elsif CACHEABLE_RESPONSE_CODES.include?(response.first.to_i)
+              cache.write(key, marshal(response))
+            end
           end
         end
       end
 
       def cacheable?
         CACHEABLE_REQUEST_METHODS.include?(env['REQUEST_METHOD']) &&
+        session.blank? &&
         !live_editing? &&
         site.try(:cache_enabled) &&
         page.try(:cache_enabled) &&
@@ -91,6 +95,31 @@ module Locomotive::Steam
       def is_redirect_url?
         return false if page.nil?
         page.try(:redirect_url).blank?
+      end
+
+      # Remove headers matching Steam's shared-cache values.
+      def keep_private(response)
+        headers = response[1]
+
+        env['steam.cache_control'] = headers['cache-control'] = private_cache_control(headers['cache-control'])
+        headers.delete('etag') if headers['etag'] == env['steam.cache_etag']
+        headers.delete('vary') if headers['vary'] == env['steam.cache_vary']
+        env['steam.cache_vary'] = env['steam.cache_etag'] = nil
+      end
+
+      # Replace shared-cache directives, preserving no-store and no-transform.
+      def private_cache_control(answered = nil)
+        names  = directive_names(cache_control) + directive_names(answered)
+        policy = names.include?('no-store') ? NO_STORE_CACHE_CONTROL : NO_CACHE_CONTROL
+
+        names.include?('no-transform') ? "#{policy}, no-transform" : policy
+      end
+
+      # Ignore commas inside quoted directive arguments.
+      def directive_names(cache_control)
+        cache_control.to_s.gsub(/"(?:[^"\\]|\\.)*"/, '""').split(',').map do |directive|
+          directive.split('=', 2).first.strip.downcase
+        end
       end
 
       def marshal(response)
