@@ -75,8 +75,59 @@ describe Locomotive::Steam::Middlewares::Cache do
     let(:site) { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_control: '', cache_vary: nil) }
     let(:page) { instance_double('Page', cache_enabled: true) }
 
-    # same formula as Cache#cache_key (the version prefix busts caches on release)
-    let(:cache_key) { Digest::MD5.hexdigest("#{Locomotive::Steam::VERSION}/site/42/#{now.to_time.to_i}/page///") }
+    # same formula as Cache#cache_key
+    let(:cache_key) { Digest::MD5.hexdigest("#{Locomotive::Steam::VERSION}/site/42/#{now.strftime('%s.%N')}/url/http://models.example.com/") }
+
+    describe 'the key' do
+
+      before do
+        allow(cache).to receive(:read).and_return(nil)
+        allow(cache).to receive(:write)
+      end
+
+      def etag_of(env = {})
+        send_request(env)[:env]['steam.cache_etag']
+      end
+
+      def site_changed_at(time)
+        instance_double('Site', _id: 42, last_modified_at: time, cache_enabled: true, cache_control: '', cache_vary: nil)
+      end
+
+      it 'tells apart two site changes within the same second' do
+        expect(etag_of('steam.site' => site_changed_at(now + 0.001.seconds))).not_to eq etag_of
+      end
+
+      it 'is the same for one moment in any time type or zone' do
+        moment = now.to_time.utc
+        etags  = [moment, moment.getlocal('+03:00'), moment.in_time_zone('Vilnius'), moment.to_datetime].map do |time|
+          etag_of('steam.site' => site_changed_at(time))
+        end
+
+        expect(etags.uniq).to eq [etag_of]
+      end
+
+      it 'tells apart the same path under another mount point' do
+        expect(etag_of('SCRIPT_NAME' => '/locomotive/acme/preview')).not_to eq etag_of
+      end
+
+      it 'tells apart the same path with another query' do
+        expect(etag_of('QUERY_STRING' => 'page=2')).not_to eq etag_of
+      end
+
+      it 'tells apart the same path over another scheme' do
+        expect(etag_of('rack.url_scheme' => 'https', 'HTTPS' => 'on')).not_to eq etag_of
+      end
+
+      it 'tells apart the same path on another host or port' do
+        expect(etag_of('HTTP_HOST' => 'sample.example.com')).not_to eq etag_of
+        expect(etag_of('HTTP_HOST' => 'models.example.com:8080')).not_to eq etag_of
+      end
+
+      it 'is the same for GET and HEAD' do
+        expect(etag_of(method: 'HEAD')).to eq etag_of
+      end
+
+    end
 
     context 'the request is a GET' do
 
@@ -413,6 +464,19 @@ describe Locomotive::Steam::Middlewares::Cache do
 
     end
 
+    context 'a HEAD request that finds no stored copy' do
+
+      let(:method) { 'HEAD' }
+
+      before { expect(cache).to receive(:read).with(cache_key).and_return(nil) }
+
+      it 'keeps the public headers but stores nothing, since a template can render HEAD differently' do
+        expect(cache).not_to receive(:write)
+        is_expected.to eq ['max-age=0, s-maxage=3600, public, must-revalidate', 'Accept-Language']
+      end
+
+    end
+
     context 'a render that leaves the session empty' do
 
       let(:session) { {} }
@@ -467,8 +531,8 @@ describe Locomotive::Steam::Middlewares::Cache do
 
   end
 
-  def send_request
-    env = env_for(url,
+  def send_request(overrides = {})
+    env = env_for(url, {
       method:                   method,
       'HTTP_IF_NONE_MATCH'      => etag,
       'HTTP_IF_MODIFIED_SINCE'  => modified_at,
@@ -479,7 +543,7 @@ describe Locomotive::Steam::Middlewares::Cache do
       'steam.live_editing'      => live_editing,
       'rack.session'            => session,
       'steam.services'          => instance_double('Services', cache: cache)
-    )
+    }.merge(overrides))
 
     env['steam.request'] = Rack::Request.new(env)
 

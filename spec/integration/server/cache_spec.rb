@@ -123,6 +123,57 @@ describe 'Page cache' do
     expect(last_response.body).to include '</html>'
   end
 
+  it 'stores a copy for each scheme and host' do
+    get 'http://example.org/about-us'
+    get 'https://example.org/about-us'
+    get 'http://sample.example.com/about-us'
+
+    expect(store).to have_received(:write).exactly(3).times
+  end
+
+  it 'shares the default-locale copy of a page without a locale in its path, ignoring the language the visitor asks for' do
+    get '/about-us'
+    clear_cookies
+    get '/about-us', {}, 'HTTP_ACCEPT_LANGUAGE' => 'fr'
+    clear_cookies
+    set_cookie 'steam-locale=fr'
+    get '/about-us'
+
+    expect(last_response.body).to include 'About us'
+    expect(store).to have_received(:write).once
+  end
+
+  it 'stores nothing for the root a visitor is redirected from to their language' do
+    get '/', {}, 'HTTP_ACCEPT_LANGUAGE' => 'fr'
+    expect(last_response.status).to eq 302
+    clear_cookies
+    set_cookie 'steam-locale=fr'
+    get '/'
+    expect(last_response.status).to eq 302
+
+    expect(store).not_to have_received(:write)
+  end
+
+  describe 'mounted twice, as the Engine mounts its preview' do
+
+    def app
+      steam = run_server
+      Rack::Builder.new do
+        map('/locomotive/acme/preview') { run steam }
+        run steam
+      end.to_app
+    end
+
+    it 'stores a copy for each mount point' do
+      get '/about-us'
+      get '/locomotive/acme/preview/about-us'
+
+      expect(last_response.status).to eq 200
+      expect(store).to have_received(:write).twice
+    end
+
+  end
+
   describe 'behind the conditional GET middlewares of the Rails default stack' do
 
     def app

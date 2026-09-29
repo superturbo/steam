@@ -54,10 +54,11 @@ module Locomotive::Steam
           log('Cache MISS')
           self.next.tap do |response|
             # Rendering may create a session. Check again before storing.
-            if session.blank? && CACHEABLE_RESPONSE_CODES.include?(response.first.to_i)
-              cache.write(key, marshal(response))
-            else
+            if session.present? || !CACHEABLE_RESPONSE_CODES.include?(response.first.to_i)
               keep_private(response)
+            elsif request.get?
+              # A template can tell HEAD from GET, so only a GET response is stored.
+              cache.write(key, marshal(response))
             end
           end
         end
@@ -91,8 +92,8 @@ module Locomotive::Steam
       end
 
       def cache_key
-        site, path, query = env['steam.site'], env['PATH_INFO'], env['QUERY_STRING']
-        key = "#{Locomotive::Steam::VERSION}/site/#{site._id}/#{site.last_modified_at.to_i}/page/#{path}/#{query}"
+        site = env['steam.site']
+        key  = "#{Locomotive::Steam::VERSION}/site/#{site._id}/#{site.last_modified_at&.strftime('%s.%N')}/url/#{request.url}"
         Digest::MD5.hexdigest(key)
       end
 
