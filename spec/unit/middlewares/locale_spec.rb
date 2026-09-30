@@ -44,6 +44,30 @@ describe Locomotive::Steam::Middlewares::Locale do
 
   end
 
+  describe 'a visitor whose locale cookie already holds the locale' do
+
+    let(:url)         { 'http://models.example.com/whatever' }
+    let(:cookie_lang) { 'de' }
+
+    it 'does not set it again' do
+      expect(cookie_service).not_to receive(:set)
+      is_expected.to eq [:de, '/whatever']
+    end
+
+  end
+
+  describe 'a visitor whose locale cookie holds another locale' do
+
+    let(:url)         { 'http://models.example.com/whatever' }
+    let(:cookie_lang) { 'fr' }
+
+    it 'sets it to the locale of the page' do
+      expect(cookie_service).to receive(:set).with('steam-locale', hash_including(value: :de)).and_return(nil)
+      is_expected.to eq [:de, '/whatever']
+    end
+
+  end
+
   describe 'the locale cookie over HTTPS' do
 
     def expect_secure_cookie

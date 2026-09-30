@@ -18,6 +18,14 @@ describe 'Page cache' do
     allow_any_instance_of(Locomotive::Steam::Site).to receive(:cache_enabled).and_return(true)
     allow(store).to receive(:write).and_call_original
     allow(store).to receive(:read).and_call_original
+
+    # A returning visitor whose locale cookie already holds English.
+    set_cookie 'steam-locale=en'
+    set_cookie 'steam-locale=en', URI('http://sample.example.com')
+  end
+
+  def locale_cookie
+    Array(last_response.headers['set-cookie']).flat_map { |header| header.split("\n") }.find { |cookie| cookie.start_with?('steam-locale=') }
   end
 
   def csrf_token
@@ -131,25 +139,88 @@ describe 'Page cache' do
     expect(store).to have_received(:write).exactly(3).times
   end
 
-  it 'shares the default-locale copy of a page without a locale in its path, ignoring the language the visitor asks for' do
+  it 'renders a page without a locale in its path in the default locale, whatever language the visitor asks for' do
     get '/about-us'
-    clear_cookies
     get '/about-us', {}, 'HTTP_ACCEPT_LANGUAGE' => 'fr'
-    clear_cookies
+    expect(last_response.body).to include 'About us'
+    expect(locale_cookie).to be_nil
+
     set_cookie 'steam-locale=fr'
     get '/about-us'
-
     expect(last_response.body).to include 'About us'
+    expect(locale_cookie).to start_with 'steam-locale=en'
+
     expect(store).to have_received(:write).once
   end
 
   it 'stores nothing for the root a visitor is redirected from to their language' do
+    clear_cookies
     get '/', {}, 'HTTP_ACCEPT_LANGUAGE' => 'fr'
     expect(last_response.status).to eq 302
     clear_cookies
     set_cookie 'steam-locale=fr'
     get '/'
     expect(last_response.status).to eq 302
+
+    expect(store).not_to have_received(:write)
+  end
+
+  describe 'a visitor Steam sets a cookie for' do
+
+    before { clear_cookies }
+
+    it 'gets it on a private page, and the page is shared once their cookie holds the locale' do
+      get '/about-us'
+      expect(locale_cookie).to start_with 'steam-locale=en'
+      expect(last_response.headers['cache-control']).to eq 'max-age=0, private, must-revalidate'
+      expect(store).not_to have_received(:write)
+
+      get '/about-us'
+      expect(locale_cookie).to be_nil
+      expect(last_response.headers['cache-control']).to eq 'max-age=0, s-maxage=3600, public, must-revalidate'
+      expect(store).to have_received(:write).once
+    end
+
+    it 'gets it with the page, not a 304, even holding the ETag of the shared copy' do
+      set_cookie 'steam-locale=en'
+      get '/about-us'
+      etag = last_response.headers['etag']
+      expect(store).to have_received(:write).once
+
+      clear_cookies
+      get '/about-us', {}, 'HTTP_IF_NONE_MATCH' => etag
+
+      expect(last_response.status).to eq 200
+      expect(locale_cookie).to start_with 'steam-locale=en'
+      expect(last_response.headers['cache-control']).to eq 'max-age=0, private, must-revalidate'
+    end
+
+    it 'still gets it when a visitor whose cookie holds the locale stored the page first' do
+      set_cookie 'steam-locale=fr'
+      get '/fr/a-notre-sujet'
+      expect(locale_cookie).to be_nil
+      expect(store).to have_received(:write).once
+
+      clear_cookies
+      get '/fr/a-notre-sujet'
+      expect(locale_cookie).to start_with 'steam-locale=fr'
+      expect(last_response.headers['cache-control']).to eq 'max-age=0, private, must-revalidate'
+      expect(last_response.body).to include 'A notre sujet'
+      expect(store).to have_received(:write).once
+    end
+
+  end
+
+  it 'keeps a page whose action sets a cookie to the visitor it was rendered for' do
+    2.times do
+      # Another visitor each time, whose locale cookie already holds English.
+      clear_cookies
+      set_cookie 'steam-locale=en'
+      get '/tags/cookie-action'
+
+      expect(Array(last_response.headers['set-cookie']).join("\n")).to include 'visitor=first'
+      expect(last_response.headers['cache-control']).to eq 'max-age=0, private, must-revalidate'
+    end
 
     expect(store).not_to have_received(:write)
   end
@@ -199,6 +270,18 @@ describe 'Page cache' do
 
       get '/about-us', {}, 'HTTP_IF_NONE_MATCH' => etag.delete_prefix('W/')
       expect(last_response.status).to eq 304
+    end
+
+    it "still sends a visitor's new locale cookie with the 304 Rack::ConditionalGet makes for the same page" do
+      get '/about-us'
+      etag = last_response.headers['etag']
+
+      clear_cookies
+      get '/about-us', {}, 'HTTP_IF_NONE_MATCH' => etag
+
+      expect(last_response.status).to eq 304
+      expect(locale_cookie).to start_with 'steam-locale=en'
+      expect(last_response.headers['cache-control']).to eq 'max-age=0, private, must-revalidate'
     end
 
     context 'with an empty store and the same key, as after a deploy' do

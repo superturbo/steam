@@ -31,10 +31,22 @@ describe Locomotive::Steam::Server do
 
     it 'is marked Secure behind a proxy that terminated TLS' do
       [{ 'HTTP_X_FORWARDED_PROTO' => 'https' }, { 'HTTP_X_FORWARDED_SSL' => 'on' }].each do |headers|
+        clear_cookies
         get '/index', {}, headers
 
         expect(locale_cookie).to match(/;\s*secure/i)
       end
+    end
+
+    it 'is set on the first visit and when the locale changes, not on every response' do
+      get '/index'
+      expect(locale_cookie).to start_with('steam-locale=en')
+
+      get '/about-us'
+      expect(locale_cookie).to be_nil
+
+      get '/fr/a-notre-sujet'
+      expect(locale_cookie).to start_with('steam-locale=fr')
     end
 
   end

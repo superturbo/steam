@@ -34,10 +34,10 @@ module Locomotive::Steam
         else
           env['steam.cache_control']  = private_cache_control
 
-          # Keep session responses private even if rendering overrides Cache-Control.
+          # Keep responses that use a session or set a cookie private even if rendering overrides Cache-Control.
           had_session = session.present?
           response    = self.next
-          keep_private(response) if had_session || session.present?
+          keep_private(response) if had_session || session.present? || sets_cookie?(response)
         end
       end
 
@@ -45,15 +45,18 @@ module Locomotive::Steam
 
       def fetch_cached_response(key)
         log("Cache key = #{key.inspect}")
-        if marshaled = cache.read(key)
+        marshaled = cache.read(key)
+        stored    = Marshal.load(marshaled) if marshaled
+
+        # A copy an earlier Steam stored with a Set-Cookie is not shared.
+        if stored && !stored[1].key?('set-cookie')
           log('Cache HIT')
-          stored = Marshal.load(marshaled)
           not_modified?(stored) ? not_modified(stored) : stored
         else
           log('Cache MISS')
           self.next.tap do |response|
-            # Rendering may create a session. Check again before storing.
-            if session.present? || !CACHEABLE_RESPONSE_CODES.include?(response.first.to_i)
+            # Rendering may create a session or set a cookie. Check again before storing.
+            if session.present? || sets_cookie?(response) || !CACHEABLE_RESPONSE_CODES.include?(response.first.to_i)
               keep_private(response)
             elsif request.get?
               # A template can tell HEAD from GET, so only a GET response is stored.
@@ -95,10 +98,15 @@ module Locomotive::Steam
       def cacheable?
         CACHEABLE_REQUEST_METHODS.include?(env['REQUEST_METHOD']) &&
         session.blank? &&
+        !sets_cookie? &&
         !live_editing? &&
         site.try(:cache_enabled) &&
         page.try(:cache_enabled) &&
         is_redirect_url?
+      end
+
+      def sets_cookie?(response = nil)
+        env['steam.cookies'].present? || (response && response[1].key?('set-cookie'))
       end
 
       def cache_key

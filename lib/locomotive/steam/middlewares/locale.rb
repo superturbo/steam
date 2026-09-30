@@ -87,6 +87,8 @@ module Locomotive::Steam
       end
 
       def set_locale_cookie
+        return if services.cookie.get(cookie_key_name) == locale.to_s
+
         services.cookie.set(cookie_key_name, {
           'value': locale, 'path': '/', 'max_age': 1.year, 'secure': request.ssl?
         })

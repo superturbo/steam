@@ -48,6 +48,17 @@ describe Locomotive::Steam::Middlewares::Cache do
 
   end
 
+  describe 'caching is disabled for the site and the render sets a cookie' do
+
+    let(:site) { instance_double('Site', cache_enabled: false) }
+    let(:app)  { ->(env) { [200, { 'cache-control' => 'public, max-age=600', 'set-cookie' => 'cart=1' }, ['page']] } }
+
+    it 'keeps the response private' do
+      expect(send_request[:headers]).to eq('cache-control' => 'max-age=0, private, must-revalidate', 'set-cookie' => 'cart=1')
+    end
+
+  end
+
   describe 'caching is disabled for a page configured no-store' do
 
     let(:site) { instance_double('Site', cache_enabled: true, cache_control: nil) }
@@ -526,6 +537,58 @@ describe Locomotive::Steam::Middlewares::Cache do
       it 'keeps the public headers but stores nothing, since a template can render HEAD differently' do
         expect(cache).not_to receive(:write)
         is_expected.to eq ['max-age=0, s-maxage=3600, public, must-revalidate', 'Accept-Language']
+      end
+
+    end
+
+    context 'a visitor Steam prepared a cookie for before the page cache' do
+
+      it 'neither reads nor writes the shared copy and keeps the page private' do
+        expect(cache).not_to receive(:read)
+        expect(cache).not_to receive(:write)
+
+        response = send_request('steam.cookies' => { 'steam-locale' => { 'value' => 'en' } })
+
+        expect([response[:env]['steam.cache_control'], response[:env]['steam.cache_vary']]).to eq ['max-age=0, private, must-revalidate', nil]
+      end
+
+    end
+
+    context 'a render that sets a cookie' do
+
+      let(:app) { ->(env) { [200, { 'cache-control' => env['steam.cache_control'], 'vary' => env['steam.cache_vary'], 'set-cookie' => 'cart=1' }, ['page']] } }
+
+      before { expect(cache).to receive(:read).with(cache_key).and_return(nil) }
+
+      it 'serves the page to this visitor only' do
+        expect(cache).not_to receive(:write)
+        expect(send_request[:headers]).to eq('cache-control' => 'max-age=0, private, must-revalidate', 'set-cookie' => 'cart=1')
+      end
+
+    end
+
+    context 'a render that prepares a cookie' do
+
+      let(:app) { ->(env) { env['steam.cookies'] = { 'cart' => { 'value' => '1' } }; [200, {}, ['page']] } }
+
+      before { expect(cache).to receive(:read).with(cache_key).and_return(nil) }
+
+      it 'stores nothing and keeps the page private' do
+        expect(cache).not_to receive(:write)
+        expect(send_request[:headers]['cache-control']).to eq 'max-age=0, private, must-revalidate'
+      end
+
+    end
+
+    context 'a copy stored with a Set-Cookie, by an earlier Steam' do
+
+      before do
+        expect(cache).to receive(:read).with(cache_key).and_return(Marshal.dump([200, { 'set-cookie' => 'visitor=first' }, ['old page']]))
+      end
+
+      it 'is not served: the page is rendered and stored again' do
+        expect(cache).to receive(:write).with(cache_key, anything)
+        expect(send_request[:headers]).not_to have_key('set-cookie')
       end
 
     end
