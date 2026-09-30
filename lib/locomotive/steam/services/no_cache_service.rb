@@ -11,6 +11,10 @@ module Locomotive
         nil
       end
 
+      def write(key, value)
+        nil
+      end
+
     end
 
   end

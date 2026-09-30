@@ -225,6 +225,21 @@ describe 'Page cache' do
     expect(store).not_to have_received(:write)
   end
 
+  describe 'without a store, as Wagon and a standalone Steam run' do
+
+    before { allow(Locomotive::Steam.configuration).to receive(:services_hook).and_call_original }
+
+    it 'serves the page on each request instead of failing to store it' do
+      2.times do
+        get '/about-us'
+
+        expect(last_response.status).to eq 200
+        expect(last_response.body).to include 'About us'
+      end
+    end
+
+  end
+
   describe 'mounted twice, as the Engine mounts its preview' do
 
     def app
