@@ -264,6 +264,30 @@ describe 'Page cache' do
     end
   end
 
+  describe 'deployment generations' do
+
+    # RAILS_CACHE_ID takes precedence, so it is set aside while RAILS_APP_VERSION names the generation.
+    def under_generation(generation)
+      previous = ENV.to_h.slice('RAILS_CACHE_ID', 'RAILS_APP_VERSION')
+      ENV.delete('RAILS_CACHE_ID')
+      ENV['RAILS_APP_VERSION'] = generation
+      yield
+    ensure
+      ENV.delete('RAILS_APP_VERSION')
+      ENV.update(previous)
+    end
+
+    it 'does not share a page between two generations, and shares it within one' do
+      under_generation('rollout-1') { get '/about-us' }
+      under_generation('rollout-2') { get '/about-us' }
+      expect(store).to have_received(:write).twice
+
+      under_generation('rollout-2') { get '/about-us' }
+      expect(store).to have_received(:write).twice
+    end
+
+  end
+
   describe 'without a store, as Wagon and a standalone Steam run' do
 
     before { allow(Locomotive::Steam.configuration).to receive(:services_hook).and_call_original }

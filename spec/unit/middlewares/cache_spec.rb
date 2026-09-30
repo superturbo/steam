@@ -86,6 +86,18 @@ describe Locomotive::Steam::Middlewares::Cache do
     let(:site) { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_control: '', cache_vary: nil) }
     let(:page) { instance_double('Page', cache_enabled: true) }
 
+    # These specs run without a deployment generation.
+    around do |example|
+      previous = ENV.to_h.slice('RAILS_CACHE_ID', 'RAILS_APP_VERSION')
+      ENV.delete('RAILS_CACHE_ID')
+      ENV.delete('RAILS_APP_VERSION')
+      example.run
+    ensure
+      ENV.delete('RAILS_CACHE_ID')
+      ENV.delete('RAILS_APP_VERSION')
+      ENV.update(previous)
+    end
+
     # the key and version Cache#cache_key and #cache_version give this request
     let(:cache_key)     { "steam/page/#{Digest::SHA256.hexdigest("42\nhttp://models.example.com/")}" }
     let(:cache_version) { "#{Locomotive::Steam::VERSION}/#{now.strftime('%s.%N')}" }
@@ -159,6 +171,38 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       it 'is the same for GET and HEAD' do
         expect(read_by(method: 'HEAD')).to eq read_by
+      end
+
+    end
+
+    describe 'under a deployment generation (RAILS_APP_VERSION)' do
+
+      around do |example|
+        previous, ENV['RAILS_APP_VERSION'] = ENV['RAILS_APP_VERSION'], 'rollout-42'
+        example.run
+      ensure
+        ENV['RAILS_APP_VERSION'] = previous
+      end
+
+      let(:page_etag) { %(W/"#{Digest::SHA256.hexdigest('Hello world!')[0, 32]}") }
+
+      it 'puts the generation first in the version' do
+        version = nil
+        allow(cache).to receive(:read).and_wrap_original { |original, key, options| version = options[:version]; original.call(key, options) }
+
+        send_request
+
+        expect(version).to eq "rollout-42/#{cache_version}"
+      end
+
+      it 'does not serve a page an earlier generation stored' do
+        store([200, {}, ['old page']], version: "rollout-41/#{cache_version}")
+        expect(send_request[:headers]['etag']).to eq page_etag
+      end
+
+      it 'serves a page the same generation stored' do
+        store([200, { 'etag' => 'W/"same"' }, ['page']], version: "rollout-42/#{cache_version}")
+        expect(send_request[:headers]['etag']).to eq 'W/"same"'
       end
 
     end

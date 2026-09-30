@@ -135,8 +135,9 @@ module Locomotive::Steam
       end
 
       # Never empty: ActiveSupport reads an entry without a version as a match.
+      # expand_cache_key puts the deployment's generation (RAILS_CACHE_ID or RAILS_APP_VERSION) first.
       def cache_version
-        "#{Locomotive::Steam::VERSION}/#{site.last_modified_at&.strftime('%s.%N') || 'none'}"
+        ActiveSupport::Cache.expand_cache_key("#{Locomotive::Steam::VERSION}/#{site.last_modified_at&.strftime('%s.%N') || 'none'}")
       end
 
       # Pages are kept only in an ActiveSupport::Cache::Store, whose API reads another version as a miss.
