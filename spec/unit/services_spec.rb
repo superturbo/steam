@@ -6,6 +6,10 @@ describe Locomotive::Steam::Services do
 
     subject { Locomotive::Steam::Services.build_instance(nil) }
 
+    it 'keeps no page without a cache the host provides' do
+      expect(subject.cache).to be_an_instance_of(ActiveSupport::Cache::NullStore)
+    end
+
     describe 'configuration with a services hook' do
 
       before do

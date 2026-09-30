@@ -147,7 +147,7 @@ module Locomotive
         end
 
         register :cache do
-          Steam::NoCacheService.new
+          ActiveSupport::Cache::NullStore.new
         end
 
         register :cookie do

@@ -247,6 +247,23 @@ describe 'Page cache' do
     expect(store).not_to have_received(:write)
   end
 
+  it "lets a host clear Steam's pages alone, in a namespaced store too" do
+    Dir.mktmpdir do |dir|
+      [ActiveSupport::Cache::MemoryStore.new(namespace: 'app'), ActiveSupport::Cache::FileStore.new(dir, namespace: 'app')].each do |shared_store|
+        allow(Locomotive::Steam.configuration).to receive(:services_hook).and_return(->(services) { services.cache = shared_store })
+        allow(shared_store).to receive(:write).and_call_original
+        shared_store.write('other', 'kept')
+
+        get '/about-us'
+        shared_store.delete_matched(%r{^steam/page/})
+        get '/about-us'
+
+        expect(shared_store).to have_received(:write).with(start_with('steam/page/'), anything, anything).twice
+        expect(shared_store.read('other')).to eq 'kept'
+      end
+    end
+  end
+
   describe 'without a store, as Wagon and a standalone Steam run' do
 
     before { allow(Locomotive::Steam.configuration).to receive(:services_hook).and_call_original }

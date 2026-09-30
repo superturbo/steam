@@ -23,6 +23,9 @@ module Locomotive::Steam
 
       NOT_SHARED_DIRECTIVES     = %w(no-store private).freeze
 
+      # Stores already warned about, so the warning does not repeat on every request.
+      UNSUPPORTED_STORES        = ObjectSpace::WeakMap.new
+
       # Steam's own Vary. Its locale comes from the URL, so a cached page must not otherwise render by Accept-Language.
       SHAREABLE_VARY            = %w(accept-language).freeze
 
@@ -51,7 +54,7 @@ module Locomotive::Steam
       def fetch_cached_response(key)
         log("Cache key = #{key.inspect}")
         # The configured policy decides the read. The write also needs the response's own.
-        shared = shareable?(cache_control, cache_vary)
+        shared = page_store && shareable?(cache_control, cache_vary)
         stored = stored_copy(key) if shared
 
         if stored
@@ -66,7 +69,7 @@ module Locomotive::Steam
             elsif request.get? && shared && shareable?(response[1]['cache-control'], response[1]['vary'])
               # A template can tell HEAD from GET, so only a GET response is stored.
               add_etag(response)
-              cache.write(key, marshal(response))
+              page_store.write(key, marshal(response), version: cache_version)
             end
           end
         end
@@ -74,7 +77,7 @@ module Locomotive::Steam
 
       # Do not replay Set-Cookie from an older stored copy.
       def stored_copy(key)
-        marshaled = cache.read(key)
+        marshaled = page_store.read(key, version: cache_version)
         stored    = Marshal.load(marshaled) if marshaled
         stored unless stored.nil? || stored[1].key?('set-cookie')
       end
@@ -128,9 +131,23 @@ module Locomotive::Steam
       end
 
       def cache_key
-        site = env['steam.site']
-        key  = "#{Locomotive::Steam::VERSION}/site/#{site._id}/#{site.last_modified_at&.strftime('%s.%N')}/url/#{request.url}"
-        Digest::MD5.hexdigest(key)
+        "steam/page/#{Digest::SHA256.hexdigest("#{site._id}\n#{request.url}")}"
+      end
+
+      # Never empty: ActiveSupport reads an entry without a version as a match.
+      def cache_version
+        "#{Locomotive::Steam::VERSION}/#{site.last_modified_at&.strftime('%s.%N') || 'none'}"
+      end
+
+      # Pages are kept only in an ActiveSupport::Cache::Store, whose API reads another version as a miss.
+      def page_store
+        return cache if cache.is_a?(ActiveSupport::Cache::Store)
+
+        unless UNSUPPORTED_STORES.key?(cache)
+          UNSUPPORTED_STORES[cache] = true
+          Locomotive::Common::Logger.warn "Steam's page cache is off: #{cache.class} is not an ActiveSupport::Cache::Store"
+        end
+        nil
       end
 
       def cache_control

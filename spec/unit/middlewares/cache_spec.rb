@@ -16,7 +16,7 @@ describe Locomotive::Steam::Middlewares::Cache do
   let(:url)             { 'http://models.example.com' }
   let(:path)            { 'hello-world' }
   let(:page)            { instance_double('Page') }
-  let(:cache)           { instance_double('CacheService', ) }
+  let(:cache)           { ActiveSupport::Cache::MemoryStore.new }
   let(:session)         { nil }
   let(:app)             { ->(env) { [code, {}, ['Hello world!']] } }
   let(:middleware)      { described_class.new(app) }
@@ -86,16 +86,30 @@ describe Locomotive::Steam::Middlewares::Cache do
     let(:site) { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_control: '', cache_vary: nil) }
     let(:page) { instance_double('Page', cache_enabled: true) }
 
-    # same formula as Cache#cache_key
-    let(:cache_key) { Digest::MD5.hexdigest("#{Locomotive::Steam::VERSION}/site/42/#{now.strftime('%s.%N')}/url/http://models.example.com/") }
+    # the key and version Cache#cache_key and #cache_version give this request
+    let(:cache_key)     { "steam/page/#{Digest::SHA256.hexdigest("42\nhttp://models.example.com/")}" }
+    let(:cache_version) { "#{Locomotive::Steam::VERSION}/#{now.strftime('%s.%N')}" }
 
-    describe 'the key the store is read with' do
+    # Keep a page as Steam would, under this request's key and version.
+    def store(response, version: cache_version)
+      cache.write(cache_key, Marshal.dump(response), version: version)
+    end
 
-      before { allow(cache).to receive(:write) }
+    # Read with read_multi, so it never counts as the request's own read.
+    def stored_page
+      marshaled = cache.read_multi(cache_key, version: cache_version)[cache_key]
+      Marshal.load(marshaled) if marshaled
+    end
 
-      def key_of(env = {})
+    def reads_the_store
+      expect(cache).to receive(:read).with(cache_key, hash_including(version: cache_version)).once.and_call_original
+    end
+
+    describe 'the key and version the store is read with' do
+
+      def read_by(env = {})
         read = nil
-        allow(cache).to receive(:read) { |key| read = key; nil }
+        allow(cache).to receive(:read).and_wrap_original { |original, key, options| read = [key, options[:version]]; original.call(key, options) }
         send_request(env)
         read
       end
@@ -104,38 +118,85 @@ describe Locomotive::Steam::Middlewares::Cache do
         instance_double('Site', _id: 42, last_modified_at: time, cache_enabled: true, cache_control: '', cache_vary: nil)
       end
 
-      it 'tells apart two site changes within the same second' do
-        expect(key_of('steam.site' => site_changed_at(now + 0.001.seconds))).not_to eq key_of
+      it 'keeps a stable key under steam/page/' do
+        expect(read_by.first).to eq cache_key
+        expect(read_by('steam.site' => site_changed_at(now + 1.day)).first).to eq cache_key
       end
 
-      it 'is the same for one moment in any time type or zone' do
-        moment = now.to_time.utc
-        keys  = [moment, moment.getlocal('+03:00'), moment.in_time_zone('Vilnius'), moment.to_datetime].map do |time|
-          key_of('steam.site' => site_changed_at(time))
+      it 'changes the version for a site change within the same second' do
+        expect(read_by('steam.site' => site_changed_at(now + 0.001.seconds)).last).not_to eq read_by.last
+      end
+
+      it 'gives one version for one moment in any time type or zone' do
+        moment   = now.to_time.utc
+        versions = [moment, moment.getlocal('+03:00'), moment.in_time_zone('Vilnius'), moment.to_datetime].map do |time|
+          read_by('steam.site' => site_changed_at(time)).last
         end
 
-        expect(keys.uniq).to eq [key_of]
+        expect(versions.uniq).to eq [cache_version]
+      end
+
+      it 'gives a site without a modification date a version all the same' do
+        expect(read_by('steam.site' => site_changed_at(nil)).last).to eq "#{Locomotive::Steam::VERSION}/none"
       end
 
       it 'tells apart the same path under another mount point' do
-        expect(key_of('SCRIPT_NAME' => '/locomotive/acme/preview')).not_to eq key_of
+        expect(read_by('SCRIPT_NAME' => '/locomotive/acme/preview').first).not_to eq cache_key
       end
 
       it 'tells apart the same path with another query' do
-        expect(key_of('QUERY_STRING' => 'page=2')).not_to eq key_of
+        expect(read_by('QUERY_STRING' => 'page=2').first).not_to eq cache_key
       end
 
       it 'tells apart the same path over another scheme' do
-        expect(key_of('rack.url_scheme' => 'https', 'HTTPS' => 'on')).not_to eq key_of
+        expect(read_by('rack.url_scheme' => 'https', 'HTTPS' => 'on').first).not_to eq cache_key
       end
 
       it 'tells apart the same path on another host or port' do
-        expect(key_of('HTTP_HOST' => 'sample.example.com')).not_to eq key_of
-        expect(key_of('HTTP_HOST' => 'models.example.com:8080')).not_to eq key_of
+        expect(read_by('HTTP_HOST' => 'sample.example.com').first).not_to eq cache_key
+        expect(read_by('HTTP_HOST' => 'models.example.com:8080').first).not_to eq cache_key
       end
 
       it 'is the same for GET and HEAD' do
-        expect(key_of(method: 'HEAD')).to eq key_of
+        expect(read_by(method: 'HEAD')).to eq read_by
+      end
+
+    end
+
+    describe 'a page Steam stores' do
+
+      it 'is kept under this version only' do
+        send_request
+
+        expect(stored_page).not_to be_nil
+        expect(cache.read_multi(cache_key, version: 'another version')).to be_empty
+      end
+
+    end
+
+    describe 'a copy stored under another version' do
+
+      before { store([200, {}, ['old page']], version: 'another version') }
+
+      it 'is not served: the page is rendered and stored under this version' do
+        expect(send_request[:headers]['etag']).to eq %(W/"#{Digest::SHA256.hexdigest('Hello world!')[0, 32]}")
+        expect(stored_page.last).to eq ['Hello world!']
+      end
+
+    end
+
+    describe 'a store that is not an ActiveSupport::Cache::Store' do
+
+      let(:cache) { double('CustomStore') }
+
+      it 'is neither read nor written, and a warning says so once' do
+        expect(Locomotive::Common::Logger).to receive(:warn).with(/not an ActiveSupport::Cache::Store/).once
+
+        2.times do
+          response = send_request
+          expect(response[:code]).to eq 200
+          expect(response[:env]['steam.cache_control']).to eq 'max-age=0, s-maxage=3600, public, must-revalidate'
+        end
       end
 
     end
@@ -146,14 +207,9 @@ describe Locomotive::Steam::Middlewares::Cache do
       let(:app)          { ->(env) { [code, {}, [rendered]] } }
       let(:content_etag) { %(W/"#{Digest::SHA256.hexdigest(rendered)[0, 32]}") }
 
-      before do
-        allow(cache).to receive(:read).and_return(nil)
-        allow(cache).to receive(:write)
-      end
-
       it 'digests the rendered page, as Rack::ETag does, and is stored with it' do
-        expect(cache).to receive(:write).with(cache_key, Marshal.dump([200, { 'etag' => content_etag }, [rendered]]))
         expect(send_request[:headers]['etag']).to eq content_etag
+        expect(stored_page).to eq [200, { 'etag' => content_etag }, [rendered]]
       end
 
       context 'rendered three times under the same key, the second time differently' do
@@ -162,7 +218,7 @@ describe Locomotive::Steam::Middlewares::Cache do
         let(:app)     { ->(env) { [200, {}, [renders.shift]] } }
 
         it 'changes with the page, not with the key' do
-          etags = Array.new(3) { send_request[:headers]['etag'] }
+          etags = Array.new(3) { cache.clear; send_request[:headers]['etag'] }
 
           expect(etags[1]).not_to eq etags[0]
           expect(etags[2]).to eq etags[0]
@@ -206,11 +262,14 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       let(:response) { nil }
 
-      before { expect(cache).to receive(:read).with(cache_key).and_return(response) }
+      before do
+        store(response) if response
+        reads_the_store
+      end
 
       context 'the cache is empty' do
 
-        before { expect(cache).to receive(:write).with(cache_key, Marshal.dump([200, { 'etag' => %(W/"#{Digest::SHA256.hexdigest('Hello world!')[0, 32]}") }, ["Hello world!"]])) }
+        after { expect(stored_page).to eq [200, { 'etag' => %(W/"#{Digest::SHA256.hexdigest('Hello world!')[0, 32]}") }, ["Hello world!"]] }
 
         it 'tells the CDN to cache the page and also cache it internally' do
           is_expected.to eq ['max-age=0, s-maxage=3600, public, must-revalidate', 'Accept-Language']
@@ -234,7 +293,7 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       describe 'the cache contains the response' do
 
-        let(:response) { Marshal.dump([200, {}, ["Hello world!"]]) }
+        let(:response) { [200, {}, ["Hello world!"]] }
 
         it 'tells the CDN to cache the page' do
           expect(cache).not_to receive(:write)
@@ -259,8 +318,7 @@ describe Locomotive::Steam::Middlewares::Cache do
       context 'with a stored copy' do
 
         before do
-          stored = [stored_code, { 'content-type' => 'text/html', 'x-own' => '1' }.merge(stored_headers), ['Hello world!']]
-          allow(cache).to receive(:read).with(cache_key).and_return(Marshal.dump(stored))
+          store([stored_code, { 'content-type' => 'text/html', 'x-own' => '1' }.merge(stored_headers), ['Hello world!']])
         end
 
         {
@@ -330,11 +388,6 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       context 'without a stored copy' do
 
-        before do
-          allow(cache).to receive(:read).with(cache_key).and_return(nil)
-          allow(cache).to receive(:write)
-        end
-
         {
           'the current ETag' => ->(tag) { tag },
           'any ETag'         => ->(_)   { '*' }
@@ -358,7 +411,7 @@ describe Locomotive::Steam::Middlewares::Cache do
 
         let(:modified_at) { now.httpdate }
 
-        before { allow(cache).to receive(:read).with(cache_key).and_return(Marshal.dump([200, {}, ['Hello world!']])) }
+        before { store([200, {}, ['Hello world!']]) }
 
         it 'serves the page, since the site date does not follow a Steam upgrade' do
           expect(subject.first).to eq 200
@@ -480,7 +533,7 @@ describe Locomotive::Steam::Middlewares::Cache do
       let(:session) { {} }
       let(:app)     { ->(env) { env['rack.session']['csrf.token'] = 't'; [200, { 'cache-control' => 'private, No-Store' }, ['t']] } }
 
-      before { expect(cache).to receive(:read).with(cache_key).and_return(nil) }
+      before { reads_the_store }
 
       it 'keeps no-store' do
         expect(cache).not_to receive(:write)
@@ -494,7 +547,7 @@ describe Locomotive::Steam::Middlewares::Cache do
       let(:session) { {} }
       let(:app)     { ->(env) { env['rack.session']['csrf.token'] = 't'; [200, { 'etag' => 'W/"own"', 'vary' => 'Cookie', 'x-own' => '1' }, ['t']] } }
 
-      before { expect(cache).to receive(:read).with(cache_key).and_return(nil) }
+      before { reads_the_store }
 
       it 'keeps an etag and vary other than the ones Steam set for the shared copy' do
         expect(cache).not_to receive(:write)
@@ -515,7 +568,7 @@ describe Locomotive::Steam::Middlewares::Cache do
         end
       end
 
-      before { expect(cache).to receive(:read).with(cache_key).and_return(nil) }
+      before { reads_the_store }
 
       it 'serves the page to this visitor only' do
         expect(cache).not_to receive(:write)
@@ -532,7 +585,7 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       let(:method) { 'HEAD' }
 
-      before { expect(cache).to receive(:read).with(cache_key).and_return(nil) }
+      before { reads_the_store }
 
       it 'keeps the public headers but stores nothing, since a template can render HEAD differently' do
         expect(cache).not_to receive(:write)
@@ -610,7 +663,7 @@ describe Locomotive::Steam::Middlewares::Cache do
 
     describe 'a render that answers with a policy of its own' do
 
-      before { expect(cache).to receive(:read).with(cache_key).and_return(nil) }
+      before { reads_the_store }
 
       {
         'private'                 => { 'cache-control' => 'private, max-age=60' },
@@ -650,7 +703,7 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       let(:app) { ->(env) { [200, { 'cache-control' => env['steam.cache_control'], 'vary' => env['steam.cache_vary'], 'set-cookie' => 'cart=1' }, ['page']] } }
 
-      before { expect(cache).to receive(:read).with(cache_key).and_return(nil) }
+      before { reads_the_store }
 
       it 'serves the page to this visitor only' do
         expect(cache).not_to receive(:write)
@@ -663,7 +716,7 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       let(:app) { ->(env) { env['steam.cookies'] = { 'cart' => { 'value' => '1' } }; [200, {}, ['page']] } }
 
-      before { expect(cache).to receive(:read).with(cache_key).and_return(nil) }
+      before { reads_the_store }
 
       it 'stores nothing and keeps the page private' do
         expect(cache).not_to receive(:write)
@@ -674,13 +727,11 @@ describe Locomotive::Steam::Middlewares::Cache do
 
     context 'a copy stored with a Set-Cookie, by an earlier Steam' do
 
-      before do
-        expect(cache).to receive(:read).with(cache_key).and_return(Marshal.dump([200, { 'set-cookie' => 'visitor=first' }, ['old page']]))
-      end
+      before { store([200, { 'set-cookie' => 'visitor=first' }, ['old page']]) }
 
       it 'is not served: the page is rendered and stored again' do
-        expect(cache).to receive(:write).with(cache_key, anything)
         expect(send_request[:headers]).not_to have_key('set-cookie')
+        expect(stored_page).to eq [200, { 'etag' => %(W/"#{Digest::SHA256.hexdigest('Hello world!')[0, 32]}") }, ['Hello world!']]
       end
 
     end
@@ -689,10 +740,8 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       let(:session) { {} }
 
-      before do
-        expect(cache).to receive(:read).with(cache_key).and_return(nil)
-        expect(cache).to receive(:write).with(cache_key, Marshal.dump([200, { 'etag' => %(W/"#{Digest::SHA256.hexdigest('Hello world!')[0, 32]}") }, ['Hello world!']]))
-      end
+      before { reads_the_store }
+      after  { expect(stored_page).to eq [200, { 'etag' => %(W/"#{Digest::SHA256.hexdigest('Hello world!')[0, 32]}") }, ['Hello world!']] }
 
       it { is_expected.to eq ['max-age=0, s-maxage=3600, public, must-revalidate', 'Accept-Language'] }
 
@@ -712,10 +761,7 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       let(:code) { 302 }
 
-      before do
-        allow(cache).to receive(:read).and_return(nil)
-        expect(cache).not_to receive(:write)
-      end
+      before { expect(cache).not_to receive(:write) }
 
       it 'tells the CDN to not cache the page, and stores nothing' do
         is_expected.to eq ['max-age=0, private, must-revalidate', nil]
