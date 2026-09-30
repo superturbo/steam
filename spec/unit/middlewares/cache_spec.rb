@@ -86,6 +86,9 @@ describe Locomotive::Steam::Middlewares::Cache do
     let(:site) { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_control: '', cache_vary: nil) }
     let(:page) { instance_double('Page', cache_enabled: true) }
 
+    # A stored page's age counts from the time it was stored.
+    around { |example| Timecop.freeze { example.run } }
+
     # These specs run without a deployment generation.
     around do |example|
       previous = ENV.to_h.slice('RAILS_CACHE_ID', 'RAILS_APP_VERSION')
@@ -102,15 +105,15 @@ describe Locomotive::Steam::Middlewares::Cache do
     let(:cache_key)     { "steam/page/#{Digest::SHA256.hexdigest("42\nhttp://models.example.com/")}" }
     let(:cache_version) { "#{Locomotive::Steam::VERSION}/#{now.strftime('%s.%N')}" }
 
-    # Keep a page as Steam would, under this request's key and version.
-    def store(response, version: cache_version)
-      cache.write(cache_key, Marshal.dump(response), version: version)
+    # Keep a page under this request's key and version, with the time it was stored.
+    def store(response, version: cache_version, stored_at: Time.now.to_i)
+      cache.write(cache_key, Marshal.dump(response + [stored_at]), version: version)
     end
 
     # Read with read_multi, so it never counts as the request's own read.
     def stored_page
       marshaled = cache.read_multi(cache_key, version: cache_version)[cache_key]
-      Marshal.load(marshaled) if marshaled
+      Marshal.load(marshaled).first(3) if marshaled
     end
 
     def reads_the_store
@@ -296,6 +299,59 @@ describe Locomotive::Steam::Middlewares::Cache do
 
     end
 
+    describe 'the age of a stored page' do
+
+      it 'is sent on a hit, in seconds since the page was stored' do
+        send_request
+        Timecop.freeze(Time.now + 100) { expect(send_request[:headers]['age']).to eq '100' }
+      end
+
+      it 'is sent with a 304 answered from the stored copy' do
+        page_etag = send_request[:headers]['etag']
+        Timecop.freeze(Time.now + 100) do
+          response = send_request('HTTP_IF_NONE_MATCH' => page_etag)
+          expect([response[:code], response[:headers]['age']]).to eq [304, '100']
+        end
+      end
+
+      it 'is never negative, though another server with its clock ahead stored the page' do
+        store([200, { 'cache-control' => 'max-age=0, s-maxage=3600, public, must-revalidate' }, ['page']], stored_at: Time.now.to_i + 30)
+        expect(send_request[:headers]['age']).to eq '0'
+      end
+
+      it 'is sent on a HEAD hit as well' do
+        send_request
+        Timecop.freeze(Time.now + 100) { expect(send_request(method: 'HEAD')[:headers]['age']).to eq '100' }
+      end
+
+      context 'when the render answers with an Age of its own, as a copy from another cache' do
+
+        let(:app) { ->(env) { [200, steam_headers(env).merge('age' => '3500'), ['page']] } }
+
+        it 'is passed on, and the page is not stored' do
+          expect(send_request[:headers]['age']).to eq '3500'
+          expect(stored_page).to be_nil
+        end
+
+      end
+
+      it 'is not sent with a page rendered for the request' do
+        expect(send_request[:headers]).not_to have_key('age')
+      end
+
+      it 'is not stored with the page' do
+        send_request
+        Timecop.freeze(Time.now + 100) { send_request }
+        expect(stored_page[1]).not_to have_key('age')
+      end
+
+      it 'cannot be told for a copy stored without its time, which is rendered again' do
+        cache.write(cache_key, Marshal.dump([200, {}, ['old page']]), version: cache_version)
+        expect(send_request[:headers]['etag']).to eq %(W/"#{Digest::SHA256.hexdigest('Hello world!')[0, 32]}")
+      end
+
+    end
+
     describe 'a page Steam stores' do
 
       it 'is kept under this version only' do
@@ -467,8 +523,8 @@ describe Locomotive::Steam::Middlewares::Cache do
 
             let(:etag) { if_none_match.call(stored_etag) }
 
-            it 'answers 304 with the validator and policy the stored copy carries' do
-              expect(subject).to eq [304, stored_headers]
+            it 'answers 304 with the validator and policy the stored copy carries, and its age' do
+              expect(subject).to eq [304, stored_headers.merge('age' => '0')]
             end
 
           end

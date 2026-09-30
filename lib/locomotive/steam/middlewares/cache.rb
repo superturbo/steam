@@ -17,7 +17,7 @@ module Locomotive::Steam
 
       NO_STORE_CACHE_CONTROL    = 'no-store'.freeze
 
-      NOT_MODIFIED_HEADERS      = %w(cache-control content-location date etag expires vary).freeze
+      NOT_MODIFIED_HEADERS      = %w(age cache-control content-location date etag expires vary).freeze
 
       ENTITY_TAG                = %r{\A(?:W/)?"[^"]*"\z}
 
@@ -67,8 +67,8 @@ module Locomotive::Steam
             # Rendering may create a session or set a cookie. Check again before storing.
             if session.present? || sets_cookie?(response) || !CACHEABLE_RESPONSE_CODES.include?(response.first.to_i)
               keep_private(response)
-            elsif request.get? && shared && shareable?(response[1]['cache-control'], response[1]['vary'])
-              # A template can tell HEAD from GET, so only a GET response is stored.
+            elsif request.get? && shared && shareable?(response[1]['cache-control'], response[1]['vary']) && !response[1].key?('age')
+              # Only a GET is stored (a template can tell HEAD from it), never one with another cache's Age.
               add_etag(response)
               page_store.write(key, marshal(response), version: cache_version, expires_in: lifetime(response[1]['cache-control']))
             end
@@ -76,11 +76,15 @@ module Locomotive::Steam
         end
       end
 
-      # Do not replay Set-Cookie from an older stored copy.
+      # Do not replay Set-Cookie from an older stored copy, nor serve one that cannot tell its age.
       def stored_copy(key)
         marshaled = page_store.read(key, version: cache_version)
-        stored    = Marshal.load(marshaled) if marshaled
-        stored unless stored.nil? || stored[1].key?('set-cookie')
+        return unless marshaled
+
+        code, headers, body, stored_at = Marshal.load(marshaled)
+        return if stored_at.nil? || headers.key?('set-cookie')
+
+        [code, headers.merge('age' => [Time.now.to_i - stored_at, 0].max.to_s), body]
       end
 
       # Store only responses Steam may reuse for a bounded time without varying by another header.
@@ -214,7 +218,7 @@ module Locomotive::Steam
         # only keep string value headers
         _headers = headers.reject { |key, val| !val.respond_to?(:to_str) }
 
-        Marshal.dump([code, _headers, body])
+        Marshal.dump([code, _headers, body, Time.now.to_i])
       end
 
       def cache

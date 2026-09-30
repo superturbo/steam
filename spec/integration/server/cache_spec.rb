@@ -106,7 +106,17 @@ describe 'Page cache' do
     expect(ok['etag']).to match(%r{\AW/"\h{32}"\z})
     expect(ok).not_to have_key('date')
     expect(last_response.status).to eq 304
-    expect(last_response.headers.to_h).to eq ok.slice(*not_modified_headers)
+    expect(last_response.headers.to_h.except('age')).to eq ok.slice(*not_modified_headers)
+    expect(last_response.headers['age']).to match(/\A\d+\z/)
+  end
+
+  it "tells a CDN the stored copy's age, so it does not keep it for another full lifetime" do
+    now = Time.now
+    Timecop.freeze(now) { get '/about-us' }
+    Timecop.freeze(now + 3590) { get '/about-us' }
+
+    expect(last_response.headers['age']).to eq '3590'
+    expect(last_response.headers['cache-control']).to eq 'max-age=0, s-maxage=3600, public, must-revalidate'
   end
 
   it 'answers a HEAD request holding the ETag with the same 304' do
@@ -116,7 +126,7 @@ describe 'Page cache' do
     head '/about-us', {}, 'HTTP_IF_NONE_MATCH' => ok['etag']
 
     expect(last_response.status).to eq 304
-    expect(last_response.headers.to_h).to eq ok.slice(*not_modified_headers)
+    expect(last_response.headers.to_h.except('age')).to eq ok.slice(*not_modified_headers)
     expect(last_response.body).to be_empty
   end
 
@@ -344,7 +354,7 @@ describe 'Page cache' do
 
       get '/about-us', {}, 'HTTP_IF_NONE_MATCH' => etag
       expect(last_response.status).to eq 304
-      expect(last_response.headers.to_h).to eq ok.slice(*not_modified_headers)
+      expect(last_response.headers.to_h.except('age')).to eq ok.slice(*not_modified_headers)
 
       get '/about-us', {}, 'HTTP_IF_NONE_MATCH' => etag.delete_prefix('W/')
       expect(last_response.status).to eq 304
