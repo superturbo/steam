@@ -18,7 +18,7 @@ describe Locomotive::Steam::Middlewares::Cache do
   let(:page)            { instance_double('Page') }
   let(:cache)           { ActiveSupport::Cache::MemoryStore.new }
   let(:session)         { nil }
-  let(:app)             { ->(env) { [code, {}, ['Hello world!']] } }
+  let(:app)             { ->(env) { [code, steam_headers(env), ['Hello world!']] } }
   let(:middleware)      { described_class.new(app) }
 
   subject do
@@ -207,6 +207,95 @@ describe Locomotive::Steam::Middlewares::Cache do
 
     end
 
+    describe 'the lifetime of a stored page' do
+
+      it 'is the s-maxage of the policy' do
+        send_request
+
+        Timecop.travel(Time.now + 3590) { expect(stored_page).not_to be_nil }
+        Timecop.travel(Time.now + 3610) { expect(stored_page).to be_nil }
+      end
+
+      context 'once it ends' do
+
+        let(:renders) { [] }
+        let(:app)     { ->(env) { renders << env['PATH_INFO']; [200, steam_headers(env), ['page']] } }
+
+        it 'has the next request render the page again' do
+          2.times { send_request }
+          expect(renders.size).to eq 1
+
+          Timecop.travel(Time.now + 3610) { send_request }
+          expect(renders.size).to eq 2
+        end
+
+      end
+
+      context 'when the render answers a shorter s-maxage' do
+
+        let(:app) { ->(env) { [200, steam_headers(env).merge('cache-control' => 'public, s-maxage=30'), ['page']] } }
+
+        it 'is that s-maxage' do
+          send_request
+
+          Timecop.travel(Time.now + 20) { expect(stored_page).not_to be_nil }
+          Timecop.travel(Time.now + 40) { expect(stored_page).to be_nil }
+        end
+
+      end
+
+      context 'under a policy that repeats the same s-maxage' do
+
+        let(:site) { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_control: 'public, s-maxage=60, s-maxage=60', cache_vary: nil) }
+
+        it 'is that s-maxage' do
+          send_request
+
+          Timecop.travel(Time.now + 50) { expect(stored_page).not_to be_nil }
+          Timecop.travel(Time.now + 70) { expect(stored_page).to be_nil }
+        end
+
+      end
+
+      context 'under a policy with a max-age only' do
+
+        let(:site) { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_control: 'public, max-age=600', cache_vary: nil) }
+
+        it 'is the max-age' do
+          send_request
+
+          Timecop.travel(Time.now + 590) { expect(stored_page).not_to be_nil }
+          Timecop.travel(Time.now + 610) { expect(stored_page).to be_nil }
+        end
+
+      end
+
+    end
+
+    describe 'a policy that gives Steam no lifetime, or asks for a validation Steam does not do' do
+
+      before do
+        expect(cache).not_to receive(:read)
+        expect(cache).not_to receive(:write)
+      end
+
+      ['public', 'public, s-maxage=0', 'max-age=0, public', 'public, s-maxage=soon', 'public, s-maxage=60, s-maxage=30',
+       'public, s-maxage=60s', 'public, s-maxage="60"', 'public, s-maxage, max-age=600', 'public, s-maxage=60, s-maxage', 'public, s-maxage=60, no-cache', 'public, s-maxage=60, No-Cache="set-cookie"'].each do |policy|
+
+        context "(#{policy})" do
+
+          let(:site) { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_control: policy, cache_vary: nil) }
+
+          it 'renders the page and keeps nothing' do
+            expect(send_request[:code]).to eq 200
+          end
+
+        end
+
+      end
+
+    end
+
     describe 'a page Steam stores' do
 
       it 'is kept under this version only' do
@@ -248,18 +337,18 @@ describe Locomotive::Steam::Middlewares::Cache do
     describe 'the ETag of a page rendered for the store' do
 
       let(:rendered)     { 'Hello world!' }
-      let(:app)          { ->(env) { [code, {}, [rendered]] } }
+      let(:app)          { ->(env) { [code, steam_headers(env), [rendered]] } }
       let(:content_etag) { %(W/"#{Digest::SHA256.hexdigest(rendered)[0, 32]}") }
 
       it 'digests the rendered page, as Rack::ETag does, and is stored with it' do
         expect(send_request[:headers]['etag']).to eq content_etag
-        expect(stored_page).to eq [200, { 'etag' => content_etag }, [rendered]]
+        expect(stored_page).to eq [200, stored_headers_for(rendered), [rendered]]
       end
 
       context 'rendered three times under the same key, the second time differently' do
 
         let(:renders) { ['Hello world!', 'Hello again!', 'Hello world!'] }
-        let(:app)     { ->(env) { [200, {}, [renders.shift]] } }
+        let(:app)     { ->(env) { [200, steam_headers(env), [renders.shift]] } }
 
         it 'changes with the page, not with the key' do
           etags = Array.new(3) { cache.clear; send_request[:headers]['etag'] }
@@ -272,7 +361,7 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       context 'when the render sets an ETag of its own' do
 
-        let(:app) { ->(env) { [200, { 'etag' => '"own"' }, [rendered]] } }
+        let(:app) { ->(env) { [200, steam_headers(env).merge('etag' => '"own"'), [rendered]] } }
 
         it 'keeps it' do
           expect(send_request[:headers]['etag']).to eq '"own"'
@@ -282,7 +371,7 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       context 'when the page is empty' do
 
-        let(:app) { ->(env) { [200, {}, ['']] } }
+        let(:app) { ->(env) { [200, steam_headers(env), ['']] } }
 
         it 'adds none' do
           expect(send_request[:headers]).not_to have_key('etag')
@@ -313,7 +402,7 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       context 'the cache is empty' do
 
-        after { expect(stored_page).to eq [200, { 'etag' => %(W/"#{Digest::SHA256.hexdigest('Hello world!')[0, 32]}") }, ["Hello world!"]] }
+        after { expect(stored_page.last).to eq ['Hello world!'] }
 
         it 'tells the CDN to cache the page and also cache it internally' do
           is_expected.to eq ['max-age=0, s-maxage=3600, public, must-revalidate', 'Accept-Language']
@@ -712,7 +801,10 @@ describe Locomotive::Steam::Middlewares::Cache do
       {
         'private'                 => { 'cache-control' => 'private, max-age=60' },
         'no-store'                => { 'cache-control' => 'No-Store' },
-        'varying on User-Agent'   => { 'cache-control' => 'max-age=0, s-maxage=3600, public, must-revalidate', 'vary' => 'User-Agent' }
+        'varying on User-Agent'   => { 'cache-control' => 'max-age=0, s-maxage=3600, public, must-revalidate', 'vary' => 'User-Agent' },
+        'with no lifetime'        => { 'cache-control' => 'public' },
+        'with s-maxage=0'         => { 'cache-control' => 'public, s-maxage=0' },
+        'with no-cache'           => { 'cache-control' => 'public, s-maxage=3600, no-cache' }
       }.each do |name, headers|
 
         context "(#{name})" do
@@ -775,7 +867,7 @@ describe Locomotive::Steam::Middlewares::Cache do
 
       it 'is not served: the page is rendered and stored again' do
         expect(send_request[:headers]).not_to have_key('set-cookie')
-        expect(stored_page).to eq [200, { 'etag' => %(W/"#{Digest::SHA256.hexdigest('Hello world!')[0, 32]}") }, ['Hello world!']]
+        expect(stored_page).to eq [200, stored_headers_for('Hello world!'), ['Hello world!']]
       end
 
     end
@@ -785,7 +877,7 @@ describe Locomotive::Steam::Middlewares::Cache do
       let(:session) { {} }
 
       before { reads_the_store }
-      after  { expect(stored_page).to eq [200, { 'etag' => %(W/"#{Digest::SHA256.hexdigest('Hello world!')[0, 32]}") }, ['Hello world!']] }
+      after  { expect(stored_page).to eq [200, stored_headers_for('Hello world!'), ['Hello world!']] }
 
       it { is_expected.to eq ['max-age=0, s-maxage=3600, public, must-revalidate', 'Accept-Language'] }
 
@@ -827,6 +919,16 @@ describe Locomotive::Steam::Middlewares::Cache do
 
     end
 
+  end
+
+  # What Steam's renderer answers with (render_response): the policy the cache set.
+  def steam_headers(env)
+    { 'cache-control' => env['steam.cache_control'], 'vary' => env['steam.cache_vary'] }.compact
+  end
+
+  def stored_headers_for(body)
+    { 'cache-control' => 'max-age=0, s-maxage=3600, public, must-revalidate', 'vary' => 'Accept-Language',
+      'etag' => %(W/"#{Digest::SHA256.hexdigest(body)[0, 32]}") }
   end
 
   def send_request(overrides = {})

@@ -41,7 +41,7 @@ describe 'Page cache' do
       'cache-control' => 'max-age=0, s-maxage=3600, public, must-revalidate', 'vary' => 'Accept-Language')
     expect(last_response.headers.to_h.keys).to include('etag')
     expect(last_response.headers.to_h.keys).not_to include('last-modified')
-    expect(store).to have_received(:write).once
+    expect(store).to have_received(:write).with(start_with('steam/page/'), anything, hash_including(expires_in: 3600)).once
   end
 
   it 'answers If-Modified-Since with the page, even for a site without a modification date' do

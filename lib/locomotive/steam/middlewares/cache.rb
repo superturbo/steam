@@ -21,7 +21,8 @@ module Locomotive::Steam
 
       ENTITY_TAG                = %r{\A(?:W/)?"[^"]*"\z}
 
-      NOT_SHARED_DIRECTIVES     = %w(no-store private).freeze
+      # No shared copy under no-store or private, and none Steam could reuse without the validation no-cache asks for.
+      NOT_SHARED_DIRECTIVES     = %w(no-cache no-store private).freeze
 
       # Stores already warned about, so the warning does not repeat on every request.
       UNSUPPORTED_STORES        = ObjectSpace::WeakMap.new
@@ -69,7 +70,7 @@ module Locomotive::Steam
             elsif request.get? && shared && shareable?(response[1]['cache-control'], response[1]['vary'])
               # A template can tell HEAD from GET, so only a GET response is stored.
               add_etag(response)
-              page_store.write(key, marshal(response), version: cache_version)
+              page_store.write(key, marshal(response), version: cache_version, expires_in: lifetime(response[1]['cache-control']))
             end
           end
         end
@@ -82,9 +83,10 @@ module Locomotive::Steam
         stored unless stored.nil? || stored[1].key?('set-cookie')
       end
 
-      # Steam's rule for its store, narrower than HTTP caching: no no-store or private, and no Vary but its own.
+      # Store only responses Steam may reuse for a bounded time without varying by another header.
       def shareable?(cache_control, vary)
         (directive_names(cache_control) & NOT_SHARED_DIRECTIVES).empty? &&
+          lifetime(cache_control).to_i.positive? &&
           (Array(vary).join(',').split(',').map { |name| name.strip.downcase } - SHAREABLE_VARY).empty?
       end
 
@@ -181,11 +183,29 @@ module Locomotive::Steam
         names.include?('no-transform') ? "#{policy}, no-transform" : policy
       end
 
-      # Ignore commas inside quoted directive arguments.
       def directive_names(cache_control)
+        directives(cache_control).map(&:first)
+      end
+
+      # Name and argument pairs, ignoring commas inside quoted arguments.
+      def directives(cache_control)
         cache_control.to_s.gsub(/"(?:[^"\\]|\\.)*"/, '""').split(',').map do |directive|
-          directive.split('=', 2).first.strip.downcase
+          name, argument = directive.split('=', 2)
+          [name.strip.downcase, argument&.strip]
         end
+      end
+
+      # The shared lifetime in seconds: s-maxage, else max-age. Nil when absent, malformed or conflicting.
+      def lifetime(cache_control)
+        all = directives(cache_control)
+
+        %w(s-maxage max-age).each do |name|
+          arguments = all.select { |directive, _| directive == name }.map(&:last).uniq
+          next if arguments.empty?
+
+          return arguments.size == 1 && arguments.first.to_s.match?(/\A\d+\z/) ? arguments.first.to_i : nil
+        end
+        nil
       end
 
       def marshal(response)
