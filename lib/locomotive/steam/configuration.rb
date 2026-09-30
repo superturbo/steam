@@ -46,6 +46,8 @@ module Locomotive
 
       # Enable serving of images, stylesheets, and JavaScripts from an asset server.
       # Useful if a CDN is used to serve assets.
+      # A callable receives the request and site.
+      # On cached pages, its result must depend only on the site and request URL.
       #
       # default: nil
       #

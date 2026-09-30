@@ -22,7 +22,7 @@ module Locomotive
       end
 
       def host
-        return @host if @host
+        return @host if defined?(@host)
 
         @host = if site.try(:asset_host).present?
           build_host_with_protocol(site.asset_host)

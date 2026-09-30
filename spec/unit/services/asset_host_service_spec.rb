@@ -119,6 +119,18 @@ describe Locomotive::Steam::AssetHostService do
 
     end
 
+    context 'answering no host' do
+
+      let(:calls) { [] }
+      let(:host)  { ->(request, site) { calls << site; nil } }
+
+      it 'is asked once for all the assets of a request' do
+        2.times { asset_host.compute(source) }
+        expect(calls.size).to eq 1
+      end
+
+    end
+
   end
 
   describe 'the site has an asset host' do
