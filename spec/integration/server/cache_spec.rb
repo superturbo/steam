@@ -225,6 +225,28 @@ describe 'Page cache' do
     expect(store).not_to have_received(:write)
   end
 
+  it "keeps pages out of Steam's store under a site policy that forbids a shared cache, and sends that policy" do
+    allow_any_instance_of(Locomotive::Steam::Site).to receive(:cache_control).and_return('private, max-age=600')
+
+    2.times { get '/about-us' }
+
+    expect(last_response.headers['cache-control']).to eq 'private, max-age=600'
+    expect(store).not_to have_received(:read)
+    expect(store).not_to have_received(:write)
+  end
+
+  it 'renders a page that varies on User-Agent for each request, and keeps its Vary for a CDN' do
+    allow_any_instance_of(Locomotive::Steam::Site).to receive(:cache_vary).and_return('User-Agent')
+
+    get '/about-us', {}, 'HTTP_USER_AGENT' => 'phone'
+    get '/about-us', {}, 'HTTP_USER_AGENT' => 'desktop'
+
+    expect(last_response.headers.to_h.slice('cache-control', 'vary')).to eq(
+      'cache-control' => 'max-age=0, s-maxage=3600, public, must-revalidate', 'vary' => 'User-Agent')
+    expect(store).not_to have_received(:read)
+    expect(store).not_to have_received(:write)
+  end
+
   describe 'without a store, as Wagon and a standalone Steam run' do
 
     before { allow(Locomotive::Steam.configuration).to receive(:services_hook).and_call_original }

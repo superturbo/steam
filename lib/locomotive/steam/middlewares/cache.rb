@@ -21,6 +21,11 @@ module Locomotive::Steam
 
       ENTITY_TAG                = %r{\A(?:W/)?"[^"]*"\z}
 
+      NOT_SHARED_DIRECTIVES     = %w(no-store private).freeze
+
+      # Steam's own Vary. Its locale comes from the URL, so a cached page must not otherwise render by Accept-Language.
+      SHAREABLE_VARY            = %w(accept-language).freeze
+
       def _call
         if cacheable?
           key = cache_key
@@ -45,11 +50,11 @@ module Locomotive::Steam
 
       def fetch_cached_response(key)
         log("Cache key = #{key.inspect}")
-        marshaled = cache.read(key)
-        stored    = Marshal.load(marshaled) if marshaled
+        # The configured policy decides the read. The write also needs the response's own.
+        shared = shareable?(cache_control, cache_vary)
+        stored = stored_copy(key) if shared
 
-        # A copy an earlier Steam stored with a Set-Cookie is not shared.
-        if stored && !stored[1].key?('set-cookie')
+        if stored
           log('Cache HIT')
           not_modified?(stored) ? not_modified(stored) : stored
         else
@@ -58,13 +63,26 @@ module Locomotive::Steam
             # Rendering may create a session or set a cookie. Check again before storing.
             if session.present? || sets_cookie?(response) || !CACHEABLE_RESPONSE_CODES.include?(response.first.to_i)
               keep_private(response)
-            elsif request.get?
+            elsif request.get? && shared && shareable?(response[1]['cache-control'], response[1]['vary'])
               # A template can tell HEAD from GET, so only a GET response is stored.
               add_etag(response)
               cache.write(key, marshal(response))
             end
           end
         end
+      end
+
+      # Do not replay Set-Cookie from an older stored copy.
+      def stored_copy(key)
+        marshaled = cache.read(key)
+        stored    = Marshal.load(marshaled) if marshaled
+        stored unless stored.nil? || stored[1].key?('set-cookie')
+      end
+
+      # Steam's rule for its store, narrower than HTTP caching: no no-store or private, and no Vary but its own.
+      def shareable?(cache_control, vary)
+        (directive_names(cache_control) & NOT_SHARED_DIRECTIVES).empty? &&
+          (Array(vary).join(',').split(',').map { |name| name.strip.downcase } - SHAREABLE_VARY).empty?
       end
 
       # Only a stored 200 answers 304. A tag with a comma inside its quotes matches nothing.

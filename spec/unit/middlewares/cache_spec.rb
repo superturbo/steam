@@ -222,10 +222,10 @@ describe Locomotive::Steam::Middlewares::Cache do
 
         describe 'the site administrator sets a custom cache control and vary' do
 
-          let(:site) { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_control: 'max-age=600, s-maxage=600, public, must-revalidate', cache_vary: 'Cookie') }
+          let(:site) { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_control: 'max-age=600, s-maxage=600, public, must-revalidate', cache_vary: 'accept-language') }
 
           it 'tells the CDN to cache the page with the custom cache control' do
-            is_expected.to eq ['max-age=600, s-maxage=600, public, must-revalidate', 'Cookie']
+            is_expected.to eq ['max-age=600, s-maxage=600, public, must-revalidate', 'accept-language']
           end
 
         end
@@ -411,7 +411,7 @@ describe Locomotive::Steam::Middlewares::Cache do
       let(:session) { {} }
       let(:app)     { ->(env) { env['rack.session']['csrf.token'] = 't'; [200, { 'cache-control' => env['steam.cache_control'] }, ['t']] } }
 
-      before { expect(cache).to receive(:read).with(cache_key).and_return(nil) }
+      before { expect(cache).not_to receive(:read) }
 
       it 'keeps no-store, which is stricter than private' do
         expect(cache).not_to receive(:write)
@@ -537,6 +537,98 @@ describe Locomotive::Steam::Middlewares::Cache do
       it 'keeps the public headers but stores nothing, since a template can render HEAD differently' do
         expect(cache).not_to receive(:write)
         is_expected.to eq ['max-age=0, s-maxage=3600, public, must-revalidate', 'Accept-Language']
+      end
+
+    end
+
+    describe 'a policy that keeps the page out of a shared cache' do
+
+      subject { send_request }
+
+      before do
+        expect(cache).not_to receive(:read)
+        expect(cache).not_to receive(:write)
+      end
+
+      {
+        'the site answering no-store'          => [{ cache_control: 'no-store' }, {}],
+        'the page answering Private, max-age=600' => [{ cache_control: '' }, { cache_control: 'Private, max-age=600' }]
+      }.each do |name, (site_policy, page_policy)|
+
+        context name do
+
+          let(:site) { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_vary: nil, **site_policy) }
+          let(:page) { instance_double('Page', cache_enabled: true, cache_vary: nil, **{ cache_control: nil }.merge(page_policy)) }
+
+          it 'renders the page and sends the policy as configured' do
+            response = subject
+            expect(response[:code]).to eq 200
+            expect(response[:env]['steam.cache_control']).to eq((page_policy[:cache_control] || site_policy[:cache_control]))
+          end
+
+        end
+
+      end
+
+    end
+
+    describe 'a page that varies on a request header its render may depend on' do
+
+      before do
+        expect(cache).not_to receive(:read)
+        expect(cache).not_to receive(:write)
+      end
+
+      ['User-Agent', 'Accept-Language, user-agent', 'Accept-Encoding', '*'].each do |vary|
+
+        context "(Vary: #{vary})" do
+
+          let(:site) { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_control: '', cache_vary: vary) }
+
+          it 'renders the page for each request and keeps the public policy for a CDN that varies on it' do
+            response = send_request
+            expect(response[:code]).to eq 200
+            expect([response[:env]['steam.cache_control'], response[:env]['steam.cache_vary']]).to eq ['max-age=0, s-maxage=3600, public, must-revalidate', vary]
+          end
+
+        end
+
+      end
+
+      context 'and whose render fails' do
+
+        let(:site) { instance_double('Site', _id: 42, last_modified_at: now, cache_enabled: true, cache_control: '', cache_vary: 'User-Agent') }
+        let(:app)  { ->(env) { [500, { 'cache-control' => env['steam.cache_control'], 'vary' => env['steam.cache_vary'] }, ['error']] } }
+
+        it 'keeps the error private' do
+          expect(send_request[:headers]).to eq('cache-control' => 'max-age=0, private, must-revalidate')
+        end
+
+      end
+
+    end
+
+    describe 'a render that answers with a policy of its own' do
+
+      before { expect(cache).to receive(:read).with(cache_key).and_return(nil) }
+
+      {
+        'private'                 => { 'cache-control' => 'private, max-age=60' },
+        'no-store'                => { 'cache-control' => 'No-Store' },
+        'varying on User-Agent'   => { 'cache-control' => 'max-age=0, s-maxage=3600, public, must-revalidate', 'vary' => 'User-Agent' }
+      }.each do |name, headers|
+
+        context "(#{name})" do
+
+          let(:app) { ->(env) { [200, headers.dup, ['page']] } }
+
+          it 'is not stored, though the configured policy is public' do
+            expect(cache).not_to receive(:write)
+            expect(send_request[:code]).to eq 200
+          end
+
+        end
+
       end
 
     end
