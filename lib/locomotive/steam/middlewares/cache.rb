@@ -67,8 +67,8 @@ module Locomotive::Steam
             # Rendering may create a session or set a cookie. Check again before storing.
             if session.present? || sets_cookie?(response) || !CACHEABLE_RESPONSE_CODES.include?(response.first.to_i)
               keep_private(response)
-            elsif request.get? && shared && shareable?(response[1]['cache-control'], response[1]['vary']) && !response[1].key?('age')
-              # Only a GET is stored (a template can tell HEAD from it), never one with another cache's Age.
+            elsif request.get? && shared && storable?(response)
+              # A template can tell HEAD from GET, so only a GET response is stored.
               add_etag(response)
               page_store.write(key, marshal(response), version: cache_version, expires_in: lifetime(response[1]['cache-control']))
             end
@@ -85,6 +85,15 @@ module Locomotive::Steam
         return if stored_at.nil? || headers.key?('set-cookie')
 
         [code, headers.merge('age' => [Time.now.to_i - stored_at, 0].max.to_s), body]
+      end
+
+      # The response's own policy allows it, it carries no other cache's Age, and the request did not ask for
+      # no-store (RFC 9111). A request's no-cache is a preference Steam does not follow.
+      def storable?(response)
+        headers = response[1]
+
+        shareable?(headers['cache-control'], headers['vary']) && !headers.key?('age') &&
+          !directive_names(env['HTTP_CACHE_CONTROL']).include?('no-store')
       end
 
       # Store only responses Steam may reuse for a bounded time without varying by another header.

@@ -274,6 +274,14 @@ describe 'Page cache' do
     end
   end
 
+  it 'keeps the response to a request asking for no-store out of the store' do
+    get '/about-us', {}, 'HTTP_CACHE_CONTROL' => 'no-store'
+    expect(store).not_to have_received(:write)
+
+    get '/about-us'
+    expect(store).to have_received(:write).once
+  end
+
   describe 'deployment generations' do
 
     # RAILS_CACHE_ID takes precedence, so it is set aside while RAILS_APP_VERSION names the generation.

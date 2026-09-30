@@ -299,6 +299,28 @@ describe Locomotive::Steam::Middlewares::Cache do
 
     end
 
+    describe "a request's own Cache-Control" do
+
+      it 'keeps the response to a request asking for No-Store out of the store' do
+        response = send_request('HTTP_CACHE_CONTROL' => 'No-Store')
+
+        expect(response[:code]).to eq 200
+        expect(response[:env]['steam.cache_control']).to eq 'max-age=0, s-maxage=3600, public, must-revalidate'
+        expect(stored_page).to be_nil
+      end
+
+      it 'still answers such a request from a page already stored' do
+        store([200, { 'cache-control' => 'max-age=0, s-maxage=3600, public, must-revalidate', 'etag' => 'W/"stored"' }, ['page']])
+        expect(send_request('HTTP_CACHE_CONTROL' => 'no-store')[:headers]['etag']).to eq 'W/"stored"'
+      end
+
+      it 'answers a request asking for no-cache from the store all the same' do
+        store([200, { 'cache-control' => 'max-age=0, s-maxage=3600, public, must-revalidate', 'etag' => 'W/"stored"' }, ['page']])
+        expect(send_request('HTTP_CACHE_CONTROL' => 'no-cache')[:headers]['etag']).to eq 'W/"stored"'
+      end
+
+    end
+
     describe 'the age of a stored page' do
 
       it 'is sent on a hit, in seconds since the page was stored' do
