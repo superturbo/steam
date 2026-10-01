@@ -28,6 +28,8 @@ describe Locomotive::Steam::Middlewares::Section do
                         }
 
   let(:body) { '' }
+  let(:type) { 'header' }
+  let(:live_editing) { true }
 
   before do
     env['rack.input']             = StringIO.new(body)
@@ -37,7 +39,9 @@ describe Locomotive::Steam::Middlewares::Section do
     env['steam.liquid_registers'] = {}
     env['steam.liquid_assigns']   = {}
     env['steam.request']          = Rack::Request.new(env)
-    env['steam.request'].add_header('HTTP_LOCOMOTIVE_SECTION_TYPE', 'header')
+    env['steam.live_editing']     = live_editing
+    env['steam.request'].add_header('HTTP_LOCOMOTIVE_SECTION_TYPE', type)
+    allow(section_finder).to receive(:find).and_return(nil)
     allow(section_finder).to receive(:find).with('header').and_return(section)
   end
 
@@ -46,12 +50,82 @@ describe Locomotive::Steam::Middlewares::Section do
     middleware.call(env)
   end
 
-  it 'renders the HTML code related to the section' do
+  it "renders the section's default content for an empty body" do
     is_expected.to eq [
       200,
       { "content-type" => "text/html" },
       [%(<div id="locomotive-section-header" class="locomotive-section" data-locomotive-section-type="header"><span id="header-section"></span>Here some </div>)]
     ]
+  end
+
+  context 'outside live editing' do
+
+    let(:live_editing) { nil }
+
+    it 'leaves the request to the next middleware' do
+      expect(section_finder).not_to receive(:find)
+      is_expected.to eq [200, env, 'app']
+    end
+
+  end
+
+  ['unknown', "header' %}{{ 6 | times: 7 }}{% section 'header"].each do |name|
+
+    context "with #{name.inspect}, the type of no section" do
+
+      let(:type) { name }
+
+      it 'answers 404 without parsing Liquid' do
+        expect(Locomotive::Steam::Liquid::Template).not_to receive(:parse)
+        is_expected.to eq [404, { 'content-type' => 'text/plain' }, ['Section not found']]
+      end
+
+    end
+
+  end
+
+  context 'with the slug of an existing section that reads as Liquid' do
+
+    let(:type)    { "header' %}{{ 6 | times: 7 }}{% section 'header" }
+    let(:section) { instance_double('Section', type: type, definition: {}, liquid_source: 'Here some {{ section.settings.name }}') }
+
+    before { allow(section_finder).to receive(:find).with(type).and_return(section) }
+
+    it 'renders that section, the slug only naming it' do
+      status, _, body = subject
+
+      expect(status).to eq 200
+      expect(body.first).to include('Here some ')
+      expect(body.first).not_to include('42')
+    end
+
+  end
+
+  context 'a section whose template has a Liquid syntax error' do
+
+    let(:section) { instance_double('Section', type: 'header', definition: {}, liquid_source: "Here some\n{% if %}") }
+
+    it 'raises a LiquidError naming the section template, as the section tag does' do
+      expect { subject }.to raise_error(Locomotive::Steam::LiquidError) do |error|
+        expect(error.template_name).to eq 'sections--header'
+        expect(error.line_number).to eq 2
+      end
+    end
+
+  end
+
+  context 'a request body without the content of the section' do
+
+    let(:body) { '{}' }
+
+    it 'renders the content the page holds for the section' do
+      is_expected.to eq [
+        200,
+        { "content-type" => "text/html" },
+        [%(<div id="locomotive-section-page-header" class="locomotive-section" data-locomotive-section-type="header"><span id="page-header-section"></span>Here some this should not be rendered in middleware</div>)]
+      ]
+    end
+
   end
 
   context "the content of the section is in the request body" do

@@ -8,11 +8,10 @@ describe Locomotive::Steam::Liquid::Tags::Section do
   let(:source)        { 'Locomotive {% section header %}' }
   let(:live_editing)  { true }
   let(:content)       { {} }
-  let(:alt_content)   { nil }
   let(:file_system)   { Locomotive::Steam::Liquid::FileSystem.new(section_finder: finder) }
   let(:page)          { liquid_instance_double('Page', sections_content: content)}
   let(:assigns)       { { 'page' => page } }
-  let(:context)       { ::Liquid::Context.new(assigns, {}, { services: services, live_editing: live_editing, _section_content: alt_content, file_system: file_system }, rethrow_errors: true) }
+  let(:context)       { ::Liquid::Context.new(assigns, {}, { services: services, live_editing: live_editing, file_system: file_system }, rethrow_errors: true) }
 
   describe 'parsing' do
 
@@ -222,28 +221,6 @@ describe Locomotive::Steam::Liquid::Tags::Section do
                 'Locomotive'\
               '</strong>'\
             '</div>' }
-        end
-
-        context 'with an id within the content (section rendered by the section middleware)' do
-          let(:source)      { '{% section header %}'}
-          let(:alt_content) {
-            {
-              id: 'dropzone-42',
-              settings: { brand: 'NoCoffee' },
-              blocks:   []
-            }.deep_stringify_keys
-          }
-
-          it { is_expected.to eq '<div id="locomotive-section-dropzone-42" '\
-            'class="locomotive-section my-awesome-header" '\
-            'data-locomotive-section-type="header">'\
-              '<span id="dropzone-42-section"></span>'\
-              'built by '\
-              '<strong data-locomotive-editor-setting="section-dropzone-42.brand">'\
-                'NoCoffee'\
-              '</strong>'\
-            '</div>' }
-
         end
 
       end

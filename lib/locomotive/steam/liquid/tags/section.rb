@@ -43,12 +43,7 @@ module Locomotive
             # fetch the section definition
             section = find_section(context)
 
-            # if the tag is called by the Section middleware, use the content
-            # from the request.
-            content = context.registers[:_section_content]
-
-            # if no content from the middleware, go get it from the page
-            content ||= find_section_content(context)
+            content = find_section_content(context)
 
             context.stack do
               set_section_dom_id(context)
@@ -61,12 +56,7 @@ module Locomotive
           private
 
           def set_section_dom_id(context)
-            # is the section being rendered from the section middleware?
-            if content = context.registers[:_section_content]
-              context['section_id'] = content['id'] || section_type
-            else       
-              context['section_id'] = "page-#{attributes[:id] || section_type}"
-            end
+            context['section_id'] = "page-#{attributes[:id] || section_type}"
           end
 
           def find_section(context)

@@ -6,11 +6,15 @@ module Locomotive::Steam
 
       include Concerns::Helpers
       include Concerns::LiquidContext
+      include Liquid::Tags::Concerns::Section
 
       def _call
-        if section_type = get_section_type
-          html = render(section_type)
-          render_response(html, 200)
+        return unless env['steam.live_editing'] && (section_type = get_section_type)
+
+        if (section = services.section_finder.find(section_type))
+          render_response(render(section, section_type), 200)
+        else
+          render_response('Section not found', 404, 'text/plain')
         end
       end
 
@@ -20,17 +24,26 @@ module Locomotive::Steam
         request.get_header('HTTP_LOCOMOTIVE_SECTION_TYPE')
       end
 
-      def render(section_type)
-        document = Liquid::Template.parse(liquid_source(section_type))
-        document.render(liquid_context)
+      # Parse the stored section template, never the header value.
+      def render(section, section_type)
+        context  = liquid_context
+        template = parse_template(section, section_type)
+
+        if (content = section_content)
+          context['section_id'] = content['id'] || section_type
+        else
+          context['section_id'] = "page-#{section_type}"
+          content = context['page']&.sections_content&.fetch(section_type, nil)
+        end
+
+        render_section(context, template, section, content)
       end
 
-      def liquid_source(section_type)
-        "{% section '#{section_type}' %}"
-      end
-
-      def liquid_registers
-        super.merge(_section_content: section_content)
+      # Preserve the section template name in syntax errors.
+      def parse_template(section, section_type)
+        Liquid::Template.parse(section.liquid_source)
+      rescue ::Liquid::SyntaxError => error
+        raise LiquidError.new(error, "sections--#{section_type}", section.liquid_source)
       end
 
       def section_content
