@@ -25,9 +25,7 @@ module Locomotive::Steam::Liquid::Tags::Concerns
     end
 
     def _render(context, template)
-      if context.registers[:live_editing]
-        editor_settings_lookup(template.root)
-      end
+      add_editor_settings(template) if context.registers[:live_editing]
 
       html = template.render(context)
 
@@ -50,6 +48,14 @@ module Locomotive::Steam::Liquid::Tags::Concerns
       tag_data  = %(data-locomotive-section-type="#{CGI.escapeHTML(section.type.to_s)}")
 
       %(<div #{tag_id} #{tag_class} #{tag_data}><span #{anchor_id}></span>#{html}</div>)
+    end
+
+    # PartialCache reuses the parsed template for each occurrence on a page.
+    def add_editor_settings(template)
+      return if template.instance_variable_defined?(:@steam_editor_settings_added)
+
+      editor_settings_lookup(template.root)
+      template.instance_variable_set(:@steam_editor_settings_added, true)
     end
 
     # in order to enable text and textarea synchronization with the editor:

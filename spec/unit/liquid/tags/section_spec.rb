@@ -223,6 +223,18 @@ describe Locomotive::Steam::Liquid::Tags::Section do
             '</div>' }
         end
 
+        context 'the same section twice on the page' do
+
+          let(:source) { '{% section header, id: "first" %}{% section header, id: "second" %}' }
+
+          it 'gives each one its editor setting attribute once' do
+            expect(subject.scan('data-locomotive-editor-setting').size).to eq 2
+            expect(subject).to include('<strong data-locomotive-editor-setting="section-page-first.brand">')
+            expect(subject).to include('<strong data-locomotive-editor-setting="section-page-second.brand">')
+          end
+
+        end
+
         context 'with a quoted id in the tag and a saved anchor holding a quote and markup' do
 
           let(:source) { %(Locomotive {% section header, id: 'my"header' %}) }
