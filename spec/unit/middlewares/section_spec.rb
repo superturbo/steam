@@ -101,6 +101,42 @@ describe Locomotive::Steam::Middlewares::Section do
 
   end
 
+  context 'with ids, a slug and a class holding quotes and markup' do
+
+    let(:type)    { %(it"s) }
+    let(:section) { instance_double('Section', type: type, definition: { 'class' => %(wide" x="1) }, liquid_source: 'Hi') }
+    let(:body)    { JSON.generate(section_content: { id: %(a" onclick="b), anchor: '<top>&' }) }
+
+    before { allow(section_finder).to receive(:find).with(type).and_return(section) }
+
+    it 'keeps each value inside its HTML attribute' do
+      is_expected.to eq [
+        200,
+        { 'content-type' => 'text/html' },
+        [%(<div id="locomotive-section-a&quot; onclick=&quot;b" class="locomotive-section wide&quot; x=&quot;1" data-locomotive-section-type="it&quot;s"><span id="&lt;top&gt;&amp;-section"></span>Hi</div>)]
+      ]
+    end
+
+  end
+
+  context 'a template that outputs the section and block attributes, with quoted ids' do
+
+    let(:section) do
+      instance_double('Section', type: 'header', definition: { 'blocks' => [{ 'type' => 'item', 'settings' => [] }] },
+        liquid_source: '<div {{ section.locomotive_attributes }}>{% for block in section.blocks %}<p {{ block.locomotive_attributes }}>x</p>{% endfor %}</div>')
+    end
+    let(:body) { JSON.generate(section_content: { id: %(a" onclick="b), blocks: [{ id: %(c"d), type: 'item' }] }) }
+
+    it 'keeps each id inside its attribute' do
+      is_expected.to eq [
+        200,
+        { 'content-type' => 'text/html' },
+        [%(<div data-locomotive-section-id="a&quot; onclick=&quot;b" data-locomotive-section-type="header"><p data-locomotive-block="section-a&quot; onclick=&quot;b-block-c&quot;d">x</p></div>)]
+      ]
+    end
+
+  end
+
   context 'a section whose template has a Liquid syntax error' do
 
     let(:section) { instance_double('Section', type: 'header', definition: {}, liquid_source: "Here some\n{% if %}") }

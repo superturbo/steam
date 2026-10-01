@@ -44,18 +44,15 @@ module Locomotive::Steam::Liquid::Tags::Concerns
       section     = context['section']
       css_class   = context['section_css_class']
 
-      # we need the section_css_class once
-      # context.scopes.last.delete('section_css_class')
-
-      anchor_id = %(id="#{section.anchor_id}")
-      tag_id    = %(id="locomotive-section-#{section.id}")
-      tag_class = %(class="#{['locomotive-section', section.css_class, css_class].compact.join(' ')}")
-      tag_data  = %(data-locomotive-section-type="#{section.type}")
+      anchor_id = %(id="#{CGI.escapeHTML(section.anchor_id)}")
+      tag_id    = %(id="#{CGI.escapeHTML("locomotive-section-#{section.id}")}")
+      tag_class = %(class="#{CGI.escapeHTML(['locomotive-section', section.css_class, css_class].compact.join(' '))}")
+      tag_data  = %(data-locomotive-section-type="#{CGI.escapeHTML(section.type.to_s)}")
 
       %(<div #{tag_id} #{tag_class} #{tag_data}><span #{anchor_id}></span>#{html}</div>)
     end
 
-    # in order to enable string/text synchronization with the editor:
+    # in order to enable text and textarea synchronization with the editor:
     # - find variables like {{ section.settings.<id> }} or {{ block.settings.<id> }}
     # - once found, get the closest tag
     # - add custom data attributes to it

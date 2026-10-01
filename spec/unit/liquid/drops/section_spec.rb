@@ -24,6 +24,17 @@ describe Locomotive::Steam::Liquid::Drops::Section do
 
   end
 
+  describe '#locomotive_attributes' do
+
+    let(:definition) { instance_double('SectionDefinition', definition: { 'settings' => [], 'blocks' => [] }, type: %(it"s)) }
+    let(:content)    { { 'id' => %(a" onclick="b) } }
+
+    it 'encodes the id and the type of the section' do
+      expect(drop.locomotive_attributes).to eq %(data-locomotive-section-id="a&quot; onclick=&quot;b" data-locomotive-section-type="it&quot;s")
+    end
+
+  end
+
   describe 'blocks_as_tree' do
 
     let(:block_definitions) { [{ 'type' => 'page' }] }

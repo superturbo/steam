@@ -43,7 +43,7 @@ module Locomotive
           end
 
           def locomotive_attributes
-            %(data-locomotive-section-id="#{id}" data-locomotive-section-type="#{type}").tap do
+            %(data-locomotive-section-id="#{CGI.escapeHTML(id.to_s)}" data-locomotive-section-type="#{CGI.escapeHTML(type.to_s)}").tap do
               # let Steam know that we won't need to wrap the section HTML
               # into an extra DIV layer.
               @context['is_section_locomotive_attributes_displayed'] = true

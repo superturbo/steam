@@ -45,7 +45,7 @@ module Locomotive
 
           def locomotive_attributes
             value = "section-#{@context['section'].id}-block-#{id}"
-            %(data-locomotive-block="#{value}")
+            %(data-locomotive-block="#{CGI.escapeHTML(value)}")
           end
 
         end

@@ -4,7 +4,7 @@ module Locomotive
       module Drops
 
         # Required to allow the sync between the Locomotive editor
-        # and the string/text inputs of a section and section block
+        # and the text and textarea inputs of a section and section block
         class SectionEditorSettingData < ::Liquid::Drop
 
           def initialize(section)
@@ -22,9 +22,9 @@ module Locomotive
               prefix += "-block.#{block.id}"
             end
 
-            # only string and text inputs can synced
+            # only text and textarea inputs can be synced
             if is_text?(meth.to_s, block)
-              %( data-locomotive-editor-setting="#{prefix}.#{meth}")
+              %( data-locomotive-editor-setting="#{CGI.escapeHTML("#{prefix}.#{meth}")}")
             else
               ''
             end

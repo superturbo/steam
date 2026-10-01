@@ -223,6 +223,31 @@ describe Locomotive::Steam::Liquid::Tags::Section do
             '</div>' }
         end
 
+        context 'with a quoted id in the tag and a saved anchor holding a quote and markup' do
+
+          let(:source) { %(Locomotive {% section header, id: 'my"header' %}) }
+          let(:content) {
+            {
+              'my"header': {
+                anchor:   %(top" onclick="<x>&),
+                settings: { brand: 'Locomotive' },
+                blocks:   []
+              }
+            }.deep_stringify_keys
+          }
+
+          it { is_expected.to eq 'Locomotive '\
+            '<div id="locomotive-section-page-my&quot;header" '\
+            'class="locomotive-section my-awesome-header" '\
+            'data-locomotive-section-type="header">'\
+              '<span id="top&quot; onclick=&quot;&lt;x&gt;&amp;-section"></span>'\
+              'built by '\
+              '<strong data-locomotive-editor-setting="section-page-my&quot;header.brand">'\
+                'Locomotive'\
+              '</strong>'\
+            '</div>' }
+        end
+
       end
     end
 
