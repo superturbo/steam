@@ -137,6 +137,38 @@ describe Locomotive::Steam::Middlewares::Section do
 
   end
 
+  context 'with a request body that is not valid JSON' do
+
+    let(:body) { '{"section_content": ' }
+
+    it 'raises a bad request' do
+      expect { subject }.to raise_error(Locomotive::Steam::InvalidJsonBody)
+    end
+
+  end
+
+  context 'with a JSON request body that is not an object' do
+
+    let(:body) { '[]' }
+
+    it 'renders the content the page holds for the section' do
+      _, _, body = subject
+      expect(body.first).to include('id="locomotive-section-page-header"')
+    end
+
+  end
+
+  context 'a request without a body' do
+
+    before { env.delete('rack.input') }
+
+    it "renders the section's default content" do
+      _, _, body = subject
+      expect(body.first).to include('id="locomotive-section-header"')
+    end
+
+  end
+
   context 'a section whose template has a Liquid syntax error' do
 
     let(:section) { instance_double('Section', type: 'header', definition: {}, liquid_source: "Here some\n{% if %}") }

@@ -1,6 +1,19 @@
+require 'rack/bad_request'
+
 module Locomotive::Steam
 
   class NoSiteException < ::Exception
+  end
+
+  # A client error: Rack::BadRequest lets the host answer it with a 400.
+  class InvalidJsonBody < ::StandardError
+
+    include ::Rack::BadRequest
+
+    def initialize(message = 'The request body is not valid JSON.')
+      super
+    end
+
   end
 
   class RedirectionException < ::Exception

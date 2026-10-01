@@ -61,11 +61,24 @@ module Locomotive::Steam::Middlewares
 
     def params
       @params ||= if request.content_type&.start_with?('application/json') && (request.post? || request.put?)
-        request.body.rewind
-        JSON.parse(request.body.read).with_indifferent_access
+        (json_body || {}).with_indifferent_access
       else
         request.params.with_indifferent_access
       end
+    end
+
+    # Empty bodies have no value. A JSON value other than an object goes under _json.
+    # Do not retain parser errors because their messages can include the body.
+    def json_body
+      return unless (body = request.body)
+
+      body.rewind
+      return if (data = body.read).empty?
+
+      data = JSON.parse(data)
+      data.is_a?(Hash) ? data : { '_json' => data }
+    rescue JSON::ParserError
+      raise Locomotive::Steam::InvalidJsonBody, cause: nil
     end
 
     def merge_with_params(values)

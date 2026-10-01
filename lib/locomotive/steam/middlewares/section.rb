@@ -47,15 +47,7 @@ module Locomotive::Steam
       end
 
       def section_content
-        # looks like request.body is not always in the right state,
-        # the following statement makes sure of it.
-        request.body.rewind
-
-        if (data = request.body.read).present?
-          JSON.parse(data)['section_content']
-        else
-          {}
-        end
+        (data = json_body) ? data['section_content'] : {}
       end
 
       def live_editing?
