@@ -81,6 +81,30 @@ describe Locomotive::Steam::Middlewares::Logging do
       middleware.call(env) rescue nil
     end
 
+    describe 'a bad request' do
+
+      include_context 'filtered logs'
+
+      let(:exception) { Rack::QueryParser::InvalidParameterError.new('invalid %-encoding (Jonas%zzJonaitis)') }
+
+      it 'names the error by its class, without the message that quotes the request' do
+        expect(Locomotive::Common::Logger).to receive(:error).with(
+          satisfy { |line| line.end_with?('error = Rack::QueryParser::InvalidParameterError') && !line.include?('Jonas') }
+        )
+        middleware.call(env) rescue nil
+      end
+
+      it 'writes the message too in test mode, as Wagon runs' do
+        allow(Locomotive::Steam.configuration).to receive(:mode).and_return(:test)
+
+        expect(Locomotive::Common::Logger).to receive(:error).with(
+          satisfy { |line| line.end_with?('error = Rack::QueryParser::InvalidParameterError: invalid %-encoding (Jonas%zzJonaitis)') }
+        )
+        middleware.call(env) rescue nil
+      end
+
+    end
+
     describe 'with no site resolved in the env' do
 
       let(:env) do
@@ -136,6 +160,100 @@ describe Locomotive::Steam::Middlewares::Logging do
       end
 
       expect(payload).to be_nil
+    end
+
+  end
+
+  describe 'the params line' do
+
+    include_context 'filtered logs'
+
+    let(:params) do
+      {
+        auth_action: 'sign_up', auth_content_type: 'accounts', auth_id_field: 'email', auth_password_field: 'slaptazodis',
+        auth_id: 'john@doe.net', auth_password: 'Secret1', auth_entry: { name: 'John', slaptazodis: 'Secret2', password_confirmation: 'Secret3' }
+      }
+    end
+
+    let(:env) do
+      env_for(url, method: 'POST', params: params, 'steam.site' => site, 'steam.locale' => :en).tap do |env|
+        env['steam.request'] = Rack::Request.new(env)
+      end
+    end
+
+    let(:lines) { [] }
+
+    before { allow(Locomotive::Common::Logger).to receive(:debug) { |line| lines << line } }
+
+    def params_line
+      lines.find { |line| line.include?('Params:') }
+    end
+
+    it 'filters the known secret names, the sign-in id and the password field the request names' do
+      middleware.call(env)
+
+      expect(params_line).to match(/"name"\s*=>\s*"John"/)
+      expect(params_line).not_to include('john@doe.net', 'Secret1', 'Secret2', 'Secret3')
+    end
+
+    it "filters the host's list too, as the Engine's request carries it" do
+      env['action_dispatch.parameter_filter'] = [:name]
+      middleware.call(env)
+
+      expect(params_line).to match(/"name"\s*=>\s*"\[FILTERED\]"/)
+    end
+
+    it 'reads no params below the debug level' do
+      logger = Locomotive::Common::Logger.instance.logger
+      level, logger.level = logger.level, ::Logger::INFO
+      expect(env['steam.request']).not_to receive(:params)
+
+      middleware.call(env)
+
+      expect(params_line).to be_nil
+    ensure
+      logger.level = level
+    end
+
+    context 'a malformed form body' do
+
+      let(:env) do
+        env_for(url, method: 'POST', input: 'entry[name]=Jonas%zzJonaitis', 'CONTENT_TYPE' => 'application/x-www-form-urlencoded',
+                     'steam.site' => site, 'steam.locale' => :en).tap do |env|
+          env['steam.request'] = Rack::Request.new(env)
+        end
+      end
+
+      it 'is left out of the log, and the request goes on' do
+        expect(middleware.call(env).first).to eq 200
+        expect(params_line).to be_nil
+        expect(lines.join).not_to include('Jonas')
+      end
+
+    end
+
+    context 'in test mode, as Wagon runs' do
+
+      before { allow(Locomotive::Steam.configuration).to receive(:mode).and_return(:test) }
+
+      it 'writes every value' do
+        middleware.call(env)
+
+        expect(params_line).to include('john@doe.net', 'Secret1', 'Secret2', 'Secret3')
+      end
+
+    end
+
+    context 'a malformed query string' do
+
+      before { env['QUERY_STRING'] = 'name=Jonas%zzJonaitis' }
+
+      it 'is left out of the log, and the request goes on' do
+        expect(middleware.call(env).first).to eq 200
+        expect(params_line).to be_nil
+        expect(lines.join).not_to include('Jonas')
+      end
+
     end
 
   end

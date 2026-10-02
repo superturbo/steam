@@ -82,22 +82,34 @@ module Locomotive
           uri = URI(url)
           Net::HTTP.get(uri)
         rescue Exception => e
-          logger.error "[SendEmail] Unable to read the '#{url}' url, error: #{e.message}"
+          filtered = LogFilter.url(url)
+          logger.error "[SendEmail] Unable to read the attachment #{filtered}: #{e.class} #{e.message.gsub(url, filtered)}"
           nil
         end
       end
 
       def log(options, simulation)
-        message = ["[#{simulation ? 'Test' : 'Live'}] Sent email via #{options[:via]} (#{options[:via_options].inspect}):"]
+        server = "via #{options[:via]} (#{options[:via_options]&.values_at(:address, :port)&.compact&.join(':')})"
+
+        if simulation
+          logger.info email_preview("[SendEmail] Email preview, not sent #{server}:", options)
+        else
+          logger.info "[SendEmail] Delivery requested #{server}"
+          logger.debug email_preview('[SendEmail] Email:', options) if logger.instance.logger&.debug?
+        end
+      end
+
+      def email_preview(heading, options)
+        message = [heading]
         message << "From:     #{options[:from]}"
         message << "To:       #{options[:to]}"
         message << "Subject:  #{options[:subject]}"
-        message << "Attachments:  #{options[:attachments]}"
+        message << "Attachments:  #{(options[:attachments] || {}).keys.join(', ')}"
         message << "-----------"
         message << (options[:body] || options[:html_body]).gsub("\n", "\n\t")
         message << "-----------"
 
-        logger.info message.join("\n") + "\n\n"
+        message.join("\n") + "\n\n"
       end
 
     end

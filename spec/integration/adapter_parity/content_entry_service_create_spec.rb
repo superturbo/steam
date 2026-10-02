@@ -246,12 +246,23 @@ describe 'Adapter parity' do
               refuses({ maker: 'topic-a' }, 'maker')
             end
 
-            it 'hands back and logs a refused link as no value' do
+            it 'hands back a refused link as no value, and logs only the refused field' do
               logged = []
               allow(Locomotive::Common::Logger).to receive(:error) { |message| logged << message }
 
               expect(create_with(maker: 'no-such-maker')['maker_id']).to be_nil
-              expect(logged.join).to match(/"maker_id"\s*=>\s*nil/)
+              expect(logged).to eq ['[specimens] Failed to persist entry: maker']
+            end
+
+            it 'logs a created entry by its type, and by its id when the id is native to the adapter' do
+              logged = []
+              allow(Locomotive::Common::Logger).to receive(:info) { |message| logged << message }
+
+              created = create_with(name: 'Jonas Jonaitis')
+
+              expect(logged.join).to include('[specimens] Entry persisted with success')
+              expect(logged.join).not_to include('Jonas', 'jonas-jonaitis')
+              expect(logged.join).to include(created['_id'].to_s) unless filesystem?
             end
 
             it 'refuses the name and the id of the same link in one write' do
@@ -362,8 +373,18 @@ describe 'Adapter parity' do
 
             service.create('specimens', writable.merge(_auth_reset_token: 'token-secret-1'))
 
-            expect(logged.join).to include '_auth_reset_token'
+            expect(logged.join).to include '[specimens] Failed to persist entry: _input'
             expect(logged.join).not_to include 'token-secret-1'
+          end
+
+          it 'keeps an entry labelled by its email address out of the error log' do
+            logged = []
+            allow(Locomotive::Common::Logger).to receive(:error) { |message| logged << message }
+
+            service.create('members', { email: 'jonas@example.lt', nickname: 'Jonas' })
+
+            expect(logged).to eq ['[members] Failed to persist entry: _input']
+            expect(service.all('members', email: 'jonas@example.lt', _visible: nil)).to be_empty
           end
 
           it 'keeps the refusal through another validation' do

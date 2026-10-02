@@ -68,7 +68,8 @@ module Locomotive::Steam
 
       def log_site(site)
         if site.nil?
-          msg = "Unable to find a site, url asked: #{request.url} ".colorize(color: :light_white, background: :red)
+          url = LogFilter.url(request.url, env['action_dispatch.parameter_filter'])
+          msg = "Unable to find a site, url asked: #{url} ".colorize(color: :light_white, background: :red)
         else
           msg = site.name.colorize(color: :light_white, background: :blue)
         end

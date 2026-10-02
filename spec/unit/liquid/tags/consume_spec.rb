@@ -123,4 +123,83 @@ describe Locomotive::Steam::Liquid::Tags::Consume do
 
   end
 
+  describe 'the log' do
+
+    include_context 'filtered logs'
+
+    let(:assigns) { { 'payload' => { 'access_code' => 'a321' } } }
+    let(:source)  { "{% consume blog from \"https://api.example.com/v1/posts?api_key=k123&page=2\", username: 'jdoe', password: 'p456', header_auth: 'Bearer h789', data: payload %}{% endconsume %}" }
+    let(:info)    { [] }
+    let(:debug)   { [] }
+
+    before do
+      allow(services.external_api).to receive(:consume).and_return({})
+      allow(Locomotive::Common::Logger).to receive(:info) { |message| info << message }
+      allow(Locomotive::Common::Logger).to receive(:debug) { |message| debug << message }
+    end
+
+    it 'writes the URL and attributes at info level, filtered by name only' do
+      subject
+
+      expect(info.join).to include('[consume] https://api.example.com/v1/posts?api_key=[FILTERED]&page=2')
+      expect(info.join).to match(/"?password"?:?\s*=?>?\s*"\[FILTERED\]"/)
+      expect(info.join).not_to include('k123', 'p456', 'h789')
+      expect(debug).to be_empty
+    end
+
+    it 'leaves a value whose name no rule covers, such as an API body field' do
+      subject
+
+      expect(info.join).to include('a321')
+    end
+
+    context 'with headers' do
+
+      let(:source) { "{% consume blog from \"https://api.example.com/v1/posts\", headers: hdrs %}{% endconsume %}" }
+
+      context 'as a hash' do
+
+        let(:assigns) { { 'hdrs' => { 'X-Api-Key' => 'APIKEY99', 'Accept' => 'application/json' } } }
+
+        it 'masks them whole' do
+          subject
+
+          expect(info.join).to match(/headers\s*(?::|=>)\s*"\[FILTERED\]"/)
+          expect(info.join).not_to include('APIKEY99', 'Accept')
+        end
+
+      end
+
+      context 'as text' do
+
+        let(:assigns) { { 'hdrs' => 'Authorization: Bearer abc' } }
+
+        it 'masks them whole' do
+          subject
+
+          expect(info.join).to match(/headers\s*(?::|=>)\s*"\[FILTERED\]"/)
+          expect(info.join).not_to include('Bearer abc')
+        end
+
+      end
+
+    end
+
+    context 'under the host list the request carries' do
+
+      let(:source)  { "{% consume blog from \"https://api.example.com/v1/posts?access_code=q654&page=2\", data: payload %}{% endconsume %}" }
+      let(:request) { Rack::Request.new(Rack::MockRequest.env_for('/', 'action_dispatch.parameter_filter' => [:access_code])) }
+      let(:context) { ::Liquid::Context.new(assigns, {}, { services: services, request: request }) }
+
+      it 'filters those names too, in the URL and the attributes' do
+        subject
+
+        expect(info.join).to include('?access_code=[FILTERED]&page=2')
+        expect(info.join).not_to include('q654', 'a321')
+      end
+
+    end
+
+  end
+
 end

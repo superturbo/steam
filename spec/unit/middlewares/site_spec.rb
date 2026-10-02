@@ -34,6 +34,46 @@ describe Locomotive::Steam::Middlewares::Site do
       it { is_expected.to eq [404, nil] }
     end
 
+    describe 'the log' do
+
+      include_context 'filtered logs'
+
+      let(:url) { 'http://models.example.com/account/reset?auth_reset_token=tok123&page=2' }
+
+      it 'names the URL asked, with its query filtered by name' do
+        logged = []
+        allow(Locomotive::Common::Logger).to receive(:info) { |message| logged << message }
+
+        subject
+
+        expect(logged.join).to include('http://models.example.com/account/reset?auth_reset_token=[FILTERED]&page=2')
+        expect(logged.join).not_to include('tok123')
+      end
+
+      it 'answers as usual for a query name it cannot read, writing no URL' do
+        logged = []
+        allow(Locomotive::Common::Logger).to receive(:info) { |message| logged << message }
+        env = env_for('http://models.example.com/reset?%FF=V1', 'steam.services' => services)
+        env['steam.request'] = Rack::Request.new(env)
+
+        expect(middleware.call(env).first).to eq 404
+        expect(logged.join).to include('url asked: an unparsable URL')
+        expect(logged.join).not_to include('V1')
+      end
+
+      it "filters the host's list too, as the Engine's request carries it" do
+        logged = []
+        allow(Locomotive::Common::Logger).to receive(:info) { |message| logged << message }
+        env = env_for(url, 'steam.services' => services, 'action_dispatch.parameter_filter' => [:page])
+        env['steam.request'] = Rack::Request.new(env)
+
+        middleware.call(env)
+
+        expect(logged.join).to include('reset?auth_reset_token=[FILTERED]&page=[FILTERED]')
+      end
+
+    end
+
     describe 'render_404 option off' do
 
       let(:render_404) { false }

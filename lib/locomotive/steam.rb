@@ -6,6 +6,7 @@ require_relative_all  'steam/decorators'
 require_relative      'steam/liquid_criteria'
 require_relative      'steam/liquid'
 require_relative      'steam/errors'
+require_relative      'steam/log_filter'
 
 require_relative      'steam/models'
 require_relative_all  'steam/entities'

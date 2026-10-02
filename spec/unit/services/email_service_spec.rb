@@ -218,4 +218,83 @@ describe Locomotive::Steam::EmailService do
     end
 
   end
+  describe 'the log' do
+
+    include_context 'filtered logs'
+
+    let(:logged)  { Hash.new { |hash, level| hash[level] = [] } }
+    let(:smtp)    { { address: 'smtp.example.com', port: 587, user_name: 'smtp-user', password: 'smtp-secret', domain: 'example.com' } }
+    let(:body)    { 'Reset it here: https://shop.example.lt/reset?auth_reset_token=abc123' }
+    let(:options) { { to: 'john@doe.net', from: 'me@locomotivecms.com', subject: 'Your reset link', body: body, smtp: smtp, attachments: { 'invoice.pdf' => 'PDFBYTES' }, html: false } }
+    let(:context) { ::Liquid::Context.new({}, {}, {}) }
+
+    before do
+      %i(debug info error).each do |level|
+        allow(service.logger).to receive(level) { |message| logged[level] << message }
+      end
+      allow(Pony).to receive(:mail)
+    end
+
+    it 'names only the delivery method and the server at info level' do
+      service.send_email(options, context)
+
+      expect(logged[:info]).to eq ['[SendEmail] Delivery requested via smtp (smtp.example.com:587)']
+    end
+
+    it 'writes the email itself at debug level, without the SMTP settings or the attachment bytes' do
+      service.send_email(options, context)
+
+      expect(logged[:debug].join).to include('john@doe.net', 'me@locomotivecms.com', 'Your reset link', 'Reset it here', 'invoice.pdf')
+      expect(logged[:debug].join).not_to include('smtp-user', 'smtp-secret', 'PDFBYTES')
+    end
+
+    it 'leaves the email out below the debug level' do
+      logger = Locomotive::Common::Logger.instance.logger
+      level, logger.level = logger.level, ::Logger::INFO
+
+      service.send_email(options, context)
+
+      expect(logged[:debug]).to be_empty
+    ensure
+      logger.level = level
+    end
+
+    context 'in simulation' do
+
+      let(:simulation) { true }
+
+      it 'previews the email at info level, without the SMTP settings or the attachment bytes' do
+        service.send_email(options, context)
+
+        expect(logged[:info].join).to include('[SendEmail] Email preview, not sent via smtp (smtp.example.com:587):', 'john@doe.net', 'Your reset link', 'Reset it here', 'invoice.pdf')
+        expect(logged[:info].join).not_to include('smtp-user', 'smtp-secret', 'PDFBYTES')
+      end
+
+    end
+
+    it 'filters the URL out of an error message that repeats it' do
+      url = 'https://files.example.com/private/bar.txt?token=abc'
+      options[:attachments] = { 'bar.txt' => url }
+      allow(Net::HTTP).to receive(:get).and_raise(URI::InvalidURIError, "bad URI(is not URI?): #{url.inspect}")
+
+      service.send_email(options, context)
+
+      error = logged[:error].find { |message| message.include?('Unable to read') }
+      expect(error).to include('URI::InvalidURIError', 'bad URI', 'token=[FILTERED]')
+      expect(error).not_to include('token=abc')
+    end
+
+    it 'names an attachment it cannot read by its URL, query filtered, and the error' do
+      options[:attachments] = { 'bar.txt' => 'https://files.example.com/private/bar.txt?token=abc&v=2' }
+      allow(Net::HTTP).to receive(:get).and_raise(SocketError, 'getaddrinfo: nodename nor servname provided')
+
+      service.send_email(options, context)
+
+      error = logged[:error].find { |message| message.include?('Unable to read') }
+      expect(error).to include('https://files.example.com/private/bar.txt?token=[FILTERED]&v=2', 'SocketError', 'getaddrinfo')
+      expect(error).not_to include('token=abc')
+    end
+
+  end
+
 end

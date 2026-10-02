@@ -59,7 +59,7 @@ module Locomotive
             _repository.create(entry)
           end
 
-          logEntryOperation(type_slug, decorated_entry)
+          log_entry_write(decorated_entry)
 
           _json_decorate(decorated_entry, as_json)
         end
@@ -76,7 +76,7 @@ module Locomotive
 
           _repository.update(entry) if validate(_repository, decorated_entry)
 
-          logEntryOperation(type_slug, decorated_entry)
+          log_entry_write(decorated_entry)
 
           _json_decorate(decorated_entry, as_json)
         end
@@ -97,7 +97,7 @@ module Locomotive
           # Keep the caller's decorator attached to the written entity.
           decorated_entry.__setobj__(candidate)
 
-          logEntryOperation(decorated_entry.content_type.slug, decorated_entry)
+          log_entry_write(decorated_entry)
 
           decorated_entry
         end
@@ -122,12 +122,32 @@ module Locomotive
 
       private
 
-      def logEntryOperation(type_slug, entry)
-        if (json = entry.as_json)['errors'].blank?
-          logger.info "[#{type_slug}] Entry persisted with success. #{json}"
+      # Filesystem IDs, labels and undeclared names can hold visitor text.
+      def log_entry_write(entry)
+        type   = "[#{entry.content_type.slug}]"
+        id     = " (#{entry._id})" if repository.adapter.native_id?(entry._id)
+        errors = entry.errors.to_hash
+
+        if errors.empty?
+          logger.info "#{type} Entry persisted with success#{id}"
         else
-          logger.error "[#{type_slug}] Failed to persist entry. #{json}"
+          logger.error "#{type} Failed to persist entry#{id}: #{logged_error_names(entry.content_type, errors)}"
         end
+
+        logger.debug "#{type} Entry attributes: #{debug_entry_details(entry)}" if logger.instance.logger&.debug?
+      end
+
+      def logged_error_names(content_type, errors)
+        declared = content_type.fields_by_name.keys.map(&:to_s) + public_input_names(content_type)
+
+        errors.keys.map { |name| declared.include?(name.to_s) ? name : REFUSED_INPUT_NAME }.uniq.join(', ')
+      end
+
+      # Filtered by name, with the error messages as written.
+      def debug_entry_details(entry)
+        attributes = entry.as_json
+
+        LogFilter.params(attributes.except('errors')).merge(attributes.slice('errors')).inspect
       end
 
       def with_repository(type_or_slug)

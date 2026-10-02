@@ -15,7 +15,7 @@ module Locomotive::Steam
 
         log "Started #{env['REQUEST_METHOD'].upcase} \"#{env['PATH_INFO']}\" at #{started_at}".light_white, 0
 
-        debug_log "Params: #{env.fetch('steam.request').params.inspect}"
+        log_params(env) if Locomotive::Common::Logger.instance.logger&.debug?
 
         response = begin
           app.call(env)
@@ -63,6 +63,17 @@ module Locomotive::Steam
 
       protected
 
+      # Parameters that cannot be parsed fail the request where they are read, not in this line.
+      def log_params(env)
+        params = env.fetch('steam.request').params
+        extra  = Array(env['action_dispatch.parameter_filter'])
+        extra += [params['auth_password_field']] if params['auth_password_field'].is_a?(String) && params['auth_password_field'].present?
+
+        debug_log "Params: #{LogFilter.params(params, extra).inspect}"
+      rescue Rack::BadRequest
+        nil
+      end
+
       # A grep-parseable "[render error] key = value / ..." line that locates
       # the failing request. Site name comes first (for humans), the handle
       # next; host is the value the site was looked up by, so it is present
@@ -74,7 +85,12 @@ module Locomotive::Steam
           "site = #{site&.name.inspect} / handle = #{site&.handle.inspect} / " \
           "host = #{env['steam.request']&.host} / method = #{env['REQUEST_METHOD']} / " \
           "path = #{env['PATH_INFO']} / took = #{errored_in_ms}ms / " \
-          "error = #{exception.class.name}: #{exception.message}"
+          "error = #{error_text(exception)}"
+      end
+
+      # A bad request's message can quote the client's input.
+      def error_text(exception)
+        exception.is_a?(Rack::BadRequest) && LogFilter.filtering_enabled? ? exception.class.name : "#{exception.class.name}: #{exception.message}"
       end
 
       # Elapsed time in milliseconds (0.1ms precision), measured with a

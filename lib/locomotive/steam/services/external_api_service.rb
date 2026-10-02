@@ -80,9 +80,17 @@ module Locomotive
         if response.code == 200
           HashConverter.to_underscore(parsed_response)
         else
-          Locomotive::Common::Logger.error "[WebService] consumed [#{method.to_s.upcase}] #{path}, #{options.inspect}, response = #{response.inspect}"
+          call = "[WebService] #{method.to_s.upcase} #{LogFilter.url("#{options[:base_uri]}#{path}")}"
+
+          Locomotive::Common::Logger.error "#{call} failed with status #{response.code}"
+          Locomotive::Common::Logger.debug "#{call} response: #{debug_response_body(response, parsed_response)}" if Locomotive::Common::Logger.instance.logger&.debug?
           nil
         end
+      end
+
+      def debug_response_body(response, parsed_response)
+        text = parsed_response.is_a?(Hash) ? LogFilter.params(parsed_response).inspect : response.body.to_s
+        text.truncate(1_000)
       end
 
       def verbose_perform_request_to(method, path, options)

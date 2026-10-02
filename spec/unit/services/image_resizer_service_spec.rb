@@ -25,6 +25,20 @@ describe Locomotive::Steam::ImageResizerService do
 
       before { allow(Locomotive::Steam.configuration).to receive(:image_resizer_remote_source_prefix).and_return('http://upload.wikimedia.org/wikipedia/') }
 
+      describe 'a source with no URL or path' do
+
+        let(:input) { { 'filename' => 'private-name.png' } }
+
+        it 'names the source it could not resize' do
+          logged = []
+          allow(Locomotive::Common::Logger).to receive(:error) { |message| logged << message }
+
+          expect(subject).to be_nil
+          expect(logged.join).to include('Unable to resize on the fly', 'private-name.png')
+        end
+
+      end
+
       it 'keeps the URL of a trusted remote image in the job' do
         job   = subject[%r{/steam/dynamic/([^/]+)/}, 1]
         steps = JSON.parse(Base64.urlsafe_decode64(job + '=' * (-job.size % 4)))

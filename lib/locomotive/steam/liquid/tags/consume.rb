@@ -62,7 +62,7 @@ module Locomotive
           def render_all_without_cache(context)
             context.stack do
               begin
-                Locomotive::Common::Logger.info "[consume] #{url.inspect} / #{attributes.inspect}"
+                Locomotive::Common::Logger.info "[consume] #{loggable_call(context)}"
 
                 context.scopes.last[variable_name] = service(context).consume(url, attributes)
               rescue Timeout::Error, Errno::ETIMEDOUT
@@ -75,6 +75,12 @@ module Locomotive
 
           def service(context)
             context.registers[:services].external_api
+          end
+
+          # Filtered by name: a value under a name no rule covers, or a token in the path, stays.
+          def loggable_call(context)
+            extra = Array(context.registers[:request]&.env&.fetch('action_dispatch.parameter_filter', nil))
+            "#{Locomotive::Steam::LogFilter.url(url, extra)} / #{Locomotive::Steam::LogFilter.params(attributes, extra).inspect}"
           end
 
           def cache_service(context)

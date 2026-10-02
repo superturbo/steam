@@ -8,19 +8,23 @@ describe Locomotive::Steam::ContentEntryService do
   let(:entry_repository)  { instance_double('Repository', site: site, locale: locale, content_type_repository: type_repository) }
   let(:service)           { described_class.new(type_repository, entry_repository, locale) }
 
-  before { allow(entry_repository).to receive(:with).and_return(entry_repository) }
+  before do
+    allow(entry_repository).to receive(:with).and_return(entry_repository)
+    allow(entry_repository).to receive(:adapter).and_return(instance_double('Adapter', native_id?: false))
+  end
 
   describe '#update_decorated_entry' do
 
     let(:title_field)  { instance_double('Field', name: :title, type: :string, is_relationship?: false, write_only?: false) }
+    let(:email_field)  { instance_double('Field', name: :email, type: :email, is_relationship?: false, write_only?: false) }
     let(:fields)       { instance_double('Fields', json: [], selects: [], associations: []) }
     let(:content_type) do
       instance_double('ContentType', invalid_entry_names: [], slug: 'articles', fields: fields, label_field_name: :title,
-                                     fields_by_name: { title: title_field }.with_indifferent_access,
-                                     persisted_field_names: [:title])
+                                     fields_by_name: { title: title_field, email: email_field }.with_indifferent_access,
+                                     persisted_field_names: [:title, :email])
     end
     let(:entry) do
-      Locomotive::Steam::ContentEntry.new(title: 'Old').tap do |_entry|
+      Locomotive::Steam::ContentEntry.new(title: 'Old', email: 'jonas@example.lt').tap do |_entry|
         _entry.content_type         = content_type
         _entry.localized_attributes = {}
       end
@@ -42,6 +46,62 @@ describe Locomotive::Steam::ContentEntryService do
       expect(result).to be(decorated)
       expect(result.__getobj__).to be(written)
       expect(result.__getobj__).not_to be(entry)
+    end
+
+    describe 'the log' do
+
+      include_context 'filtered logs'
+
+      let(:logged) { Hash.new { |hash, level| hash[level] = [] } }
+
+      before do
+        %i(debug info error).each do |level|
+          allow(Locomotive::Common::Logger).to receive(level) { |message| logged[level] << message }
+        end
+      end
+
+      it 'names a write by its type at info level, and adds its attributes, filtered by name, at debug level' do
+        allow(entry_repository).to receive(:update)
+
+        service.update_decorated_entry(decorated, 'title' => 'New title')
+
+        expect(logged[:info]).to eq ['[articles] Entry persisted with success']
+        expect(logged[:debug].join).to start_with('[articles] Entry attributes: ')
+        expect(logged[:debug].join).to match(/"title"\s*=>\s*"New title"/).and match(/"email"\s*=>\s*"\[FILTERED\]"/)
+        expect(logged[:debug].join).not_to include('jonas@example.lt')
+      end
+
+      it 'leaves the attributes out below the debug level' do
+        allow(entry_repository).to receive(:update)
+        logger = Locomotive::Common::Logger.instance.logger
+        level, logger.level = logger.level, ::Logger::INFO
+
+        service.update_decorated_entry(decorated, 'title' => 'New title')
+
+        expect(logged[:debug]).to be_empty
+      ensure
+        logger.level = level
+      end
+
+      it 'names a failed write by its type and failed fields at error level' do
+        allow(entry_repository).to receive(:update) { |entity| entity.errors.add(:email, :invalid) }
+
+        service.update_decorated_entry(decorated, 'title' => 'New title')
+
+        expect(logged[:error]).to eq ['[articles] Failed to persist entry: email']
+      end
+
+      it 'adds the attributes of a failed write, filtered by name, and its error messages at debug level' do
+        allow(entry_repository).to receive(:update) { |entity| entity.errors.add(:email, :invalid) }
+
+        service.update_decorated_entry(decorated, 'title' => 'New title')
+
+        expect(logged[:debug].join).to start_with('[articles] Entry attributes: ')
+        expect(logged[:debug].join).to match(/"title"\s*=>\s*"New title"/).and match(/"email"\s*=>\s*"\[FILTERED\]"/)
+        expect(logged[:debug].join).to match(/"errors"\s*=>\s*\{"email"\s*=>\s*\["is invalid"\]\}/)
+        expect(logged[:debug].join).not_to include('jonas@example.lt')
+      end
+
     end
 
   end
@@ -68,7 +128,7 @@ describe Locomotive::Steam::ContentEntryService do
           allow(entry).to receive(:base_url).and_return('/assets')
         end
       end
-      allow(service).to receive(:validate) { |_, entry| entry.errors.add(:email, :blank); false }
+      allow(service).to receive(:validate) { |_, entry| entry.errors.add(:secret, :invalid); false }
     end
 
     it 'logs a failed write without the password' do
@@ -77,8 +137,27 @@ describe Locomotive::Steam::ContentEntryService do
 
       service.create('accounts', { secret: 'plain-secret-1' })
 
-      expect(logged.join).to include('Failed to persist entry')
+      expect(logged.join).to include('[accounts] Failed to persist entry: secret')
       expect(logged.join).not_to include('plain-secret-1')
+    end
+
+    it 'names the type by its slug when given the type itself' do
+      logged = []
+      allow(Locomotive::Common::Logger).to receive(:error) { |message| logged << message }
+
+      service.create(content_type, { secret: 'plain-secret-1' })
+
+      expect(logged.join).to start_with('[accounts] Failed to persist entry')
+    end
+
+    it 'logs a key the visitor named but no field declares as _input' do
+      logged = []
+      allow(Locomotive::Common::Logger).to receive(:error) { |message| logged << message }
+
+      service.create('accounts', { secret: 'plain-secret-1', tokenABC123: '1' })
+
+      expect(logged.join).to include('[accounts] Failed to persist entry: ', '_input')
+      expect(logged.join).not_to include('tokenABC123')
     end
 
   end
