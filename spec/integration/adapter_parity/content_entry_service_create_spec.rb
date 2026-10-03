@@ -251,7 +251,7 @@ describe 'Adapter parity' do
               allow(Locomotive::Common::Logger).to receive(:error) { |message| logged << message }
 
               expect(create_with(maker: 'no-such-maker')['maker_id']).to be_nil
-              expect(logged).to eq ['[specimens] Failed to persist entry: maker']
+              expect(logged).to eq ['[specimens] Failed to persist entry: maker=invalid']
             end
 
             it 'logs a created entry by its type, and by its id when the id is native to the adapter' do
@@ -373,7 +373,7 @@ describe 'Adapter parity' do
 
             service.create('specimens', writable.merge(_auth_reset_token: 'token-secret-1'))
 
-            expect(logged.join).to include '[specimens] Failed to persist entry: _input'
+            expect(logged.join).to include '[specimens] Failed to persist entry: _input=invalid'
             expect(logged.join).not_to include 'token-secret-1'
           end
 
@@ -383,7 +383,7 @@ describe 'Adapter parity' do
 
             service.create('members', { email: 'jonas@example.lt', nickname: 'Jonas' })
 
-            expect(logged).to eq ['[members] Failed to persist entry: _input']
+            expect(logged).to eq ['[members] Failed to persist entry: _input=invalid']
             expect(service.all('members', email: 'jonas@example.lt', _visible: nil)).to be_empty
           end
 

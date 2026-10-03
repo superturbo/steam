@@ -83,12 +83,24 @@ describe Locomotive::Steam::ContentEntryService do
         logger.level = level
       end
 
-      it 'names a failed write by its type and failed fields at error level' do
+      it 'names a failed write by its type and the codes of its failed fields at error level' do
         allow(entry_repository).to receive(:update) { |entity| entity.errors.add(:email, :invalid) }
 
         service.update_decorated_entry(decorated, 'title' => 'New title')
 
-        expect(logged[:error]).to eq ['[articles] Failed to persist entry: email']
+        expect(logged[:error]).to eq ['[articles] Failed to persist entry: email=invalid']
+      end
+
+      it 'logs each code of a failed field, and never an error text' do
+        allow(entry_repository).to receive(:update) do |entity|
+          entity.errors.add(:email, :blank)
+          entity.errors.add(:email, :taken)
+          entity.errors.add(:title, 'quotes New title')
+        end
+
+        service.update_decorated_entry(decorated, 'title' => 'New title')
+
+        expect(logged[:error]).to eq ['[articles] Failed to persist entry: email=blank, email=taken, title=invalid']
       end
 
       it 'adds the attributes of a failed write, filtered by name, and its error messages at debug level' do
@@ -137,7 +149,7 @@ describe Locomotive::Steam::ContentEntryService do
 
       service.create('accounts', { secret: 'plain-secret-1' })
 
-      expect(logged.join).to include('[accounts] Failed to persist entry: secret')
+      expect(logged.join).to include('[accounts] Failed to persist entry: secret=invalid')
       expect(logged.join).not_to include('plain-secret-1')
     end
 
@@ -156,7 +168,7 @@ describe Locomotive::Steam::ContentEntryService do
 
       service.create('accounts', { secret: 'plain-secret-1', tokenABC123: '1' })
 
-      expect(logged.join).to include('[accounts] Failed to persist entry: ', '_input')
+      expect(logged.join).to include('[accounts] Failed to persist entry: ', '_input=invalid')
       expect(logged.join).not_to include('tokenABC123')
     end
 

@@ -124,23 +124,25 @@ module Locomotive
 
       # Filesystem IDs, labels and undeclared names can hold visitor text.
       def log_entry_write(entry)
-        type   = "[#{entry.content_type.slug}]"
-        id     = " (#{entry._id})" if repository.adapter.native_id?(entry._id)
-        errors = entry.errors.to_hash
+        type = "[#{entry.content_type.slug}]"
+        id   = " (#{entry._id})" if repository.adapter.native_id?(entry._id)
 
-        if errors.empty?
+        if entry.errors.empty?
           logger.info "#{type} Entry persisted with success#{id}"
         else
-          logger.error "#{type} Failed to persist entry#{id}: #{logged_error_names(entry.content_type, errors)}"
+          logger.error "#{type} Failed to persist entry#{id}: #{logged_error_codes(entry.content_type, entry.errors.codes)}"
         end
 
         logger.debug "#{type} Entry attributes: #{debug_entry_details(entry)}" if logger.instance.logger&.debug?
       end
 
-      def logged_error_names(content_type, errors)
+      def logged_error_codes(content_type, codes)
         declared = content_type.fields_by_name.keys.map(&:to_s) + public_input_names(content_type)
 
-        errors.keys.map { |name| declared.include?(name.to_s) ? name : REFUSED_INPUT_NAME }.uniq.join(', ')
+        codes.flat_map do |name, list|
+          logged_name = declared.include?(name.to_s) ? name : REFUSED_INPUT_NAME
+          list.map { |code| "#{logged_name}=#{code}" }
+        end.uniq.join(', ')
       end
 
       # Filtered by name, with the error messages as written.

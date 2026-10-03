@@ -21,17 +21,27 @@ module Locomotive
             extend Forwardable
 
             attr_accessor :messages
+            attr_reader :codes
 
-            def_delegators :@messages, :[], :clear, :empty?, :each, :size, :to_hash
+            def_delegators :@messages, :[], :empty?, :each, :size, :to_hash
 
             alias_method :blank?, :empty?
 
             def initialize
               @messages = HashWithIndifferentAccess.new({})
+              @codes    = HashWithIndifferentAccess.new({})
             end
 
             def add(attribute, message, options = {})
-              (@messages[attribute] ||= []) << generate_message(message, options)
+              text = generate_message(message, options)
+
+              (@codes[attribute]    ||= []) << (message.is_a?(Symbol) ? message : :invalid)
+              (@messages[attribute] ||= []) << text
+            end
+
+            def clear
+              @codes.clear
+              @messages.clear
             end
 
             def generate_message(message, options = {})
