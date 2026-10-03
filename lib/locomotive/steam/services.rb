@@ -119,7 +119,7 @@ module Locomotive
         end
 
         register :external_api do
-          Steam::ExternalAPIService.new
+          Steam::ExternalAPIService.new(request&.env&.fetch('action_dispatch.parameter_filter', nil))
         end
 
         register :csrf_protection do

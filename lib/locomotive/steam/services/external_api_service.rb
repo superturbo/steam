@@ -12,6 +12,10 @@ module Locomotive
       open_timeout 3
       read_timeout 3
 
+      def initialize(log_rules = [])
+        @log_rules = Array(log_rules)
+      end
+
       # Available option keys:
       # - method
       # - data
@@ -74,22 +78,27 @@ module Locomotive
       end
 
       def perform_request_to(method, path, options)
-        response        = self.class.send(method.to_sym, path, options)
-        parsed_response = response.parsed_response
+        response = self.class.send(method.to_sym, path, options)
 
         if response.code == 200
-          HashConverter.to_underscore(parsed_response)
+          HashConverter.to_underscore(response.parsed_response)
         else
-          call = "[WebService] #{method.to_s.upcase} #{LogFilter.url("#{options[:base_uri]}#{path}")}"
+          call = "[WebService] #{method.to_s.upcase} #{LogFilter.url("#{options[:base_uri]}#{path}", @log_rules)}"
 
           Locomotive::Common::Logger.error "#{call} failed with status #{response.code}"
-          Locomotive::Common::Logger.debug "#{call} response: #{debug_response_body(response, parsed_response)}" if Locomotive::Common::Logger.instance.logger&.debug?
+          Locomotive::Common::Logger.debug "#{call} response: #{debug_response_body(response)}" if Locomotive::Common::Logger.instance.logger&.debug?
           nil
         end
       end
 
-      def debug_response_body(response, parsed_response)
-        text = parsed_response.is_a?(Hash) ? LogFilter.params(parsed_response).inspect : response.body.to_s
+      def debug_response_body(response)
+        parsed_response = begin
+          response.parsed_response
+        rescue StandardError
+          nil
+        end
+
+        text = parsed_response.is_a?(Hash) ? LogFilter.params(parsed_response, @log_rules).inspect : response.body.to_s
         text.truncate(1_000)
       end
 

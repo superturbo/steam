@@ -121,6 +121,27 @@ describe Locomotive::Steam::Liquid::Tags::Consume do
       expect(subject).to eq 'first response'
     end
 
+    describe 'the error line' do
+
+      include_context 'filtered logs'
+
+      let(:url)    { 'http://blog.locomotiveapp.org/api/read?api_key=k123' }
+      let(:source) { %{{% consume blog from "#{url}", password: 'p456' %}{{ blog.title }}{% endconsume %}} }
+      let(:errors) { [] }
+
+      before do
+        allow(Locomotive::Common::Logger).to receive(:error) { |message| errors << message }
+        allow(services.external_api).to receive(:consume).and_raise(Net::ReadTimeout, 'timed out reading p456')
+      end
+
+      it 'names the call and the timeout, nothing more' do
+        subject
+
+        expect(errors).to eq ['[consume] GET http://blog.locomotiveapp.org/api/read?api_key=[FILTERED] timed out (Net::ReadTimeout)']
+      end
+
+    end
+
   end
 
   describe 'the log' do

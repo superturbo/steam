@@ -65,7 +65,10 @@ module Locomotive
                 Locomotive::Common::Logger.info "[consume] #{loggable_call(context)}"
 
                 context.scopes.last[variable_name] = service(context).consume(url, attributes)
-              rescue Timeout::Error, Errno::ETIMEDOUT
+              rescue Timeout::Error, Errno::ETIMEDOUT => error
+                Locomotive::Common::Logger.error "[consume] #{(attributes[:method] || 'GET').to_s.upcase} " \
+                  "#{Locomotive::Steam::LogFilter.url(url, host_log_rules(context))} timed out (#{error.class})"
+
                 context.scopes.last[variable_name] = last_response(context)
               end
 
@@ -79,8 +82,12 @@ module Locomotive
 
           # Filtered by name: a value under a name no rule covers, or a token in the path, stays.
           def loggable_call(context)
-            extra = Array(context.registers[:request]&.env&.fetch('action_dispatch.parameter_filter', nil))
-            "#{Locomotive::Steam::LogFilter.url(url, extra)} / #{Locomotive::Steam::LogFilter.params(attributes, extra).inspect}"
+            rules = host_log_rules(context)
+            "#{Locomotive::Steam::LogFilter.url(url, rules)} / #{Locomotive::Steam::LogFilter.params(attributes, rules).inspect}"
+          end
+
+          def host_log_rules(context)
+            Array(context.registers[:request]&.env&.fetch('action_dispatch.parameter_filter', nil))
           end
 
           def cache_service(context)
