@@ -104,16 +104,16 @@ module Locomotive
 
       # Log file
       #
-      # default: nil (ENV['LOCOMOTIVE_STEAM_LOG'] || STDOUT)
+      # default: nil (STDOUT)
       #
       attr_accessor :log_file
 
       # Log level
       #
-      # default: ::Logger::DEBUG
+      # default: ::Logger::INFO
       #
       attr_accessor :log_level
-      def log_level; @log_level || ::Logger::DEBUG; end
+      def log_level; @log_level || ::Logger::INFO; end
 
       # Lambda called once a Services instance has been built.
       # It is used when we want to change one of the services

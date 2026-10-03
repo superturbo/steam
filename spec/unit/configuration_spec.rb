@@ -9,6 +9,7 @@ describe Locomotive::Steam::Configuration do
     it { expect(subject.mode).to eq(:production) }
     it { expect(subject.serve_assets).to eq(true) }
     it { expect(subject.asset_path).to eq(nil) }
+    it { expect(subject.log_level).to eq(::Logger::INFO) }
 
   end
 
@@ -27,12 +28,56 @@ describe Locomotive::Steam::Configuration do
 
     before { subject.mode = :test }
     it { expect(subject.mode).to eq(:test) }
+    it { expect(subject.log_level).to eq(::Logger::INFO) }
+
+    context 'a log level set by the host' do
+
+      before { subject.log_level = ::Logger::DEBUG }
+      it { expect(subject.log_level).to eq(::Logger::DEBUG) }
+
+    end
 
     context 'the initial value was true' do
 
       before { subject.serve_assets = false }
       it { expect(subject.serve_assets).to eq(false) }
 
+    end
+
+  end
+
+  describe 'the logger Locomotive::Steam.configure builds' do
+
+    after do
+      Locomotive::Steam.configuration.log_level = nil
+      Locomotive::Steam.configuration.log_file  = nil
+      reset_logger
+    end
+
+    it 'logs at the info level unless the host sets one' do
+      Locomotive::Steam.configure { |config| config.log_level = nil }
+
+      expect(Locomotive::Common::Logger.instance.logger.level).to eq(::Logger::INFO)
+    end
+
+    it 'logs at the level the host sets' do
+      Locomotive::Steam.configure { |config| config.log_level = ::Logger::DEBUG }
+
+      expect(Locomotive::Common::Logger.instance.logger.level).to eq(::Logger::DEBUG)
+    end
+
+    it 'refuses a blank or unknown log level' do
+      ['', '   ', 'verbose'].each do |level|
+        expect { Locomotive::Steam.configure { |config| config.log_level = level } }
+          .to raise_error(ArgumentError, /invalid log level/)
+      end
+    end
+
+    it 'writes to the standard output without a log file' do
+      expect {
+        Locomotive::Steam.configure { |config| config.log_file = nil }
+        Locomotive::Common::Logger.info 'a line for the standard output'
+      }.to output(/a line for the standard output/).to_stdout
     end
 
   end

@@ -75,6 +75,7 @@ Locomotive::Steam.configure do |config|
   config.asset_path     = options[:asset_path]
   config.asset_host     = options[:asset_host]
   config.log_file       = options[:log_file]
+  config.log_level      = ::Logger::DEBUG
 end
 
 app = Locomotive::Steam.to_app
