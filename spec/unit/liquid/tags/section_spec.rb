@@ -84,6 +84,41 @@ describe Locomotive::Steam::Liquid::Tags::Section do
 
       end
 
+      {
+        '{{ section.settings.brand | upcase }}'           => 'NOCOFFEE',
+        '{{section.settings.brand|upcase}}'               => 'NOCOFFEE',
+        "{{ section.settings.brand | default: 'Brand' }}" => 'NoCoffee',
+        '{{ section.settings.brand | strip }}'            => 'NoCoffee'
+      }.each do |markup, value|
+        context "filtering the setting with #{markup}" do
+
+          let(:liquid_source) { "built by <a>\n\t<strong>#{markup}</strong></a>" }
+
+          it { is_expected.to eq 'Locomotive'\
+            ' <div id="locomotive-section-page-header"'\
+            ' class="locomotive-section my-awesome-header"'\
+            ' data-locomotive-section-type="header">'\
+              '<span id="page-header-section"></span>'\
+              'built by <a>' + %(\n\t) + %(<strong data-locomotive-editor-setting-render="section-page-header.brand">#{value}</strong></a>)\
+            '</div>' }
+
+        end
+      end
+
+      context 'filtering a non text type input' do
+
+        let(:liquid_source) { "built by <strong>{{ section.settings.image | default: 'none' }}</strong>" }
+
+        it { is_expected.to eq 'Locomotive'\
+          ' <div id="locomotive-section-page-header"'\
+          ' class="locomotive-section my-awesome-header"'\
+          ' data-locomotive-section-type="header">'\
+            '<span id="page-header-section"></span>'\
+            'built by <strong>foo.png</strong>'\
+          '</div>' }
+
+      end
+
       context 'with a non string type input' do
 
         let(:liquid_source) { 'built by <strong>{{ section.settings.image }}</strong>' }
@@ -155,6 +190,20 @@ describe Locomotive::Steam::Liquid::Tags::Section do
           '<span id="page-header-section"></span>'\
           '<a href="/" data-locomotive-editor-setting="section-page-header-block.42.title">Home</a>'\
         '</div>' }
+
+      context 'filtering the setting' do
+
+        let(:liquid_source) { '{% for foo in section.blocks %}<a href="/">{{ foo.settings.title | upcase }}</a>{% endfor %}' }
+
+        it { is_expected.to eq 'Locomotive'\
+          ' <div id="locomotive-section-page-header"'\
+          ' class="locomotive-section my-awesome-header"'\
+          ' data-locomotive-section-type="header">'\
+            '<span id="page-header-section"></span>'\
+            '<a href="/" data-locomotive-editor-setting-render="section-page-header-block.42.title">HOME</a>'\
+          '</div>' }
+
+      end
 
       context 'with a non text type input' do
 

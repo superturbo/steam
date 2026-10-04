@@ -7,8 +7,9 @@ module Locomotive
         # and the text and textarea inputs of a section and section block
         class SectionEditorSettingData < ::Liquid::Drop
 
-          def initialize(section)
-            @section = section
+          def initialize(section, attribute: 'data-locomotive-editor-setting')
+            @section   = section
+            @attribute = attribute
           end
 
           def liquid_method_missing(meth)
@@ -22,9 +23,9 @@ module Locomotive
               prefix += "-block.#{block.id}"
             end
 
-            # only text and textarea inputs can be synced
+            # only text and textarea settings get editor attributes
             if is_text?(meth.to_s, block)
-              %( data-locomotive-editor-setting="#{CGI.escapeHTML("#{prefix}.#{meth}")}")
+              %( #{@attribute}="#{CGI.escapeHTML("#{prefix}.#{meth}")}")
             else
               ''
             end

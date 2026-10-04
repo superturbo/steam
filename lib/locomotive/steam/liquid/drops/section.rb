@@ -77,6 +77,10 @@ module Locomotive
             SectionEditorSettingData.new(@section)
           end
 
+          def editor_setting_render_data
+            SectionEditorSettingData.new(@section, attribute: 'data-locomotive-editor-setting-render')
+          end
+
           private
 
           def build_blocks(blocks)

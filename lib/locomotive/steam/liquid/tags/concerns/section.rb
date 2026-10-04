@@ -108,8 +108,9 @@ module Locomotive::Steam::Liquid::Tags::Concerns
             previous_node.gsub!(/>(\s*)\z/, '\1')
 
             # here we go, add a liquid variable!
+            data = node.filters.empty? ? 'editor_setting_data' : 'editor_setting_render_data'
             new_nodelist.push(::Liquid::Variable.new(
-              "section.editor_setting_data.#{matches[:id]}",
+              "section.#{data}.#{matches[:id]}",
               node.parse_context)
             )
 
