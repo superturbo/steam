@@ -19,21 +19,24 @@ module Locomotive
           end
 
           def render(context)
-            ga_snippet(context.evaluate(account_id))
+            id = context.evaluate(account_id)
+            return '' if id.blank?
+
+            ga_snippet(id.to_s)
           end
 
           private
 
           def ga_snippet(account_id)
             %{
-              <!-- Global Site Tag (gtag.js) - Google Analytics -->
-              <script async src="https://www.googletagmanager.com/gtag/js?id=#{account_id}"></script>
+              <!-- Google tag (gtag.js) -->
+              <script async src="https://www.googletagmanager.com/gtag/js?id=#{ERB::Util.url_encode(account_id)}"></script>
               <script>
                 window.dataLayer = window.dataLayer || [];
                 function gtag(){dataLayer.push(arguments);}
                 gtag('js', new Date());
 
-                gtag('config', '#{account_id}');
+                gtag('config', #{ERB::Util.json_escape(account_id.to_json)});
               </script>
             }
           end
