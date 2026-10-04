@@ -53,7 +53,7 @@ module Locomotive
         _options[:basic_auth] = { username: username, password: password } if username
 
         # headers
-        _options[:headers] = options[:headers] || {}
+        _options[:headers] = (options[:headers] || {}).dup
         _options[:headers]['Authorization'] = options[:header_auth] if options[:header_auth]
         _options[:headers]['User-Agent'] = 'LocomotiveCMS' if options[:with_user_agent]
         _options.delete(:headers) if _options[:headers].blank?

@@ -47,33 +47,34 @@ module Locomotive
               Locomotive::Common::Logger.error "A consume tag can't call an empty URL."
               ''
             else
-              render_all_and_cache_it(context) { |_context| super(_context) }
+              context.stack do
+                context.scopes.last[variable_name] = response(context)
+                super(context)
+              end
             end
           end
 
           protected
 
-          def render_all_and_cache_it(context, &block)
-            cache_service(context).fetch(page_fragment_cache_key, cache_options) do
-              self.render_all_without_cache(context, &block)
-            end
+          def response(context)
+            site_id = context.registers[:site]&._id
+            return call_service(context) unless expires_in.to_i > 0 && site_id
+
+            cache_service(context).fetch(cache_key(site_id), expires_in: expires_in, skip_nil: true) { call_service(context) }
           end
 
-          def render_all_without_cache(context)
-            context.stack do
-              begin
-                Locomotive::Common::Logger.info "[consume] #{loggable_call(context)}"
+          def call_service(context)
+            Locomotive::Common::Logger.info "[consume] #{loggable_call(context)}"
 
-                context.scopes.last[variable_name] = service(context).consume(url, attributes)
-              rescue Timeout::Error, Errno::ETIMEDOUT => error
-                Locomotive::Common::Logger.error "[consume] #{(attributes[:method] || 'GET').to_s.upcase} " \
-                  "#{Locomotive::Steam::LogFilter.url(url, host_log_rules(context))} timed out (#{error.class})"
+            service(context).consume(url, attributes)
+          rescue Timeout::Error, Errno::ETIMEDOUT => error
+            Locomotive::Common::Logger.error "[consume] #{(attributes[:method] || 'GET').to_s.upcase} " \
+              "#{Locomotive::Steam::LogFilter.url(url, host_log_rules(context))} timed out (#{error.class})"
+            nil
+          end
 
-                context.scopes.last[variable_name] = last_response(context)
-              end
-
-              yield(context)
-            end
+          def cache_key(site_id)
+            "steam/consume/#{site_id}/#{Digest::SHA256.hexdigest([url, attributes, expires_in].to_json)}"
           end
 
           def service(context)
@@ -92,18 +93,6 @@ module Locomotive
 
           def cache_service(context)
             context.registers[:services].cache
-          end
-
-          def cache_options
-            expires_in.blank? || expires_in == 0 ? { force: true } : { expires_in: expires_in }
-          end
-
-          def last_response(context)
-            cache_service(context).read(page_fragment_cache_key)
-          end
-
-          def page_fragment_cache_key
-            "Steam-consume-#{Digest::SHA1.hexdigest(variable_name + url)}"
           end
 
         end

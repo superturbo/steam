@@ -80,26 +80,117 @@ describe Locomotive::Steam::Liquid::Tags::Consume do
 
   end
 
-  describe 'with an expires_in option' do
+  describe 'caching the service response' do
 
-    let(:assigns)     { { 'secret_password' => 'bar' } }
-    let(:source)      { "{% consume blog from \"http://blog.locomotiveapp.org/api/read\", username: 'foo', password: secret_password, expires_in: #{expires_in} %}{{ blog.title }}{% endconsume %}" }
-    let(:expires_in)  { 42 }
+    let(:store)   { ActiveSupport::Cache::MemoryStore.new }
+    let(:site)    { instance_double('Site', _id: 'site-1') }
+    let(:context) { ::Liquid::Context.new(assigns, {}, { services: services, site: site }) }
+    let(:calls)   { [] }
+    let(:infos)   { [] }
+    let(:call)    { '{% consume blog from "http://blog.locomotiveapp.org/api/read", username: "foo", expires_in: 60 %}' }
 
-    it 'passes the expires_in value to the cache' do
-      expect(services.cache).to receive(:fetch).with('Steam-consume-d1249cd56af82e108d383f981ad953347dbb94dc', { expires_in: 42 }).and_return('Locomotive rocks!')
-      is_expected.to eq 'Locomotive rocks!'
+    before do
+      services.cache = store
+      allow(services.external_api).to receive(:consume) { |url, options| calls << [url, options]; { 'title' => "Title #{calls.size}" } }
+      allow(Locomotive::Common::Logger).to receive(:info) { |message| infos << message }
     end
 
-    describe 'expires_in set to 0 (so basically, meaning non cache at all)' do
+    def render(source, on: context)
+      render_template(source, on)
+    end
 
-      let(:expires_in)  { 0 }
+    def context_for(site_id)
+      ::Liquid::Context.new(assigns, {}, { services: services, site: instance_double('Site', _id: site_id) })
+    end
 
-      it "doesn't pass the expires_in value to the cache" do
-        expect(services.cache).to receive(:fetch).with('Steam-consume-d1249cd56af82e108d383f981ad953347dbb94dc', { force: true }).and_return('Locomotive rocks!')
-        is_expected.to eq 'Locomotive rocks!'
+    it 'calls the service once while the lifetime lasts, and again after it' do
+      2.times { expect(render("#{call}{{ blog.title }}{% endconsume %}")).to eq 'Title 1' }
+      expect(calls.size).to eq 1
+
+      Timecop.travel(Time.now + 61) do
+        expect(render("#{call}{{ blog.title }}{% endconsume %}")).to eq 'Title 2'
       end
+    end
 
+    it 'logs the call only when it reaches the service' do
+      2.times { render("#{call}{{ blog.title }}{% endconsume %}") }
+
+      expect(infos.grep(/\[consume\]/).size).to eq 1
+    end
+
+    it 'renders each block with the cached response' do
+      expect(render("#{call}<h1>{{ blog.title }}</h1>{% endconsume %}")).to eq '<h1>Title 1</h1>'
+      expect(render("#{call}<p>{{ blog.title }}</p>{% endconsume %}")).to eq '<p>Title 1</p>'
+      expect(calls.size).to eq 1
+    end
+
+    it 'keeps sites apart' do
+      expect(render("#{call}{{ blog.title }}{% endconsume %}", on: context_for('site-1'))).to eq 'Title 1'
+      expect(render("#{call}{{ blog.title }}{% endconsume %}", on: context_for('site-2'))).to eq 'Title 2'
+    end
+
+    it 'keeps calls with other options apart' do
+      render("#{call}{{ blog.title }}{% endconsume %}")
+      other = call.sub('username: "foo"', 'username: "bar"')
+
+      expect(render("#{other}{{ blog.title }}{% endconsume %}")).to eq 'Title 2'
+    end
+
+    it 'keeps other passwords and authorization headers apart' do
+      render("#{call}{{ blog.title }}{% endconsume %}")
+      with_password = call.sub('username: "foo"', 'username: "foo", password: "p2"')
+      with_header   = call.sub('username: "foo"', 'username: "foo", header_auth: "Bearer b2"')
+
+      expect(render("#{with_password}{{ blog.title }}{% endconsume %}")).to eq 'Title 2'
+      expect(render("#{with_header}{{ blog.title }}{% endconsume %}")).to eq 'Title 3'
+    end
+
+    it 'calls the service once for headers given by a variable, and leaves them as they were' do
+      allow(services.external_api).to receive(:consume).and_call_original
+      allow(Locomotive::Steam::ExternalAPIService).to receive(:get) { calls << :get; double('response', code: 200, parsed_response: { 'title' => 'T' }) }
+      headers = { 'Accept' => 'application/json' }
+      on      = ::Liquid::Context.new({ 'hdrs' => headers }, {}, { services: services, site: site })
+      source  = '{% consume blog from "http://blog.locomotiveapp.org/api/read", headers: hdrs, header_auth: "Bearer t1", with_user_agent: true, expires_in: 60 %}{{ blog.title }}{% endconsume %}'
+
+      2.times { expect(render(source, on: on)).to eq 'T' }
+
+      expect(calls).to eq [:get]
+      expect(headers).to eq('Accept' => 'application/json')
+    end
+
+    it 'calls the service without the cache when there is no site' do
+      without_site = ::Liquid::Context.new(assigns, {}, { services: services })
+      expect(store).not_to receive(:fetch)
+
+      2.times { render("#{call}{{ blog.title }}{% endconsume %}", on: without_site) }
+
+      expect(calls.size).to eq 2
+    end
+
+    it 'keeps other lifetimes apart' do
+      render("#{call}{{ blog.title }}{% endconsume %}")
+      longer = call.sub('expires_in: 60', 'expires_in: 3600')
+
+      expect(render("#{longer}{{ blog.title }}{% endconsume %}")).to eq 'Title 2'
+    end
+
+    it 'does not cache an empty response' do
+      allow(services.external_api).to receive(:consume) { |*| calls << :call; calls.size == 1 ? nil : { 'title' => 'Back' } }
+
+      expect(render("#{call}{% if blog == null %}down{% else %}{{ blog.title }}{% endif %}{% endconsume %}")).to eq 'down'
+      expect(render("#{call}{% if blog == null %}down{% else %}{{ blog.title }}{% endif %}{% endconsume %}")).to eq 'Back'
+    end
+
+    [0, nil].each do |lifetime|
+      it "writes nothing to the cache with expires_in #{lifetime.inspect}" do
+        source = lifetime ? call.sub('expires_in: 60', "expires_in: #{lifetime}") : call.sub(', expires_in: 60', '')
+        expect(store).not_to receive(:fetch)
+        expect(store).not_to receive(:write)
+
+        2.times { render("#{source}{{ blog.title }}{% endconsume %}") }
+
+        expect(calls.size).to eq 2
+      end
     end
 
   end
@@ -115,10 +206,11 @@ describe Locomotive::Steam::Liquid::Tags::Consume do
       subject
     end
 
-    it 'should return the previous successful response if a timeout occurs' do
-      allow(services.cache).to receive(:read).and_return(response)
+    it 'gives the block nil on a timeout' do
       allow(services.external_api).to receive(:consume).and_raise(Timeout::Error)
-      expect(subject).to eq 'first response'
+      source = %{{% consume blog from "#{url}" %}{% if blog == null %}down{% endif %}{% endconsume %}}
+
+      expect(render_template(source, context)).to eq 'down'
     end
 
     describe 'the error line' do
