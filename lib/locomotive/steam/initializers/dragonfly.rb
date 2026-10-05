@@ -19,6 +19,7 @@ module Locomotive
           ::Dragonfly.app(:steam).configure do
             if imagemagick_commands
               plugin :imagemagick, imagemagick_commands
+              processor :thumb, Locomotive::Steam::ImageResizerService::Thumb.new
             end
 
             processor :convert do |content, args|
@@ -67,6 +68,8 @@ module Locomotive
           identify  = ENV['IMAGE_MAGICK_IDENTIFY'] || `which identify`.strip.presence || '/usr/local/bin/identify'
 
           if File.exist?(convert)
+            raise "Steam resizes with ImageMagick's identify, which is not found: #{identify}" unless File.exist?(identify)
+
             { convert_command: convert, identify_command: identify }
           else
             missing_image_magick

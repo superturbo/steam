@@ -74,8 +74,14 @@ describe Locomotive::Steam::ImageResizerService do
         let(:input)  { '/images/nav_on.png' }
         it { is_expected.to match /\/steam\/dynamic\/.*\/nav_on.png/ }
 
-        it 'signs the fetch_file job it signed before, so its URL stays the same' do
-          expect(subject).to eq resizer.fetch_file(File.join(public, '/images/nav_on.png')).thumb(geometry).url
+        it 'signs a versioned thumb job under a new URL' do
+          job   = subject[%r{/steam/dynamic/([^/]+)/}, 1]
+          steps = JSON.parse(Base64.urlsafe_decode64(job + '=' * (-job.size % 4)))
+          file  = resizer.fetch_file(File.join(public, '/images/nav_on.png'))
+
+          expect(steps.last).to eq ['p', 'thumb', geometry, { 'decode' => 'jpeg-1x-v1' }]
+          expect(subject).to eq file.thumb(geometry, 'decode' => 'jpeg-1x-v1').url
+          expect(subject).not_to eq file.thumb(geometry).url
         end
 
       end

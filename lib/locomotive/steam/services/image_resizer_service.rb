@@ -1,5 +1,6 @@
 require_relative 'image_resizer_service/local_sources'
 require_relative 'image_resizer_service/remote_sources'
+require_relative 'image_resizer_service/thumb'
 
 module Locomotive
   module Steam
@@ -12,7 +13,7 @@ module Locomotive
         return get_url_or_path(source) if disabled? || geometry.blank?
 
         if file = fetch_file(source)
-          job = file.thumb(geometry)
+          job = file.thumb(geometry, 'decode' => Thumb::DECODE)
           job = image_magick_convert(job, convert_args)
           job.url
         else

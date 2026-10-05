@@ -11,6 +11,31 @@ describe Locomotive::Steam::Initializers::Dragonfly do
     before { initializer.run }
     it { is_expected.not_to eq nil }
 
+    it 'resizes with the Steam thumb processor' do
+      expect(::Dragonfly.app(:steam).get_processor(:thumb)).to be_a(Locomotive::Steam::ImageResizerService::Thumb)
+    end
+
+  end
+
+  describe 'ImageMagick without identify' do
+
+    let(:convert) { Tempfile.new('convert') }
+
+    around do |example|
+      kept = ENV.values_at('IMAGE_MAGICK_CONVERT', 'IMAGE_MAGICK_IDENTIFY')
+      example.run
+    ensure
+      ENV['IMAGE_MAGICK_CONVERT'], ENV['IMAGE_MAGICK_IDENTIFY'] = kept
+      initializer.run
+    end
+
+    it 'refuses to start' do
+      ENV['IMAGE_MAGICK_CONVERT']  = convert.path
+      ENV['IMAGE_MAGICK_IDENTIFY'] = '/nonexistent/steam/identify'
+
+      expect { initializer.run }.to raise_error(RuntimeError, %r{identify.*/nonexistent/steam/identify})
+    end
+
   end
 
   describe 'missing ImagickMagick' do
