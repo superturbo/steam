@@ -10,6 +10,7 @@ module Locomotive
           # need to be called outside of the configure method
           imagemagick_commands = find_imagemagick_commands
           key = signing_key
+          timeout = command_timeout
           check_remote_source_prefix
 
           # Clear earlier rules before installing source checks.
@@ -20,10 +21,10 @@ module Locomotive
             if imagemagick_commands
               plugin :imagemagick, imagemagick_commands
               processor :thumb, Locomotive::Steam::ImageResizerService::Thumb.new
-            end
 
-            processor :convert do |content, args|
-              ::Dragonfly::ImageMagick::Commands.convert(content, args)
+              processor :convert do |content, args|
+                ::Dragonfly::ImageMagick::Commands.convert(content, args)
+              end
             end
 
             fetch_file_whitelist [Locomotive::Steam::ImageResizerService::LocalSources.new]
@@ -37,7 +38,18 @@ module Locomotive
             url_format '/steam/dynamic/:job/:sha/:basename.:ext'
           end
 
+          if imagemagick_commands
+            Locomotive::Steam::ImageResizerService::Shell.install(::Dragonfly.app(:steam), timeout: timeout)
+          end
+
           ::Dragonfly.logger = Locomotive::Common::Logger
+        end
+
+        def command_timeout
+          timeout = Locomotive::Steam.configuration.image_magick_command_timeout
+          return timeout if timeout.is_a?(Numeric) && timeout.real? && timeout.finite? && timeout.positive?
+
+          raise ArgumentError, 'Steam needs image_magick_command_timeout as a positive number of seconds.'
         end
 
         def signing_key

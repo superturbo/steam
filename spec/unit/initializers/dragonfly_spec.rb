@@ -47,8 +47,95 @@ describe Locomotive::Steam::Initializers::Dragonfly do
     end
     it { is_expected.to eq nil }
 
+    it "keeps Dragonfly's shell" do
+      expect(::Dragonfly.app(:steam).shell).to be_instance_of(::Dragonfly::Shell)
+    end
+
+    it 'runs no ImageMagick command for a :convert job' do
+      app = ::Dragonfly.app(:steam)
+      allow(app.shell).to receive(:run)
+
+      expect { app.new_job('image').process(:convert, '-quality 70').apply }
+        .to raise_error(::Dragonfly::Register::NotFound)
+      expect(app.shell).not_to have_received(:run)
+    end
+
     after(:all) do
       Locomotive::Steam::Initializers::Dragonfly.new.run
+    end
+
+  end
+
+  describe 'missing ImageMagick on a platform without process groups' do
+
+    before do
+      ::Dragonfly::App.destroy_apps
+      allow(File).to receive(:exist?).and_return(false)
+      allow(Gem).to receive(:win_platform?).and_return(true)
+    end
+
+    after(:all) do
+      Locomotive::Steam::Initializers::Dragonfly.new.run
+    end
+
+    it 'starts with resizing disabled' do
+      expect { initializer.run }.not_to raise_error
+      expect(::Dragonfly.app(:steam).plugins[:imagemagick]).to be_nil
+    end
+
+  end
+
+  describe 'the ImageMagick commands of resize jobs' do
+
+    let(:app)           { ::Dragonfly.app(:steam) }
+    let(:configuration) { Locomotive::Steam.configuration }
+
+    around do |example|
+      example.run
+      initializer.run
+    end
+
+    it 'run through a shell with a 30 s timeout per command' do
+      initializer.run
+
+      expect(app.shell).to be_a(Locomotive::Steam::ImageResizerService::Shell)
+      expect(app.shell.timeout).to eq 30
+    end
+
+    it 'take the timeout from the configuration' do
+      allow(configuration).to receive(:image_magick_command_timeout).and_return(12)
+      initializer.run
+
+      expect(app.shell.timeout).to eq 12
+    end
+
+    [0, -1, Float::INFINITY, Float::NAN, Complex(1, 1), '30'].each do |value|
+      it "refuse to start with a timeout of #{value.inspect}" do
+        allow(configuration).to receive(:image_magick_command_timeout).and_return(value)
+
+        expect { initializer.run }.to raise_error(ArgumentError, /image_magick_command_timeout/)
+      end
+    end
+
+    describe 'with ImageMagick' do
+
+      let(:image) { File.expand_path('../../fixtures/default/public/images/nav_on.png', __dir__) }
+
+      before do
+        initializer.run
+        skip 'ImageMagick is not installed' unless File.exist?(app.env[:convert_command].to_s)
+        allow(app.shell).to receive(:run).and_call_original
+      end
+
+      it 'all go through that shell, for new and earlier URLs' do
+        app.fetch_file(image).thumb('4x4', 'decode' => 'jpeg-1x-v1').process(:convert, '-quality 70').apply
+        app.fetch_file(image).thumb('4x4').apply
+        app.fetch_file(image).width
+
+        expect(app.shell).to have_received(:run).with(/identify/, anything).twice
+        expect(app.shell).to have_received(:run).with(/convert/, anything).exactly(3).times
+      end
+
     end
 
   end

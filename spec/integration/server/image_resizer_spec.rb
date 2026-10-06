@@ -144,4 +144,56 @@ describe 'Resize jobs' do
 
   end
 
+  context 'an ImageMagick command that runs past its timeout' do
+
+    let(:mode) { :production }
+    let(:key)  { 'a deployment key' }
+    let(:dir)  { Dir.mktmpdir }
+
+    before do
+      skip 'ImageMagick is not installed' unless File.exist?(resizer.env[:convert_command].to_s)
+      allow(configuration).to receive(:image_magick_command_timeout).and_return(0.5)
+      Locomotive::Steam::Initializers::Dragonfly.new.run
+      resizer.env[:convert_command] = File.join(dir, 'convert').tap do |path|
+        File.write(path, "#!/bin/sh\nsleep 30\n")
+        File.chmod(0o755, path)
+      end
+      allow(Dragonfly).to receive(:warn)
+    end
+
+    after { FileUtils.remove_entry(dir) }
+
+    it 'answers 500 for a new and an earlier URL, and logs no command' do
+      [job.thumb('4x4', 'decode' => 'jpeg-1x-v1').url, job.thumb('4x4').url].each do |url|
+        get url
+
+        expect(last_response.status).to eq 500
+      end
+      expect(Dragonfly).to have_received(:warn).with('caught error - ImageMagick command ran past 0.5s').twice
+    end
+
+  end
+
+  context 'an ImageMagick command that does not exist' do
+
+    let(:mode) { :production }
+    let(:key)  { 'a deployment key' }
+
+    before do
+      skip 'ImageMagick is not installed' unless File.exist?(resizer.env[:convert_command].to_s)
+      resizer.env[:convert_command] = '/nonexistent/steam/convert'
+      allow(Dragonfly).to receive(:warn)
+    end
+
+    it 'answers 500 for a new and an earlier URL' do
+      [job.thumb('4x4', 'decode' => 'jpeg-1x-v1').url, job.thumb('4x4').url].each do |url|
+        get url
+
+        expect(last_response.status).to eq 500
+      end
+      expect(Dragonfly).to have_received(:warn).with(/\Acaught error - Command failed/).twice
+    end
+
+  end
+
 end

@@ -79,6 +79,13 @@ module Locomotive
       #
       attr_accessor :image_resizer_remote_source_prefix
 
+      # Timeout for one ImageMagick command, not the whole resize job.
+      #
+      # default: 30
+      #
+      attr_accessor :image_magick_command_timeout
+      def image_magick_command_timeout; @image_magick_command_timeout.nil? ? 30 : @image_magick_command_timeout; end
+
       # Enable the Cross-site request forgery protection for POST requests.
       #
       # default: true

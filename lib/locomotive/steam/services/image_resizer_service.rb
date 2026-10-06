@@ -1,6 +1,7 @@
 require_relative 'image_resizer_service/local_sources'
 require_relative 'image_resizer_service/remote_sources'
 require_relative 'image_resizer_service/thumb'
+require_relative 'image_resizer_service/shell'
 
 module Locomotive
   module Steam
