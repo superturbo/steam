@@ -15,6 +15,16 @@ module Locomotive
         STDERR_LIMIT = 64 * 1024
         GRACE        = 1
 
+        RESOURCE_LIMIT_ENV_KEYS = %w(AREA DISK FILE HEIGHT LIST_LENGTH MAP MEMORY THREAD THROTTLE TIME WIDTH)
+                                  .map { |name| "MAGICK_#{name}_LIMIT" }.freeze
+        POLICY_PATH = File.expand_path('imagemagick', __dir__).freeze
+
+        SAMPLES_PATH = POLICY_PATH
+        SAMPLE       = 'sample.png'
+        REFUSED      = { 'PDF' => 'refused.pdf', 'SVG' => 'refused.svg', 'MSVG' => 'refused.svg', 'MVG' => 'refused.mvg' }.freeze
+        # A denied format may be reported as unavailable.
+        REFUSAL = /by the security policy|no decode delegate|unable to open image `[a-z]+:/
+
         attr_reader :timeout
 
         # Dragonfly 1.4 has no public way to replace an app's shell.
@@ -38,6 +48,30 @@ module Locomotive
           @timeout = timeout
         end
 
+        # Probes sample formats, not every policy rule.
+        def check_policy(convert:, identify:)
+          Dir.mktmpdir('steam-magick-check-') do |directory|
+            png = File.join(SAMPLES_PATH, SAMPLE)
+
+            { 'PNG' => png, 'JPEG' => File.join(directory, 'sample.jpg') }.each do |format, sample|
+              command(convert, png, sample) unless sample == png
+              command(identify, '-ping', sample)
+              command(convert, sample, '-resize', '1x1', File.join(directory, "output#{File.extname(sample)}"))
+            rescue CommandFailed, LimitExceeded => e
+              raise "Steam cannot resize with this ImageMagick: #{format} cannot be read and written (#{e.message.lines.last.strip})"
+            end
+
+            REFUSED.each do |format, name|
+              command(identify, '-ping', "#{format.downcase}:#{File.join(SAMPLES_PATH, name)}")
+              raise "Steam expects ImageMagick to refuse #{format}, but it reads it"
+            rescue CommandFailed => e
+              next if e.message.match?(REFUSAL)
+
+              raise "Steam cannot verify that ImageMagick refuses #{format} (#{e.message.lines.last.strip})"
+            end
+          end
+        end
+
         private
 
         def run_command(command)
@@ -48,8 +82,8 @@ module Locomotive
           pid = waiter = readers = nil
           # Do not interrupt a spawned child before it has a cleanup path.
           Thread.handle_interrupt(Object => :never) do
-            pid = Process.spawn({ 'MAGICK_TEMPORARY_PATH' => directory }, command,
-                                pgroup: true, in: File::NULL, out: out_writer, err: err_writer)
+            pid = Process.spawn(ENV.slice('PATH', *RESOURCE_LIMIT_ENV_KEYS).merge('MAGICK_TEMPORARY_PATH' => directory, 'MAGICK_CONFIGURE_PATH' => POLICY_PATH), command,
+                                unsetenv_others: true, pgroup: true, in: File::NULL, out: out_writer, err: err_writer)
             [out_writer, err_writer].each(&:close)
             waiter  = Process.detach(pid)
             readers = [read(out, STDOUT_LIMIT), read(err, STDERR_LIMIT)]
@@ -150,6 +184,10 @@ module Locomotive
 
         def now
           Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        end
+
+        def command(*arguments)
+          run(arguments.shelljoin, escape: false)
         end
 
         # macOS may return EPERM for an exited group; cleanup must still finish.

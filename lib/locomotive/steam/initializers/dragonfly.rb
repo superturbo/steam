@@ -38,11 +38,12 @@ module Locomotive
             url_format '/steam/dynamic/:job/:sha/:basename.:ext'
           end
 
+          ::Dragonfly.logger = Locomotive::Common::Logger
+
           if imagemagick_commands
             Locomotive::Steam::ImageResizerService::Shell.install(::Dragonfly.app(:steam), timeout: timeout)
+              .check_policy(convert: imagemagick_commands[:convert_command], identify: imagemagick_commands[:identify_command])
           end
-
-          ::Dragonfly.logger = Locomotive::Common::Logger
         end
 
         def command_timeout

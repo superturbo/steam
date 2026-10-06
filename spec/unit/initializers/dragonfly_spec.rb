@@ -1,4 +1,5 @@
 require 'spec_helper'
+require 'open3'
 
 describe Locomotive::Steam::Initializers::Dragonfly do
 
@@ -33,7 +34,7 @@ describe Locomotive::Steam::Initializers::Dragonfly do
       ENV['IMAGE_MAGICK_CONVERT']  = convert.path
       ENV['IMAGE_MAGICK_IDENTIFY'] = '/nonexistent/steam/identify'
 
-      expect { initializer.run }.to raise_error(RuntimeError, %r{identify.*/nonexistent/steam/identify})
+      expect { initializer.run }.to raise_error(RuntimeError, %r{ImageMagick's identify, which is not found: /nonexistent/steam/identify})
     end
 
   end
@@ -127,6 +128,14 @@ describe Locomotive::Steam::Initializers::Dragonfly do
         allow(app.shell).to receive(:run).and_call_original
       end
 
+      it 'refuse to start when the check of the ImageMagick policy fails' do
+        allow_any_instance_of(Locomotive::Steam::ImageResizerService::Shell).to receive(:check_policy)
+          .with(convert: app.env[:convert_command], identify: app.env[:identify_command])
+          .and_raise(RuntimeError, 'check failed')
+
+        expect { initializer.run }.to raise_error(RuntimeError, 'check failed')
+      end
+
       it 'all go through that shell, for new and earlier URLs' do
         app.fetch_file(image).thumb('4x4', 'decode' => 'jpeg-1x-v1').process(:convert, '-quality 70').apply
         app.fetch_file(image).thumb('4x4').apply
@@ -136,6 +145,30 @@ describe Locomotive::Steam::Initializers::Dragonfly do
         expect(app.shell).to have_received(:run).with(/convert/, anything).exactly(3).times
       end
 
+    end
+
+  end
+
+  describe 'the log of the start-up checks' do
+
+    it "goes through Steam's logger from a new process on, leaving no dragonfly.log behind" do
+      skip 'ImageMagick is not installed' unless File.exist?(`which convert`.strip)
+      steam = File.expand_path('../../../lib/locomotive/steam', __dir__)
+
+      Dir.mktmpdir do |dir|
+        script = <<~RUBY
+          require #{steam.inspect}
+          Locomotive::Steam.configure do |config|
+            config.mode      = :test
+            config.log_level = ::Logger::DEBUG
+          end
+        RUBY
+        output, status = Open3.capture2e(RbConfig.ruby, '-e', script, chdir: dir)
+
+        expect(status).to be_success, output
+        expect(output).to include('DRAGONFLY: shell command')
+        expect(Dir.children(dir)).not_to include('dragonfly.log')
+      end
     end
 
   end

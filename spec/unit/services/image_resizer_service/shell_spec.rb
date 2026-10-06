@@ -1,5 +1,6 @@
 require 'spec_helper'
 require 'open3'
+require 'rexml/document'
 
 describe Locomotive::Steam::ImageResizerService::Shell do
 
@@ -198,6 +199,39 @@ describe Locomotive::Steam::ImageResizerService::Shell do
     it 'refuses an output past 1 MB' do
       expect { shell.run('head -c 1048577 /dev/zero', escape: false) }
         .to raise_error(described_class::LimitExceeded, 'ImageMagick command printed more than 1048576 bytes')
+    end
+
+  end
+
+  describe 'the environment of a command' do
+
+    let(:limits) do
+      %w(AREA DISK FILE HEIGHT LIST_LENGTH MAP MEMORY THREAD THROTTLE TIME WIDTH).each_with_index
+        .to_h { |name, index| ["MAGICK_#{name}_LIMIT", (index + 1).to_s] }
+    end
+    let(:host) do
+      limits.merge('SECRET_KEY_BASE' => 'sentinel', 'DATABASE_URL' => 'postgres://u:sentinel@db/x', 'HOME' => dir,
+                   'MAGICK_CONFIGURE_PATH' => dir, 'MAGICK_HOME' => dir)
+    end
+
+    around do |example|
+      kept = host.keys.to_h { |name| [name, ENV[name]] }
+      ENV.update(host)
+      example.run
+    ensure
+      kept.each { |name, value| value ? ENV[name] = value : ENV.delete(name) }
+    end
+
+    def environment
+      shell.run('env', escape: false).lines.to_h { |line| line.chomp.split('=', 2) }
+    end
+
+    it "holds only the host PATH, its temporary directory, Steam's ImageMagick policy and the host resource limits" do
+      child = environment
+
+      expect(child.keys).to match_array(['PATH', 'MAGICK_TEMPORARY_PATH', 'MAGICK_CONFIGURE_PATH', *limits.keys])
+      expect(child).to include(limits.merge('PATH' => ENV['PATH'], 'MAGICK_CONFIGURE_PATH' => described_class::POLICY_PATH))
+      expect(File.basename(child['MAGICK_TEMPORARY_PATH'])).to start_with('steam-magick-')
     end
 
   end
@@ -551,6 +585,31 @@ describe Locomotive::Steam::ImageResizerService::Shell do
       Open3.capture2(commands[:identify_command], '-format', '%#', content.path).first
     end
 
+    it 'lets ImageMagick apply a resource limit the host sets' do
+      kept, ENV['MAGICK_MEMORY_LIMIT'] = ENV['MAGICK_MEMORY_LIMIT'], '7MiB'
+      resources = shell.run("#{commands[:identify_command]} -list resource", escape: false)
+      memory    = resources.match(/Memory:\s+(?<amount>\d+(?:\.\d+)?)(?<unit>[KMG]iB|B)?/)
+
+      expect(memory).not_to be_nil
+      unit = { nil => 1, 'B' => 1, 'KiB' => 1024, 'MiB' => 1024**2, 'GiB' => 1024**3 }.fetch(memory[:unit])
+      expect(memory[:amount].to_f * unit).to be <= 7 * 1024**2
+    ensure
+      kept ? ENV['MAGICK_MEMORY_LIMIT'] = kept : ENV.delete('MAGICK_MEMORY_LIMIT')
+    end
+
+    it 'still refuses a document that a host policy given through MAGICK_CONFIGURE_PATH refuses' do
+      host = File.join(dir, 'host').tap { |folder| FileUtils.mkdir_p(folder) }
+      File.write(File.join(host, 'policy.xml'), '<policymap><policy domain="coder" rights="none" pattern="MVG"/></policymap>')
+      drawing  = File.join(dir, 'drawing.mvg').tap { |path| File.write(path, "viewbox 0 0 1 1\n") }
+      identify = [commands[:identify_command], '-ping', "mvg:#{drawing}"].shelljoin
+      kept, ENV['MAGICK_CONFIGURE_PATH'] = ENV['MAGICK_CONFIGURE_PATH'], host
+
+      expect { ::Dragonfly::Shell.new.run(identify, escape: false) }.to raise_error(Dragonfly::Shell::CommandFailed, /security policy/)
+      expect { bounded.shell.run(identify, escape: false) }.to raise_error(Dragonfly::Shell::CommandFailed, /security policy/)
+    ensure
+      kept ? ENV['MAGICK_CONFIGURE_PATH'] = kept : ENV.delete('MAGICK_CONFIGURE_PATH')
+    end
+
     it 'stops ImageMagick blocked on its input' do
       fifo    = File.join(dir, 'input').tap { |path| File.mkfifo(path) }
       started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
@@ -560,6 +619,81 @@ describe Locomotive::Steam::ImageResizerService::Shell do
 
       expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 2
       expect { File.open(fifo, File::WRONLY | File::NONBLOCK) }.to raise_error(Errno::ENXIO) # no reader left
+    end
+
+    describe 'checking the ImageMagick policy' do
+
+      let(:steam_rules) { File.read(File.join(described_class::POLICY_PATH, 'policy.xml'))[%r{<policymap>(.*)</policymap>}m, 1] }
+
+      def check
+        described_class.new(timeout: 10).check_policy(convert: commands[:convert_command], identify: commands[:identify_command])
+      end
+
+      def policy(rules)
+        path = File.join(dir, 'policy').tap { |folder| FileUtils.mkdir_p(folder) }
+        File.write(File.join(path, 'policy.xml'), "<policymap>#{rules}</policymap>")
+        stub_const("#{described_class}::POLICY_PATH", path)
+      end
+
+      def stand_in_identify(cases)
+        File.join(dir, 'identify').tap do |path|
+          File.write(path, "#!/bin/sh\ncase \"$2\" in #{cases} esac\nexec #{commands[:identify_command]} \"$@\"\n")
+          File.chmod(0o755, path)
+        end
+      end
+
+      def check_with(identify)
+        described_class.new(timeout: 10).check_policy(convert: commands[:convert_command], identify: identify)
+      end
+
+      it 'passes when JPEG and PNG are read and written, and PDF, SVG and MVG are refused' do
+        expect { check }.not_to raise_error
+      end
+
+      it 'keeps refusing a format whose coder a later rule allows' do
+        policy(steam_rules + '<policy domain="coder" rights="read" pattern="MVG"/>')
+
+        expect { check }.not_to raise_error
+      end
+
+      it 'passes when this ImageMagick cannot read or write GIF or WebP' do
+        policy(steam_rules + '<policy domain="coder" rights="none" pattern="{GIF,WEBP}"/>')
+
+        expect { check }.not_to raise_error
+      end
+
+      it 'passes when this ImageMagick no longer recognises a refused format, as ImageMagick 6 does' do
+        identify = stand_in_identify(%{pdf:*|svg:*|msvg:*|mvg:*) printf "identify: unable to open image %s%s': No such file or directory\\n" '`' "$2" >&2; exit 1;;})
+
+        expect { check_with(identify) }.not_to raise_error
+      end
+
+      %w(PDF SVG MSVG MVG).each do |format|
+        it "fails when #{format} is read" do
+          identify = stand_in_identify(%{#{format.downcase}:*) echo "#{format} 60x40"; exit 0;;})
+
+          expect { check_with(identify) }.to raise_error(RuntimeError, "Steam expects ImageMagick to refuse #{format}, but it reads it")
+        end
+      end
+
+      it 'fails when a refused format fails for another reason' do
+        identify = stand_in_identify(%{mvg:*) echo "identify: improper image header" >&2; exit 1;;})
+
+        expect { check_with(identify) }.to raise_error(RuntimeError, /cannot verify that ImageMagick refuses MVG/)
+      end
+
+      it 'fails when JPEG cannot be read and written' do
+        policy(steam_rules + '<policy domain="coder" rights="none" pattern="JPEG"/>')
+
+        expect { check }.to raise_error(RuntimeError, /cannot resize with this ImageMagick: JPEG/)
+      end
+
+      it 'fails when PNG can be read but not written' do
+        policy(steam_rules + '<policy domain="coder" rights="read" pattern="PNG"/>')
+
+        expect { check }.to raise_error(RuntimeError, /cannot resize with this ImageMagick: PNG/)
+      end
+
     end
 
     it 'resizes a JPEG to the same bytes as Dragonfly' do
@@ -572,6 +706,28 @@ describe Locomotive::Steam::ImageResizerService::Shell do
       png = image('logo.png')
 
       expect(pixels(bounded.fetch_file(png).thumb('300x200#').apply)).to eq pixels(stock.fetch_file(png).thumb('300x200#').apply)
+    end
+
+  end
+
+  describe 'the sample files of the ImageMagick check' do
+
+    def sample(format)
+      File.binread(File.join(described_class::SAMPLES_PATH, described_class::REFUSED[format]))
+    end
+
+    it 'hold a PDF whose cross-reference table points at each of its objects' do
+      pdf     = sample('PDF')
+      entries = pdf[/^xref\n0 \d+\n(.*?)^trailer/m, 1].lines.drop(1)
+
+      expect(entries).not_to be_empty
+      expect(entries.map(&:bytesize).uniq).to eq [20]
+      entries.each_with_index { |entry, index| expect(pdf.byteslice(entry.to_i..)).to start_with("#{index + 1} 0 obj") }
+      expect(pdf[/^startxref\n(\d+)$/, 1].to_i).to eq pdf.index("xref\n")
+    end
+
+    it 'hold an SVG that is well-formed XML' do
+      expect(REXML::Document.new(sample('SVG')).root.name).to eq 'svg'
     end
 
   end

@@ -174,6 +174,30 @@ describe 'Resize jobs' do
 
   end
 
+  context 'an earlier URL a client has cached' do
+
+    let(:mode) { :production }
+    let(:key)  { 'a deployment key' }
+
+    before { skip 'ImageMagick is not installed' unless File.exist?(resizer.env[:convert_command].to_s) }
+
+    it 'is answered 304 from its ETag before any ImageMagick command runs' do
+      job = resizer.fetch_file(image).thumb('4x4')
+      allow(resizer.shell).to receive(:run).and_call_original
+
+      get job.url, {}, 'HTTP_IF_NONE_MATCH' => %("#{job.signature}")
+
+      expect(last_response.status).to eq 304
+      expect(resizer.shell).not_to have_received(:run)
+
+      get job.url
+
+      expect(last_response.status).to eq 200
+      expect(resizer.shell).to have_received(:run).at_least(:once)
+    end
+
+  end
+
   context 'an ImageMagick command that does not exist' do
 
     let(:mode) { :production }

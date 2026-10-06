@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<policymap>
+  <policy domain="delegate" rights="none" pattern="*"/>
+  <policy domain="path" rights="none" pattern="@*"/>
+  <policy domain="module" rights="none" pattern="{CAPTION,EPT,HTML,INLINE,LABEL,MSL,MVG,PANGO,PCL,PDF,PS,PS2,PS3,SVG,TXT,URL,VIDEO,XPS}"/>
+  <policy domain="coder" rights="none" pattern="{CAPTION,EPT,HTML,INLINE,LABEL,MSL,MSVG,MVG,PANGO,PCL,PDF,PS,PS2,PS3,SVG,TXT,URL,VIDEO,XPS}"/>
+</policymap>
