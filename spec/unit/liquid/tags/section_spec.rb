@@ -339,5 +339,29 @@ describe Locomotive::Steam::Liquid::Tags::Section do
 
   end
 
+  describe 'a section type holding two dashes' do
+
+    let(:live_editing) { false }
+    let(:source)       { "{% section 'hero--dark_x' %}" }
+
+    def section_named(slug, liquid_source)
+      instance_double('Section', slug: slug, type: slug, liquid_source: liquid_source,
+                                 definition: { 'type' => slug, 'settings' => [], 'blocks' => [] })
+    end
+
+    before do
+      allow(finder).to receive(:find).with('hero--dark_x').and_return(section_named('hero--dark_x', 'dark hero'))
+      allow(finder).to receive(:find).with('hero').and_return(section_named('hero', 'plain hero'))
+    end
+
+    it 'renders its own template' do
+      output = render_template(source, context)
+
+      expect(output).to include 'dark hero'
+      expect(output).not_to include 'plain hero'
+    end
+
+  end
+
 end
 

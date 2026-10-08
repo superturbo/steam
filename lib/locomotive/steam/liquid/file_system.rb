@@ -21,7 +21,7 @@ module Locomotive
 
         # Called by Liquid to retrieve a template file
         def read_template_file(template_path)
-          type, name = template_path.split('--')
+          type, name = template_path.split('--', 2)
 
           # Liquid 5 include passes bare snippet names.
           type, name = 'snippets', type if name.nil?

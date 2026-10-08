@@ -20,6 +20,17 @@ describe Locomotive::Steam::Liquid::FileSystem do
 
     end
 
+    context 'a section whose name holds two dashes' do
+
+      let(:template_path) { 'sections--hero--dark_x' }
+      let(:section)       { instance_double('Section', liquid_source: 'dark hero') }
+
+      before { allow(section_finder).to receive(:find).with('hero--dark_x').and_return(section) }
+
+      it { is_expected.to eq 'dark hero' }
+
+    end
+
     context 'a bare name defaults to a snippet (how Liquid 5 include passes them)' do
 
       let(:template_path) { 'footer' }
