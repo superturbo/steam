@@ -10,6 +10,16 @@ module Locomotive
       class Shell < ::Dragonfly::Shell
 
         class LimitExceeded < RuntimeError; end
+        class RefusedJob < ::Dragonfly::Job::Fetch::NotFound; end
+
+        class CommandError < ::Dragonfly::Shell::CommandFailed
+          attr_reader :diagnostics
+
+          def initialize(message, diagnostics)
+            super(message)
+            @diagnostics = diagnostics.to_s
+          end
+        end
 
         STDOUT_LIMIT = 1024 * 1024
         STDERR_LIMIT = 64 * 1024
@@ -44,6 +54,13 @@ module Locomotive
           app.instance_variable_set(:@shell, new(timeout: timeout))
         end
 
+        # Dragonfly answers a refused job with 404.
+        def self.reraise(error)
+          raise error unless error.is_a?(CommandError) && error.diagnostics.match?(REFUSAL)
+
+          raise RefusedJob, "ImageMagick refused the source or an argument: #{error.diagnostics.lines.grep(REFUSAL).first.strip}"
+        end
+
         def initialize(timeout:)
           @timeout = timeout
         end
@@ -65,7 +82,7 @@ module Locomotive
               command(identify, '-ping', "#{format.downcase}:#{File.join(SAMPLES_PATH, name)}")
               raise "Steam expects ImageMagick to refuse #{format}, but it reads it"
             rescue CommandFailed => e
-              next if e.message.match?(REFUSAL)
+              next if e.diagnostics.match?(REFUSAL)
 
               raise "Steam cannot verify that ImageMagick refuses #{format} (#{e.message.lines.last.strip})"
             end
@@ -153,6 +170,12 @@ module Locomotive
             end
             [kept.force_encoding(Encoding.default_external).scrub, cut]
           end
+        end
+
+        def raise_command_failed!(command, status = nil, error = nil)
+          super
+        rescue ::Dragonfly::Shell::CommandFailed => e
+          raise CommandError.new(e.message, error)
         end
 
         def watchers_finished?(threads, seconds)

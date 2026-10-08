@@ -85,6 +85,7 @@ describe 'Resize jobs' do
         get resizer.fetch_file(File.join(outside, 'secret.png')).url
 
         expect(last_response.status).to eq 403
+        expect(last_response.headers['cache-control']).to eq 'no-store'
         expect(last_response.body).not_to include 'secret'
       end
     end
@@ -119,9 +120,17 @@ describe 'Resize jobs' do
 
       get url_signed_with('please change it')
       expect(last_response.status).to eq 400
+      expect(last_response.headers['cache-control']).to eq 'no-store'
 
       head url_signed_with('please change it')
       expect(last_response.status).to eq 400
+    end
+
+    it 'answers a method other than GET and HEAD with 405, kept by no cache' do
+      post job.url
+
+      expect(last_response.status).to eq 405
+      expect(last_response.headers['cache-control']).to eq 'no-store'
     end
 
   end
@@ -163,11 +172,12 @@ describe 'Resize jobs' do
 
     after { FileUtils.remove_entry(dir) }
 
-    it 'answers 500 for a new and an earlier URL, and logs no command' do
+    it 'answers 500, kept by no cache, for a new and an earlier URL, and logs no command' do
       [job.thumb('4x4', 'decode' => 'jpeg-1x-v1').url, job.thumb('4x4').url].each do |url|
         get url
 
         expect(last_response.status).to eq 500
+        expect(last_response.headers['cache-control']).to eq 'no-store'
       end
       expect(Dragonfly).to have_received(:warn).with('caught error - ImageMagick command ran past 0.5s').twice
     end
@@ -198,6 +208,61 @@ describe 'Resize jobs' do
 
   end
 
+  context 'a source or an argument ImageMagick refuses' do
+
+    let(:mode) { :production }
+    let(:key)  { 'a deployment key' }
+    let(:pdf)  { File.join(Locomotive::Steam::ImageResizerService::Shell::SAMPLES_PATH, 'refused.pdf') }
+
+    before do
+      skip 'ImageMagick is not installed' unless File.exist?(resizer.env[:convert_command].to_s)
+      allow(Dragonfly).to receive(:warn)
+    end
+
+    it 'answers 404, kept by no cache, for a new and an earlier URL' do
+      Dir.mktmpdir do |root|
+        allow(configuration).to receive(:asset_path).and_return(root)
+        source = resizer.fetch_file(File.join(root, 'doc.pdf').tap { |path| FileUtils.cp(pdf, path) })
+
+        [source.thumb('4x4', 'decode' => 'jpeg-1x-v1').url, source.thumb('4x4').url].each do |url|
+          %i(get head).each do |verb|
+            send(verb, url)
+
+            expect(last_response.status).to eq(404), "#{verb} #{url}"
+            expect(last_response.headers['cache-control']).to eq 'no-store'
+          end
+        end
+        expect(Dragonfly).to have_received(:warn).with(/\AImageMagick refused the source or an argument: /).exactly(4).times
+      end
+    end
+
+    it 'answers 404 for a :convert step whose argument ImageMagick refuses' do
+      Dir.mktmpdir do |folder|
+        script = File.join(folder, 'script.msl').tap { |path| File.write(path, '<?xml version="1.0"?><image/>') }
+
+        get job.thumb('4x4').process(:convert, "msl:#{script} -append").url
+
+        expect(last_response.status).to eq 404
+        expect(last_response.headers['cache-control']).to eq 'no-store'
+      end
+    end
+
+    it 'answers 500 for a :convert step that fails for another reason, though its arguments name a refusal' do
+      get job.thumb('4x4').process(:convert, '-bogus-option by the security policy').url
+
+      expect(last_response.status).to eq 500
+      expect(last_response.headers['cache-control']).to eq 'no-store'
+    end
+
+    it 'keeps public caching for a resized image' do
+      get job.thumb('4x4').url
+
+      expect(last_response.status).to eq 200
+      expect(last_response.headers['cache-control']).to eq 'public, max-age=31536000'
+    end
+
+  end
+
   context 'an ImageMagick command that does not exist' do
 
     let(:mode) { :production }
@@ -214,6 +279,7 @@ describe 'Resize jobs' do
         get url
 
         expect(last_response.status).to eq 500
+        expect(last_response.headers['cache-control']).to eq 'no-store'
       end
       expect(Dragonfly).to have_received(:warn).with(/\Acaught error - Command failed/).twice
     end

@@ -120,7 +120,7 @@ describe Locomotive::Steam::ImageResizerService::Shell do
 
         expect do
           expect { shell.run(alive, escape: false) }.to raise_error(described_class::LimitExceeded)
-          expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 4
+          expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < shell.timeout + 3 * described_class::GRACE + 0.9
           (Thread.list - threads).each { |thread| thread.join(0.5) }
         end.not_to output.to_stderr
 
@@ -186,7 +186,31 @@ describe Locomotive::Steam::ImageResizerService::Shell do
 
   end
 
+  describe 'a failed command, reraised' do
+
+    def failure(command)
+      shell.run(command, escape: false)
+    rescue Dragonfly::Shell::CommandFailed => e
+      e
+    end
+
+    it 'is a refused job when ImageMagick reports a refusal' do
+      error = failure(%(sh -c 'echo "identify: not allowed by the security policy" >&2; exit 1'))
+
+      expect { described_class.reraise(error) }.to raise_error(described_class::RefusedJob, /by the security policy/)
+    end
+
+    it 'stays as it is when only the command names a refusal' do
+      error = failure(%(sh -c 'echo "convert: unrecognized option" >&2; exit 1' by the security policy))
+
+      expect { described_class.reraise(error) }.to raise_error(error)
+    end
+
+  end
+
   describe 'what a command prints' do
+
+    let(:shell) { described_class.new(timeout: 30) }
 
     it 'keeps the first 64 KB of its errors' do
       noisy = "sh -c 'head -c 1000000 /dev/zero | tr \"\\\\000\" e >&2; exit 1'"

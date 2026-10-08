@@ -2,7 +2,6 @@ require 'rack/csrf'
 require 'rack/session/moneta'
 require 'rack/builder'
 require 'rack/lint'
-require 'dragonfly/middleware'
 
 require_relative 'middlewares'
 
@@ -30,7 +29,7 @@ module Locomotive::Steam
             }
           end
 
-          use Dragonfly::Middleware, :steam
+          use Middlewares::ImageResizer
 
           use Rack::Lint
           use Rack::RewindableInput::Middleware unless ENV['RAILS_ENV']

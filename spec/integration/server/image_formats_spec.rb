@@ -46,8 +46,8 @@ describe "The image formats resize jobs read and write under Steam's ImageMagick
   def refused?(job)
     job.apply
     false
-  rescue Dragonfly::Shell::CommandFailed => e
-    e.message.match?(Locomotive::Steam::ImageResizerService::Shell::REFUSAL) or raise
+  rescue Locomotive::Steam::ImageResizerService::Shell::RefusedJob
+    true
   end
 
   describe 'an allowed source' do

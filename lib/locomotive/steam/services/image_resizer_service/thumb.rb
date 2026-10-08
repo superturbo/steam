@@ -26,6 +26,8 @@ module Locomotive
             'frame'      => opts['frame'],
             'input_args' => decoding_size_args(geometry, content.analyse(:image_properties))
           })
+        rescue ::Dragonfly::Shell::CommandFailed => e
+          Shell.reraise(e)
         end
 
         private

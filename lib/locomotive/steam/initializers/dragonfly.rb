@@ -24,6 +24,8 @@ module Locomotive
 
               processor :convert do |content, args|
                 ::Dragonfly::ImageMagick::Commands.convert(content, args)
+              rescue ::Dragonfly::Shell::CommandFailed => e
+                Locomotive::Steam::ImageResizerService::Shell.reraise(e)
               end
             end
 
