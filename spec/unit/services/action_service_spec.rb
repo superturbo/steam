@@ -9,7 +9,12 @@ describe Locomotive::Steam::ActionService do
   let(:api_service)    { instance_double('ExternalAPIService') }
   let(:redirection_service) { instance_double('PageRedirectionService') }
   let(:cookie_service) { instance_double('CookieService') }
-  let(:service)        { described_class.new(site, email_service, content_entry: entry_service, api: api_service, redirection: redirection_service, cookie: cookie_service) }
+  let(:asset_host)     { Locomotive::Steam::AssetHostService.new(nil, instance_double('Site', asset_host: nil), 'https://assets.example.com') }
+  let(:service)        { described_class.new(site, email_service, content_entry: entry_service, api: api_service, redirection: redirection_service, cookie: cookie_service, asset_host: asset_host) }
+
+  def entry(attributes)
+    instance_double(Locomotive::Steam::ContentEntry, to_hash: attributes)
+  end
 
   describe '#run' do
 
@@ -174,14 +179,24 @@ describe Locomotive::Steam::ActionService do
         }
 
         before do
-          expect(entry_service).to receive(:all).with('bands', { "created_at.lte" => "2015-03-25T10:00:00.000-05:00", "published" => true }, true).and_return([
-            { 'name' => 'Pearl Jam' },
-            { 'name' => 'Nirvana' },
-            { 'name' => 'Soundgarden' }
+          expect(entry_service).to receive(:all).with('bands', { "created_at.lte" => "2015-03-25T10:00:00.000-05:00", "published" => true }).and_return([
+            entry('name' => 'Pearl Jam'),
+            entry('name' => 'Nirvana'),
+            entry('name' => 'Soundgarden')
           ])
         end
 
         it { is_expected.to eq('Pearl Jam, Nirvana, Soundgarden') }
+
+      end
+
+      describe 'allEntries for an unknown type' do
+
+        let(:script) { "return allEntries('unknown', {}) === null;" }
+
+        before { allow(entry_service).to receive(:all).with('unknown', {}).and_return(nil) }
+
+        it { is_expected.to eq true }
 
       end
 
@@ -190,10 +205,20 @@ describe Locomotive::Steam::ActionService do
         let(:script) { "return findEntry('bands', '42').name;" }
 
         before do
-          expect(entry_service).to receive(:find).with('bands', '42', true).and_return('name' => 'Pearl Jam')
+          expect(entry_service).to receive(:find).with('bands', '42').and_return(entry('name' => 'Pearl Jam'))
         end
 
         it { is_expected.to eq('Pearl Jam') }
+
+      end
+
+      describe 'findEntry for a missing entry' do
+
+        let(:script) { "return findEntry('bands', '42') === null;" }
+
+        before { allow(entry_service).to receive(:find).with('bands', '42').and_return(nil) }
+
+        it { is_expected.to eq true }
 
       end
 
@@ -202,7 +227,7 @@ describe Locomotive::Steam::ActionService do
         let(:script) { "return createEntry('bands', { name: 'Pearl Jam'}).name;" }
 
         before do
-          expect(entry_service).to receive(:create).with('bands', { 'name' => 'Pearl Jam' }, true).and_return('name' => 'Pearl Jam')
+          expect(entry_service).to receive(:create).with('bands', { 'name' => 'Pearl Jam' }).and_return(entry('name' => 'Pearl Jam'))
         end
 
         it { is_expected.to eq('Pearl Jam') }
@@ -214,10 +239,69 @@ describe Locomotive::Steam::ActionService do
         let(:script) { "return updateEntry('bands', 'pearl-jam', { name: 'Pearl Jam'}).name;" }
 
         before do
-          expect(entry_service).to receive(:update).with('bands', 'pearl-jam', { 'name' => 'Pearl Jam' }, true).and_return('name' => 'Pearl Jam')
+          expect(entry_service).to receive(:update).with('bands', 'pearl-jam', { 'name' => 'Pearl Jam' }).and_return(entry('name' => 'Pearl Jam'))
         end
 
         it { is_expected.to eq('Pearl Jam') }
+
+      end
+
+      describe 'a file field of an entry' do
+
+        let(:updated_at) { Time.utc(2026, 10, 1, 12) }
+        let(:cover)      { Locomotive::Steam::ContentEntry::FileField.new('cover.jpg', '/sites/42/songs/7', 1234, updated_at) }
+        let(:song)       { entry('title' => 'Alive', 'cover' => cover) }
+        let(:url)        { 'https://assets.example.com/sites/42/songs/7/cover.jpg?1790856000' }
+
+        before do
+          allow(entry_service).to receive(:all).with('songs', {}).and_return([song])
+          allow(entry_service).to receive(:find).with('songs', 'alive').and_return(song)
+          allow(entry_service).to receive(:create).with('songs', { 'title' => 'Alive' }).and_return(song)
+          allow(entry_service).to receive(:update).with('songs', 'alive', { 'title' => 'Alive' }).and_return(song)
+        end
+
+        {
+          'allEntries'  => "allEntries('songs', {})[0]",
+          'findEntry'   => "findEntry('songs', 'alive')",
+          'createEntry' => "createEntry('songs', { title: 'Alive' })",
+          'updateEntry' => "updateEntry('songs', 'alive', { title: 'Alive' })"
+        }.each do |name, call|
+
+          context "read through #{name}" do
+
+            let(:script) { "return #{call}.cover.url;" }
+
+            it 'has the asset host and the version of the file' do
+              is_expected.to eq url
+            end
+
+          end
+
+        end
+
+        context 'without an asset host' do
+
+          let(:asset_host) { Locomotive::Steam::AssetHostService.new(nil, instance_double('Site', asset_host: nil), nil) }
+          let(:script)     { "return findEntry('songs', 'alive').cover.url;" }
+
+          it 'keeps the path of the file, with its version' do
+            is_expected.to eq '/sites/42/songs/7/cover.jpg?1790856000'
+          end
+
+        end
+
+        context 'the rest of the entry' do
+
+          let(:script) { "return findEntry('songs', 'alive');" }
+
+          it 'reads as before' do
+            is_expected.to eq(
+              'title' => 'Alive',
+              'cover' => { 'url' => url, 'filename' => 'cover.jpg', 'size' => 1234.0, 'updated_at' => '2026-10-01T12:00:00.000Z' }
+            )
+          end
+
+        end
 
       end
 

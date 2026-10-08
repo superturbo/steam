@@ -75,7 +75,7 @@ module Locomotive
         end
 
         register :action do
-          Steam::ActionService.new(current_site, email, content_entry: content_entry, api: external_api, redirection: page_redirection, cookie: cookie)
+          Steam::ActionService.new(current_site, email, content_entry: content_entry, api: external_api, redirection: page_redirection, cookie: cookie, asset_host: asset_host)
         end
 
         register :content_entry do

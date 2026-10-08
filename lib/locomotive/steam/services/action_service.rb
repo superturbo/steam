@@ -11,7 +11,7 @@ module Locomotive
 
     class ActionService
 
-      SERVICES = %w(content_entry api redirection cookie)
+      SERVICES = %w(content_entry api redirection cookie asset_host)
 
       BUILT_IN_FUNCTIONS = %w(
         log
@@ -97,19 +97,19 @@ module Locomotive
       end
 
       def all_entries_lambda(liquid_context)
-        -> (type, conditions) { content_entry_service.all(type, conditions, true) }
+        -> (type, conditions) { content_entry_service.all(type, conditions)&.map { |entry| entry_as_json(entry) } }
       end
 
       def find_entry_lambda(liquid_context)
-        -> (type, id_or_slug) { content_entry_service.find(type, id_or_slug, true) }
+        -> (type, id_or_slug) { entry_as_json(content_entry_service.find(type, id_or_slug)) }
       end
 
       def create_entry_lambda(liquid_context)
-        -> (type, attributes) { content_entry_service.create(type, attributes, true) }
+        -> (type, attributes) { entry_as_json(content_entry_service.create(type, attributes)) }
       end
 
       def update_entry_lambda(liquid_context)
-        -> (type, id_or_slug, attributes) { content_entry_service.update(type, id_or_slug, attributes, true) }
+        -> (type, id_or_slug, attributes) { entry_as_json(content_entry_service.update(type, id_or_slug, attributes)) }
       end
 
       def call_api_lambda(liquid_context)
@@ -118,6 +118,17 @@ module Locomotive
 
       def redirect_to_lambda(liquid_context)
         -> (page_handle, locale = nil) { redirection_service.redirect_to(page_handle, locale) }
+      end
+
+      # A file reads as a page shows it: through the asset host, with its version.
+      def entry_as_json(entry)
+        return if entry.nil?
+
+        entry.to_hash.transform_values do |value|
+          next value unless value.is_a?(ContentEntry::FileField)
+
+          value.to_hash.merge('url' => asset_host_service.compute(value.url, value.updated_at.try(:to_i)))
+        end.as_json
       end
 
     end
