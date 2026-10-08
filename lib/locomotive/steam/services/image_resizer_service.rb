@@ -2,6 +2,7 @@ require_relative 'image_resizer_service/local_sources'
 require_relative 'image_resizer_service/remote_sources'
 require_relative 'image_resizer_service/thumb'
 require_relative 'image_resizer_service/shell'
+require_relative 'image_resizer_service/convert_arguments'
 
 module Locomotive
   module Steam
@@ -12,6 +13,11 @@ module Locomotive
 
       def resize(source, geometry, convert_args = "")
         return get_url_or_path(source) if disabled? || geometry.blank?
+
+        unless ConvertArguments.allowed?(convert_args)
+          Locomotive::Common::Logger.error 'Unable to resize on the fly: Steam does not run these ImageMagick arguments'
+          return nil
+        end
 
         if file = fetch_file(source)
           job = file.thumb(geometry, 'decode' => Thumb::DECODE)

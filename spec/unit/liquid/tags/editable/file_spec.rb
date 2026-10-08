@@ -146,6 +146,24 @@ describe Locomotive::Steam::Liquid::Tags::Editable::File do
         it { is_expected.to eq '<span class="locomotive-block-anchor" data-element-id="header" style="visibility: hidden"></span>/steam/dynamic/W1siZnUiLCJodHRwOi8vd3d3LnBsYWNlaG9sZC5pdC81MDB4NTAwIl0sWyJwIiwidGh1bWIiLCI1MDB4MTAwIyIseyJkZWNvZGUiOiJqcGVnLTF4LXYxIn1dXQ/6583698bbc7a883d/500x500?editable-path=header--banner' }
 
       end
+
+      context 'with a filter Steam does not run' do
+
+        let(:source) { "{% block header %}{% editable_file banner, hint: 'some text', resize: '500x100#', filters: '-sepia-tone 80%' %}http://www.placehold.it/500x500{% endeditable_file %}{% endblock %}" }
+
+        it 'keeps the original image' do
+          is_expected.to eq 'http://www.placehold.it/500x500'
+        end
+
+      end
+
+      context 'with a filter the resize options produce' do
+
+        let(:source) { "{% block header %}{% editable_file banner, hint: 'some text', resize: '500x100#', filters: '-strip' %}http://www.placehold.it/500x500{% endeditable_file %}{% endblock %}" }
+
+        it { is_expected.to start_with '/steam/dynamic/' }
+
+      end
     end
 
     context 'additional image filters' do
@@ -178,9 +196,9 @@ describe Locomotive::Steam::Liquid::Tags::Editable::File do
         expect(@image_resizer).to have_received(:resize).with(input, geometry, '-quality 75 -strip -interlace Plane')
       end
 
-      it 'handles multiple and custom filters' do
-        render_template(source % {filter: "quality: 60, filters: '-sepia-tone 80%'"}, context, options)
-        expect(@image_resizer).to have_received(:resize).with(input, geometry, '-quality 60 -sepia-tone 80%')
+      it 'passes filters on after the other options' do
+        render_template(source % {filter: "quality: 60, filters: '-strip'"}, context, options)
+        expect(@image_resizer).to have_received(:resize).with(input, geometry, '-quality 60 -strip')
       end
 
       it 'handles progressive display' do

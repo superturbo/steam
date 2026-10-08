@@ -10,7 +10,7 @@ module Locomotive
           #   strip: <true|false> remove extra possibly unnecessary metadata
           #   progressive: <true|false> make JPEG progressive
           #   optimize: <number> shortcut to quality: and also applies strip and progressive
-          #   filters: <string> access to any ImageMagick arguments 
+          #   filters: <string> only ImageMagick arguments the options above produce
           def resize(input, resize_string, *args)
             args ||= {}
             options = []

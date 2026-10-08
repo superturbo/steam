@@ -31,6 +31,14 @@ describe Locomotive::Steam::Liquid::Filters::Resize do
 
       it { is_expected.to match /\/steam\/dynamic\/.*\/240px-Metropolitan_railway_steam_locomotive_2781022036.png/ }
 
+      it 'gives no URL for a filter Steam does not run' do
+        expect(resize(input, geometry, { 'filters' => '-sepia-tone 80%' })).to be_nil
+      end
+
+      it 'resizes with a filter the resize options produce' do
+        expect(resize(input, geometry, { 'filters' => '-strip' })).to match(/\/steam\/dynamic\//)
+      end
+
       describe 'when imagemagick is not available' do
 
         let(:input) {
@@ -79,9 +87,9 @@ describe Locomotive::Steam::Liquid::Filters::Resize do
         expect(@image_resizer).to have_received(:resize).with(input, geometry, '-quality 75 -strip -interlace Plane')
       end
 
-      it 'handles multiple and custom filters' do
-        resize(input, geometry, { 'quality' => 60, 'filters' => '-sepia-tone 80%' })
-        expect(@image_resizer).to have_received(:resize).with(input, geometry, '-quality 60 -sepia-tone 80%')
+      it 'passes filters on after the other options' do
+        resize(input, geometry, { 'quality' => 60, 'filters' => '-strip' })
+        expect(@image_resizer).to have_received(:resize).with(input, geometry, '-quality 60 -strip')
       end
 
       it 'handles progressive display' do

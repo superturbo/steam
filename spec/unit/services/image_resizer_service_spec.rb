@@ -155,13 +155,21 @@ describe Locomotive::Steam::ImageResizerService do
         it { is_expected.to eq nil }
       end
 
-      describe 'additional filters' do
-        let(:input)  { '/images/nav_on.png' }
-        let (:filters) { [{"quality" => 70, "auto_orient" => true, "filters" => "-swirl 180"}] }
+      describe 'ImageMagick arguments' do
+        let(:input) { '/images/nav_on.png' }
 
-        subject { service.resize(input, geometry, filters) }
+        it 'signs a job with the arguments the resize options produce' do
+          expect(service.resize(input, geometry, '-quality 70 -auto-orient')).to match(/\/steam\/dynamic\/.*\/nav_on.png/)
+        end
 
-        it { is_expected.to match /\/steam\/dynamic\/.*\/nav_on.png/ }
+        it 'signs no job, and logs why, for other arguments' do
+          logged = []
+          allow(Locomotive::Common::Logger).to receive(:error) { |message| logged << message }
+
+          expect(service.resize(input, geometry, '-quality 70 -write /tmp/copy.png')).to be_nil
+          expect(logged.join).to include('Unable to resize on the fly', 'ImageMagick arguments')
+          expect(logged.join).not_to include('/tmp/copy.png')
+        end
       end
 
     end

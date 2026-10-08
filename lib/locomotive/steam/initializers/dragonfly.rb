@@ -23,6 +23,7 @@ module Locomotive
               processor :thumb, Locomotive::Steam::ImageResizerService::Thumb.new
 
               processor :convert do |content, args|
+                Locomotive::Steam::ImageResizerService::ConvertArguments.check!(args)
                 ::Dragonfly::ImageMagick::Commands.convert(content, args)
               rescue ::Dragonfly::Shell::CommandFailed => e
                 Locomotive::Steam::ImageResizerService::Shell.reraise(e)

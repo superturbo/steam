@@ -236,7 +236,19 @@ describe 'Resize jobs' do
       end
     end
 
-    it 'answers 404 for a :convert step whose argument ImageMagick refuses' do
+    it 'answers 404 for a :convert step on a source ImageMagick refuses' do
+      Dir.mktmpdir do |root|
+        allow(configuration).to receive(:asset_path).and_return(root)
+        source = resizer.fetch_file(File.join(root, 'doc.pdf').tap { |path| FileUtils.cp(pdf, path) })
+
+        get source.process(:convert, '-strip').url
+
+        expect(last_response.status).to eq 404
+        expect(last_response.headers['cache-control']).to eq 'no-store'
+      end
+    end
+
+    it 'answers 404 for a :convert step with a script argument' do
       Dir.mktmpdir do |folder|
         script = File.join(folder, 'script.msl').tap { |path| File.write(path, '<?xml version="1.0"?><image/>') }
 
@@ -247,11 +259,28 @@ describe 'Resize jobs' do
       end
     end
 
-    it 'answers 500 for a :convert step that fails for another reason, though its arguments name a refusal' do
-      get job.thumb('4x4').process(:convert, '-bogus-option by the security policy').url
+    it 'answers 404 for an earlier :convert step with arguments Steam does not run, and writes nothing' do
+      Dir.mktmpdir do |folder|
+        copy = File.join(folder, 'copy.png')
 
-      expect(last_response.status).to eq 500
-      expect(last_response.headers['cache-control']).to eq 'no-store'
+        get job.thumb('4x4').process(:convert, "-quality 70 -write #{copy}").url
+
+        expect(last_response.status).to eq 404
+        expect(last_response.headers['cache-control']).to eq 'no-store'
+        expect(File.exist?(copy)).to be false
+      end
+    end
+
+    it 'answers 404 for an earlier :convert step that reads another image' do
+      get job.thumb('4x4').process(:convert, "#{image} -append").url
+
+      expect(last_response.status).to eq 404
+    end
+
+    it 'runs an earlier :convert step with the arguments the resize options produce' do
+      get job.thumb('4x4').process(:convert, '-quality 70 -strip -interlace Plane -auto-orient').url
+
+      expect(last_response.status).to eq 200
     end
 
     it 'keeps public caching for a resized image' do

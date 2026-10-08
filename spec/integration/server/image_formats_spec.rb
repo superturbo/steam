@@ -159,44 +159,52 @@ describe "The image formats resize jobs read and write under Steam's ImageMagick
 
   end
 
-  describe 'ImageMagick arguments of the :convert step' do
+  # Check ImageMagick policy independently of Steam's argument guard.
+  describe 'ImageMagick arguments Steam does not pass' do
+
+    def policy_refuses?(arguments)
+      ::Dragonfly::ImageMagick::Commands.convert(resizer.fetch_file(photo).apply.content, arguments)
+      false
+    rescue Dragonfly::Shell::CommandFailed => e
+      e.diagnostics.match?(Locomotive::Steam::ImageResizerService::Shell::REFUSAL) or raise
+    end
 
     it 'cannot read a file indirectly' do
       secret = written('secret.txt', 'sentinel')
 
-      expect(refused?(resizer.fetch_file(photo).process(:convert, "-set comment @#{secret}"))).to be true
+      expect(policy_refuses?("-set comment @#{secret}")).to be true
     end
 
     it 'cannot read an inline image' do
       inline = "inline:data:image/png;base64,#{[File.binread(File.join(Locomotive::Steam::ImageResizerService::Shell::SAMPLES_PATH, Locomotive::Steam::ImageResizerService::Shell::SAMPLE))].pack('m0')}"
 
-      expect(refused?(resizer.fetch_file(photo).process(:convert, "#{inline} -append"))).to be true
+      expect(policy_refuses?("#{inline} -append")).to be true
     end
 
     it 'cannot run an MSL script' do
       written_by_script = File.join(dir, 'by-script.png')
       script = written('script.msl', %(<?xml version="1.0"?><image><read filename="#{photo}"/><write filename="#{written_by_script}"/></image>))
 
-      expect(refused?(resizer.fetch_file(photo).process(:convert, "msl:#{script} -append"))).to be true
+      expect(policy_refuses?("msl:#{script} -append")).to be true
       expect(File.exist?(written_by_script)).to be false
     end
 
     it 'cannot draw an MVG file' do
       drawing = written('shapes.mvg', "viewbox 0 0 60 40\nfill red rectangle 0,0 30,20\n")
 
-      expect(refused?(resizer.fetch_file(photo).process(:convert, "mvg:#{drawing} -append"))).to be true
+      expect(policy_refuses?("mvg:#{drawing} -append")).to be true
     end
 
     it "cannot draw SVG with ImageMagick's own renderer" do
       svg = written('drawing.svg', '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="40"><rect width="60" height="40"/></svg>')
 
-      expect(refused?(resizer.fetch_file(photo).process(:convert, "msvg:#{svg} -append"))).to be true
+      expect(policy_refuses?("msvg:#{svg} -append")).to be true
     end
 
     it 'cannot write a format that is not allowed' do
       copy = File.join(dir, 'copy.pdf')
 
-      expect(refused?(resizer.fetch_file(photo).process(:convert, "-write #{copy}"))).to be true
+      expect(policy_refuses?("-write #{copy}")).to be true
       expect(File.exist?(copy) ? File.binread(copy, 4) : nil).not_to eq '%PDF'
     end
 
