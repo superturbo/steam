@@ -48,4 +48,40 @@ describe Locomotive::Steam::Decorators::TemplateDecorator do
 
   end
 
+  describe '#liquid_source of a template file' do
+
+    let(:directory)     { Dir.mktmpdir }
+    let(:template_path) { File.join(directory, 'card.liquid') }
+    let(:snippet)       { instance_double('Snippet', localized_attributes: [], template_path: template_path) }
+    let(:decorated)     { described_class.new(snippet, locale, default_locale) }
+
+    before { File.binwrite(template_path, content.b) }
+
+    after { FileUtils.remove_entry(directory) }
+
+    context 'that is valid UTF-8' do
+
+      let(:content) { '<p>Ąžuolas</p>' }
+
+      it { expect(decorated.liquid_source).to eq '<p>Ąžuolas</p>' }
+
+    end
+
+    context 'that is not valid UTF-8' do
+
+      let(:content) { "<p>Labas \xFF pasauli</p>" }
+
+      it 'is refused with its path, without its content' do
+        expect { decorated.liquid_source }.to raise_error(Locomotive::Steam::TemplateError) { |error|
+          expect(error.message).to eq 'The file is not valid UTF-8'
+          expect(error.template_name).to eq template_path
+          expect(error.source).to be_nil
+          expect(error.backtrace).not_to be_empty
+        }
+      end
+
+    end
+
+  end
+
 end

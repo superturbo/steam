@@ -6,7 +6,7 @@ describe Locomotive::Steam::TemplateError do
   let(:file)      { 'template.liquid.haml' }
   let(:source)    { %w(a b c d e f g h i j k l m n o p q r s t u v w y z).join("\n") }
   let(:line)      { 10 }
-  let(:backtrace) { 'Backtrace' }
+  let(:backtrace) { ["template.liquid.haml:10:in 'render'", "page.rb:42:in 'render'"] }
   let(:error)     { described_class.new(message, file, source, line, backtrace) }
 
   describe '#code_lines' do
@@ -19,9 +19,19 @@ describe Locomotive::Steam::TemplateError do
 
   describe '#backtrace' do
 
-    subject { error.original_backtrace }
+    it 'is the backtrace of the error it stands for' do
+      expect(error.backtrace).to eq backtrace
+    end
 
-    it { is_expected.to eq 'Backtrace' }
+    it 'is where it was raised when it stands for no other error' do
+      raised = begin
+        raise described_class.new(message, file, source, line, nil)
+      rescue described_class => e
+        e
+      end
+
+      expect(raised.backtrace.first).to start_with "#{__FILE__}:"
+    end
 
   end
 

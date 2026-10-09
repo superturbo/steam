@@ -25,6 +25,10 @@ module Locomotive::Steam
             yaml      = File.open(path).read.force_encoding('utf-8')
             template  = nil
 
+            unless yaml.valid_encoding?
+              raise Locomotive::Steam::TemplateError.new('The file is not valid UTF-8', path, nil, nil, nil)
+            end
+
             # JSON header?
             if frontmatter && match = yaml.match(JSON_FRONTMATTER_REGEXP)
               json, template = match[:json], match[:template]

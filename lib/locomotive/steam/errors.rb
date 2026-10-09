@@ -112,7 +112,7 @@ module Locomotive::Steam
     end
 
     def backtrace
-      original_backtrace
+      original_backtrace || super
     end
 
     private

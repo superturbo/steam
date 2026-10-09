@@ -23,6 +23,10 @@ module Locomotive
         def source_from_template_file
           source = File.read(template_path).force_encoding('utf-8')
 
+          unless source.valid_encoding?
+            raise Steam::TemplateError.new('The file is not valid UTF-8', template_path, nil, nil, nil)
+          end
+
           if match = source.match(FRONTMATTER_REGEXP)
             source = match[:template]
           end

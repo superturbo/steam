@@ -49,4 +49,70 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::Section do
 
   end
 
+  describe 'a section file' do
+
+    let(:site_path) { Dir.mktmpdir }
+    let(:scope)     { instance_double('Scope', default_locale: :en) }
+    let(:path)      { File.join(site_path, 'app', 'views', 'sections', 'promo.liquid') }
+
+    before do
+      FileUtils.mkdir_p(File.dirname(path))
+      File.binwrite(path, "---\nname: Akcija\n---\n".b + body.b)
+    end
+
+    after { FileUtils.remove_entry(site_path) }
+
+    context 'that is valid UTF-8' do
+
+      let(:body) { '<p>Ąžuolas</p>' }
+
+      it 'loads its definition and template' do
+        section = loader.load(scope).first
+
+        expect(section[:definition][:name]).to eq 'Akcija'
+        expect(section[:template]).to eq '<p>Ąžuolas</p>'
+      end
+
+    end
+
+    context 'that is not valid UTF-8' do
+
+      let(:body) { "<p>Labas \xFF pasauli</p>" }
+
+      it 'is refused with its path, without its content' do
+        expect { loader.load(scope) }.to raise_error(Locomotive::Steam::TemplateError) { |error|
+          expect(error.message).to eq 'The file is not valid UTF-8'
+          expect(error.template_name).to eq path
+          expect(error.source).to be_nil
+          expect(error.backtrace).not_to be_empty
+        }
+      end
+
+    end
+
+  end
+
+  describe 'a section file without a header' do
+
+    let(:site_path) { Dir.mktmpdir }
+    let(:scope)     { instance_double('Scope', default_locale: :en) }
+    let(:path)      { File.join(site_path, 'app', 'views', 'sections', 'promo.liquid') }
+
+    before do
+      FileUtils.mkdir_p(File.dirname(path))
+      File.write(path, "<p>Akcija</p>\n")
+    end
+
+    after { FileUtils.remove_entry(site_path) }
+
+    it 'is refused with its path and a backtrace' do
+      expect { loader.load(scope) }.to raise_error(Locomotive::Steam::TemplateError) { |error|
+        expect(error.message).to eq 'Your file requires a valid YAML or JSON header'
+        expect(error.template_name).to eq path
+        expect(error.backtrace).not_to be_empty
+      }
+    end
+
+  end
+
 end
