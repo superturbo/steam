@@ -25,7 +25,8 @@ module Locomotive::Steam
             file_system:    Locomotive::Steam::Liquid::FileSystem.new(
               section_finder: services.section_finder,
               snippet_finder: services.snippet_finder
-            )
+            ),
+            template_factory: Locomotive::Steam::Liquid::PartialTemplateFactory.new
           }.merge(env['steam.liquid_registers'])
         end
 

@@ -118,12 +118,15 @@ describe Locomotive::Steam::Liquid::Tags::GlobalSection do
       let(:liquid_source) { '{% action "Hello world" %}a.b(+}{% endaction %}' }
       let(:section)       { instance_double('section',
         name:           'Hero',
+        type:           'header',
         liquid_source:  liquid_source,
         definition:     { settings: [], blocks: [] }
       )}
 
-      it 'raises an TemplateError' do
-        expect { subject }.to raise_exception(Locomotive::Steam::TemplateError)
+      it 'raises a TemplateError named after the section type' do
+        expect { subject }.to raise_exception(Locomotive::Steam::TemplateError) { |error|
+          expect(error.template_name).to eq 'sections--header'
+        }
       end
     end
 

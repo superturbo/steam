@@ -111,6 +111,11 @@ module Locomotive::Steam
       (start..finish).map { |i| [i, lines[i - 1]] }
     end
 
+    # The template the error occurred in; an enclosing template does not rename it.
+    def template_name=(name)
+      super if template_name.blank?
+    end
+
     def backtrace
       original_backtrace || super
     end

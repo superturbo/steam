@@ -25,35 +25,4 @@ module Liquid
     end
 
   end
-
-  class PartialCache
-
-    def self.load(template_name, context:, parse_context:)
-      cached_partials = context.registers[:cached_partials]
-      cache_key = "#{template_name}:#{parse_context.error_mode}"
-      cached = cached_partials[cache_key]
-      return cached if cached
-
-      file_system = context.registers[:file_system]
-      source      = file_system.read_template_file(template_name)
-
-      parse_context.partial = true
-
-      template = context.registers[:template_factory].for(template_name)
-
-      begin
-        partial = template.parse(source, parse_context)
-      rescue Locomotive::Steam::TemplateError
-        raise
-      rescue ::Liquid::SyntaxError => e
-        raise Locomotive::Steam::LiquidError.new(e, template_name, source)
-      end
-
-      partial.name ||= template_name
-      cached_partials[cache_key] = partial
-    ensure
-      parse_context.partial = false
-    end
-
-  end
 end

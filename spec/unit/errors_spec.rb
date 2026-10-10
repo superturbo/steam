@@ -17,6 +17,32 @@ describe Locomotive::Steam::TemplateError do
 
   end
 
+  describe '#template_name' do
+
+    it 'is the template the error occurred in, which an enclosing template does not rename' do
+      error.template_name = 'sections--hero'
+
+      expect(error.template_name).to eq file
+    end
+
+    it 'is given by the enclosing template when the error has none' do
+      unnamed = described_class.new(message, nil, source, line, backtrace)
+
+      unnamed.template_name = 'sections--hero'
+
+      expect(unnamed.template_name).to eq 'sections--hero'
+    end
+
+    it 'is given by the enclosing template when the error has a blank one' do
+      unnamed = described_class.new(message, '', source, line, backtrace)
+
+      unnamed.template_name = 'sections--hero'
+
+      expect(unnamed.template_name).to eq 'sections--hero'
+    end
+
+  end
+
   describe '#backtrace' do
 
     it 'is the backtrace of the error it stands for' do

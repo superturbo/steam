@@ -35,7 +35,10 @@ describe Locomotive::Steam::Liquid::Tags::Snippet do
   describe 'rendering' do
 
     let(:assigns) { {} }
-    let(:context) { ::Liquid::Context.new(assigns, {}, { services: services, file_system: file_system }) }
+    let(:context) do
+      ::Liquid::Context.new(assigns, {}, { services: services, file_system: file_system,
+                                           template_factory: Locomotive::Steam::Liquid::PartialTemplateFactory.new })
+    end
 
     subject { render_template(source, context) }
 
@@ -70,12 +73,14 @@ describe Locomotive::Steam::Liquid::Tags::Snippet do
 
     context 'the snippet has a syntax error inside its liquid template' do
 
-      # Liquid 5's include loads through PartialCache, so the snippet path now
-      # gets the same Steam error wrapping as the section path
-      let(:snippet_source) { '{% if %}' }
+      let(:snippet_source) { "built by\n{% if %}" }
 
-      it 'raises a LiquidError' do
-        expect { subject }.to raise_exception(Locomotive::Steam::LiquidError)
+      it 'raises a LiquidError naming the snippet, with its code' do
+        expect { subject }.to raise_exception(Locomotive::Steam::LiquidError) { |error|
+          expect(error.template_name).to eq 'footer'
+          expect(error.line_number).to eq 2
+          expect(error.code_lines).to include [2, '{% if %}']
+        }
       end
 
     end

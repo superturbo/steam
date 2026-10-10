@@ -11,7 +11,9 @@ describe Locomotive::Steam::Liquid::Tags::Section do
   let(:file_system)   { Locomotive::Steam::Liquid::FileSystem.new(section_finder: finder) }
   let(:page)          { liquid_instance_double('Page', sections_content: content)}
   let(:assigns)       { { 'page' => page } }
-  let(:context)       { ::Liquid::Context.new(assigns, {}, { services: services, live_editing: live_editing, file_system: file_system }, rethrow_errors: true) }
+  let(:factory)       { Locomotive::Steam::Liquid::PartialTemplateFactory.new }
+  let(:registers)     { { services: services, live_editing: live_editing, file_system: file_system, template_factory: factory } }
+  let(:context)       { ::Liquid::Context.new(assigns, {}, registers, rethrow_errors: true) }
 
   describe 'parsing' do
 
@@ -316,8 +318,12 @@ describe Locomotive::Steam::Liquid::Tags::Section do
 
       let(:liquid_source) { %(built by <a>\n\t<strong>{{ section.settings.brand }}{% if %}</strong></a>) }
 
-      it 'raises a LiquidError' do
-        expect { subject }.to raise_exception(Locomotive::Steam::LiquidError)
+      it 'raises a LiquidError naming the section, with its code' do
+        expect { subject }.to raise_exception(Locomotive::Steam::LiquidError) { |error|
+          expect(error.template_name).to eq 'sections--header'
+          expect(error.line_number).to eq 2
+          expect(error.code_lines).to include [2, "\t<strong>{{ section.settings.brand }}{% if %}</strong></a>"]
+        }
       end
 
     end
@@ -328,12 +334,15 @@ describe Locomotive::Steam::Liquid::Tags::Section do
       let(:liquid_source) { '{% action "Hello world" %}a.b(+}{% endaction %}' }
       let(:section)       { instance_double('section',
         name:           'Hero',
+        type:           'header',
         liquid_source:  liquid_source,
         definition:     { settings: [], blocks: [] }
       )}
 
-      it 'raises a TemplateError' do
-        expect { subject }.to raise_exception(Locomotive::Steam::TemplateError)
+      it 'raises a TemplateError named after the section type' do
+        expect { subject }.to raise_exception(Locomotive::Steam::TemplateError) { |error|
+          expect(error.template_name).to eq 'sections--header'
+        }
       end
     end
 
@@ -359,6 +368,145 @@ describe Locomotive::Steam::Liquid::Tags::Section do
 
       expect(output).to include 'dark hero'
       expect(output).not_to include 'plain hero'
+    end
+
+  end
+
+  describe 'a section template nested too deep' do
+
+    let(:live_editing)  { false }
+    let(:source)        { "{% section 'deep' %}" }
+    let(:liquid_source) { ('{% if true %}' * 101) + 'deep' + ('{% endif %}' * 101) }
+    let(:section)       { instance_double('Section', slug: 'deep', type: 'deep', liquid_source: liquid_source,
+                                                     definition: { 'type' => 'deep', 'settings' => [], 'blocks' => [] }) }
+
+    before { allow(finder).to receive(:find).with('deep').and_return(section) }
+
+    it 'keeps the Liquid error and names the section template' do
+      expect { render_template(source, context) }.to raise_error(::Liquid::StackLevelError) { |error|
+        expect(error.template_name).to eq 'sections--deep'
+      }
+    end
+
+  end
+
+  describe 'an error in the second of two sections' do
+
+    let(:live_editing) { false }
+    let(:source)       { "{% section 'first' %}{% section 'second' %}" }
+
+    def section_typed(type, liquid_source)
+      instance_double('Section', slug: type, type: type, liquid_source: liquid_source,
+                                 definition: { 'type' => type, 'settings' => [], 'blocks' => [] })
+    end
+
+    before do
+      allow(finder).to receive(:find).with('first').and_return(section_typed('first', 'first section'))
+      allow(finder).to receive(:find).with('second').and_return(section_typed('second', '{% action "Hello world" %}a.b(+}{% endaction %}'))
+    end
+
+    it 'is named after the second section' do
+      expect { render_template(source, context) }.to raise_error(Locomotive::Steam::TemplateError) { |error|
+        expect(error.template_name).to eq 'sections--second'
+      }
+    end
+
+  end
+
+  describe 'an error in a snippet a section includes by a variable' do
+
+    let(:live_editing)   { false }
+    let(:assigns)        { { 'page' => page, 'card' => 'broken_card' } }
+    let(:snippet_finder) { instance_double('SnippetFinder') }
+    let(:file_system)    { Locomotive::Steam::Liquid::FileSystem.new(section_finder: finder, snippet_finder: snippet_finder) }
+    let(:source)         { "{% section 'holder' %}" }
+    let(:section)        { instance_double('Section', slug: 'holder', type: 'holder', liquid_source: '{% include card %}',
+                                                      definition: { 'type' => 'holder', 'settings' => [], 'blocks' => [] }) }
+
+    before do
+      allow(finder).to receive(:find).with('holder').and_return(section)
+      allow(snippet_finder).to receive(:find).with('broken_card').and_return(instance_double('Snippet', liquid_source: '{% if %}'))
+    end
+
+    it 'keeps the name of the snippet' do
+      expect { render_template(source, context) }.to raise_error(Locomotive::Steam::LiquidError) { |error|
+        expect(error.template_name).to eq 'broken_card'
+      }
+    end
+
+  end
+
+  describe 'the template name of the context' do
+
+    let(:live_editing)  { false }
+    let(:source)        { "{% section 'hero' %}" }
+    let(:section)       { instance_double('Section', slug: 'hero', type: 'hero', liquid_source: liquid_source,
+                                                     definition: { 'type' => 'hero', 'settings' => [], 'blocks' => [] }) }
+
+    before do
+      allow(finder).to receive(:find).with('hero').and_return(section)
+      context.template_name = 'pages/index.liquid'
+    end
+
+    context 'after a section renders' do
+
+      let(:liquid_source) { 'hero' }
+
+      it 'is the one before the section' do
+        render_template(source, context)
+
+        expect(context.template_name).to eq 'pages/index.liquid'
+      end
+
+    end
+
+    context 'after a section fails' do
+
+      let(:liquid_source) { '{% action "Hello world" %}a.b(+}{% endaction %}' }
+
+      it 'is the one before the section, while the error names the section' do
+        expect { render_template(source, context) }.to raise_error(Locomotive::Steam::TemplateError) { |error|
+          expect(error.template_name).to eq 'sections--hero'
+        }
+
+        expect(context.template_name).to eq 'pages/index.liquid'
+      end
+
+    end
+
+  end
+
+  describe "a context without Steam's template factory" do
+
+    let(:live_editing) { false }
+    let(:registers)    { { services: services, live_editing: live_editing, file_system: file_system } }
+    let(:source)       { "{% section 'plain' %}" }
+    let(:section)      { instance_double('Section', slug: 'plain', type: 'plain', liquid_source: liquid_source,
+                                                    definition: { 'type' => 'plain', 'settings' => [], 'blocks' => [] }) }
+
+    before { allow(finder).to receive(:find).with('plain').and_return(section) }
+
+    context 'a section that parses' do
+
+      let(:liquid_source) { 'plain section' }
+
+      it 'renders it' do
+        expect(render_template(source, context)).to include 'plain section'
+      end
+
+    end
+
+    context 'a section with a syntax error' do
+
+      let(:liquid_source) { "plain\n{% if %}" }
+
+      it 'raises the Liquid error, naming the section, without its code' do
+        expect { render_template(source, context) }.to raise_error(::Liquid::SyntaxError) { |error|
+          expect(error.template_name).to eq 'sections--plain'
+          expect(error).not_to respond_to(:code_lines)
+        }
+      end
+
     end
 
   end

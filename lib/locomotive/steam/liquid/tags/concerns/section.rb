@@ -15,11 +15,13 @@ module Locomotive::Steam::Liquid::Tags::Concerns
         # assign an id if specified in the context
         context['section'].id = context['section_id'] if context['section_id'].present?
 
+        # Errors name the section being rendered, as with Liquid's include.
+        template_name, context.template_name = context.template_name, "sections--#{section.type}"
+
         begin
           _render(context, template)
-        rescue Locomotive::Steam::TemplateError => e
-          e.template_name = "sections--#{section.name}"
-          raise e
+        ensure
+          context.template_name = template_name
         end
       end
     end
