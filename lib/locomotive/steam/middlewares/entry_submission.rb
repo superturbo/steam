@@ -7,6 +7,7 @@ module Locomotive::Steam
 
       include Concerns::Helpers
       include Concerns::Recaptcha
+      include Concerns::CsrfProtection
 
       HTTP_REGEXP             = /^https?:\/\//o
       ENTRY_SUBMISSION_REGEXP = /^\/entry_submissions\/(\w+)/o
@@ -20,6 +21,8 @@ module Locomotive::Steam
         # version of the entry + error messages (if present).
         with_locale do
           if slug = get_content_type_slug
+            return refuse_unverified_form unless form_token_verified?
+
             entry = create_entry(slug)
             navigation_behavior(entry)
           else

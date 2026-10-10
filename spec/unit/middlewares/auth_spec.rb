@@ -4,6 +4,7 @@ require_relative '../../../lib/locomotive/steam/middlewares/thread_safe'
 require_relative '../../../lib/locomotive/steam/middlewares/concerns/auth_helpers'
 require_relative '../../../lib/locomotive/steam/middlewares/concerns/helpers'
 require_relative '../../../lib/locomotive/steam/middlewares/concerns/recaptcha'
+require_relative '../../../lib/locomotive/steam/middlewares/concerns/csrf_protection'
 require_relative '../../../lib/locomotive/steam/middlewares/auth'
 
 describe Locomotive::Steam::Middlewares::Auth::AuthOptions do
@@ -68,9 +69,42 @@ describe Locomotive::Steam::Middlewares::Auth do
   let(:recaptcha_service) { instance_double('RecaptchaService', verify: recaptcha_response) }
   let(:auth_service)      { instance_double('AuthService', find_authenticated_resource: nil) }
   let(:services)          { instance_double('Services', auth: auth_service, content_entry: entry_service, recaptcha: recaptcha_service, :locale= => 'en') }
-  let(:session)           { {} }
-  let(:form)              { { auth_action: 'sign_up', auth_content_type: 'accounts', :'g-recaptcha-response' => 'mycode' } }
+  let(:session)           { { Rack::Csrf.key => 'token-1' } }
+  let(:form)              { { auth_action: 'sign_up', auth_content_type: 'accounts', :'g-recaptcha-response' => 'mycode', _csrf: 'token-1' } }
   let(:rack_env)          { build_env }
+
+  before do
+    allow(services).to receive(:csrf_protection) { Locomotive::Steam::CsrfProtectionService.new(true, Rack::Csrf.field, rack_env) }
+  end
+
+  describe 'form token' do
+
+    before { allow(auth_service).to receive(:sign_up) }
+
+    it 'refuses an action without a token' do
+      form.delete(:_csrf)
+
+      code, _headers, body = middleware.call(rack_env)
+
+      expect([code, body.join]).to eq [422, 'The form could not be verified. Reload the page and submit it again.']
+      expect(recaptcha_service).not_to have_received(:verify)
+      expect(auth_service).not_to have_received(:sign_up)
+    end
+
+    it 'refuses a token other than the one of the session' do
+      form[:_csrf] = 'token-2'
+
+      expect(middleware.call(rack_env).first).to eq 422
+      expect(auth_service).not_to have_received(:sign_up)
+    end
+
+    it 'leaves a request without an authentication action alone' do
+      form.replace(_csrf: 'token-2')
+
+      expect(middleware.call(rack_env).first).to eq 200
+    end
+
+  end
 
   describe 'sign_up with an invalid recaptcha' do
 
@@ -92,7 +126,7 @@ describe Locomotive::Steam::Middlewares::Auth do
 
   describe 'reset_password of a type whose password field has another name' do
 
-    let(:form)         { { auth_action: 'reset_password', auth_content_type: 'accounts', auth_reset_token: '42', auth_callback: '/me' } }
+    let(:form)         { { auth_action: 'reset_password', auth_content_type: 'accounts', auth_reset_token: '42', auth_callback: '/me', _csrf: 'token-1' } }
     let(:content_type) { instance_double('ContentType', slug: 'accounts', recaptcha_required?: false) }
     let(:entry)        { instance_double('Account', _id: 42, content_type: content_type) }
 

@@ -5,17 +5,29 @@ require_relative '../../../lib/locomotive/steam/middlewares/thread_safe'
 describe Locomotive::Steam::Middlewares::ThreadSafe do
 
   # A new middleware each time: params are memoized.
-  def params_for(body)
+  def middleware_for(body)
     env = Rack::MockRequest.env_for('/', method: 'POST', input: body.to_s, 'CONTENT_TYPE' => 'application/json')
     env.delete('rack.input') if body.nil?
     env['steam.request'] = Rack::Request.new(env)
-    described_class.new(nil).tap { |middleware| middleware.env = env }.params
+    described_class.new(nil).tap { |middleware| middleware.env = env }
+  end
+
+  def params_for(body)
+    middleware_for(body).params
   end
 
   describe 'the params of a JSON body' do
 
     it 'reads a JSON object' do
       expect(params_for('{"entry": {"name": "John"}}')).to eq('entry' => { 'name' => 'John' })
+    end
+
+    it 'parses the body once for the params and the body fields' do
+      middleware = middleware_for('{"_csrf": "token-1"}')
+      expect(JSON).to receive(:parse).once.and_call_original
+
+      expect(middleware.params['_csrf']).to eq 'token-1'
+      expect(middleware.body_params['_csrf']).to eq 'token-1'
     end
 
     it 'has none for an empty body or no body at all' do

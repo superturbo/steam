@@ -19,6 +19,17 @@ describe Locomotive::Steam::Liquid::Tags::ModelForm do
 
   it { is_expected.to eq %(<form method="POST" enctype="multipart/form-data"><input type="hidden" name="content_type_slug" value="newsletter_addresses" /><input type="hidden" name="token" value="42" />Newsletter Form</form>) }
 
+  describe 'protection not enabled' do
+
+    before { allow(services.configuration).to receive(:csrf_protection).and_return(false) }
+
+    it 'renders no token and creates none' do
+      is_expected.to eq %(<form method="POST" enctype="multipart/form-data"><input type="hidden" name="content_type_slug" value="newsletter_addresses" />Newsletter Form</form>)
+      expect(Rack::Csrf).not_to have_received(:token)
+    end
+
+  end
+
   describe 'invalid syntax' do
 
     let(:source) { "{% model_form %}Hello world{% endmodel_form %}" }

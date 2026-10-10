@@ -60,16 +60,31 @@ module Locomotive::Steam::Middlewares
     end
 
     def params
-      @params ||= if request.content_type&.start_with?('application/json') && (request.post? || request.put?)
+      @params ||= if json_request?
         (json_body || {}).with_indifferent_access
       else
         request.params.with_indifferent_access
       end
     end
 
+    # The fields of the request body, without the query string.
+    def body_params
+      json_request? ? (json_body || {}) : request.POST
+    end
+
+    def json_request?
+      request.content_type&.start_with?('application/json') && (request.post? || request.put?)
+    end
+
+    def json_body
+      return @json_body if defined?(@json_body)
+
+      @json_body = read_json_body
+    end
+
     # Empty bodies have no value. A JSON value other than an object goes under _json.
     # Do not retain parser errors because their messages can include the body.
-    def json_body
+    def read_json_body
       return unless (body = request.body)
 
       body.rewind

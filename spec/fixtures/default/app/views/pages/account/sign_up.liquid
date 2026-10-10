@@ -17,6 +17,7 @@ handle: sign_up
 {% else %}
 
   <form action="{% path_to 'sign_up' %}" method="POST">
+    {% csrf_param %}
     <input type="hidden" name="auth_action" value="sign_up" />
     <input type="hidden" name="auth_content_type" value="accounts" />
     <input type="hidden" name="auth_id_field" value="email" />

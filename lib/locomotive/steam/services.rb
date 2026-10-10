@@ -123,7 +123,7 @@ module Locomotive
         end
 
         register :csrf_protection do
-          Steam::CsrfProtectionService.new(configuration.csrf_protection, Rack::Csrf.field, Rack::Csrf.token(request.env))
+          Steam::CsrfProtectionService.new(configuration.csrf_protection, Rack::Csrf.field, request.env)
         end
 
         register :markdown do

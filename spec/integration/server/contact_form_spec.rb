@@ -11,6 +11,71 @@ describe 'ContactForm' do
   it 'renders the form' do
     get '/contact'
     expect(last_response.body).to include '/entry_submissions/messages.json'
+    expect(last_response.body).to match(/name="_csrf" value="[^"]+"/)
+  end
+
+  describe 'form token' do
+
+    let(:entry) { { 'name' => 'John', 'email' => 'j@doe.net', 'message' => 'Bla bla' } }
+
+    it 'accepts the token rendered in the form of the page' do
+      get '/events'
+      token = last_response.body[/name="_csrf" value="([^"]+)"/, 1]
+
+      post '/events', { 'content_type_slug' => 'messages', 'entry' => entry, '_csrf' => token }
+
+      expect(last_response.status).to eq 301
+      expect(last_response.location).to include 'submitted_entry_slug=john'
+    end
+
+    it 'refuses a submission without the token' do
+      post '/entry_submissions/messages', { 'entry' => entry }
+
+      expect(last_response.status).to eq 422
+      expect(last_response.body).to eq 'The form could not be verified. Reload the page and submit it again.'
+    end
+
+    it 'refuses a token sent in the query string only' do
+      get '/events'
+      token = last_response.body[/name="_csrf" value="([^"]+)"/, 1]
+
+      post "/events?_csrf=#{token}", { 'content_type_slug' => 'messages', 'entry' => entry }
+
+      expect(last_response.status).to eq 422
+    end
+
+    it 'refuses a token other than the one of the session' do
+      get '/events'
+
+      post '/events', { 'content_type_slug' => 'messages', 'entry' => entry, '_csrf' => 'another-token' }
+
+      expect(last_response.status).to eq 422
+    end
+
+    it 'accepts the token of the page in the X-CSRF-Token header' do
+      get '/events'
+      token = last_response.body[/name="_csrf" value="([^"]+)"/, 1]
+
+      post '/events', { 'content_type_slug' => 'messages', 'entry' => entry }, { 'HTTP_X_CSRF_TOKEN' => token }
+
+      expect(last_response.status).to eq 301
+    end
+
+    context 'protection disabled by the host' do
+
+      before { allow(Locomotive::Steam.configuration).to receive(:csrf_protection).and_return(false) }
+
+      it 'renders no token and accepts a submission without one' do
+        get '/events'
+        expect(last_response.body).not_to include 'name="_csrf"'
+
+        post '/events', { 'content_type_slug' => 'messages', 'entry' => entry }
+
+        expect(last_response.status).to eq 301
+      end
+
+    end
+
   end
 
   describe 'submit a new entry (old version)' do
@@ -226,6 +291,9 @@ describe 'ContactForm' do
   end
 
   def post_contact_form(url, params, json = false, follow_redirect = false, env = {})
+    params = params.merge(Rack::Csrf.field => form_token)
+    env    = env.merge('rack.session' => { Rack::Csrf.key => form_token })
+
     if json
       url += '.json'
       params = JSON.generate(params.symbolize_keys)

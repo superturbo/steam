@@ -43,6 +43,15 @@ module Spec
       Rack::MockRequest.env_for(url, opts)
     end
 
+    def form_token
+      'spec-form-token'
+    end
+
+    def post_form(url, params = {}, env = {})
+      session = (env['rack.session'] || {}).merge(Rack::Csrf.key => form_token)
+      post url, params.merge(Rack::Csrf.field => form_token), env.merge('rack.session' => session)
+    end
+
     def notification_payload_for(notification)
       payload = nil
       subscription = ActiveSupport::Notifications.subscribe(notification) do |name, start, finish, id, _payload|

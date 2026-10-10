@@ -86,7 +86,7 @@ module Locomotive
       attr_accessor :image_magick_command_timeout
       def image_magick_command_timeout; @image_magick_command_timeout.nil? ? 30 : @image_magick_command_timeout; end
 
-      # Enable the Cross-site request forgery protection for POST requests.
+      # Enable CSRF protection for entry submissions, authentication actions and unlocking private sites.
       #
       # default: true
       #

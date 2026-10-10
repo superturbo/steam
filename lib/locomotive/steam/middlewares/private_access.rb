@@ -9,19 +9,22 @@ module Locomotive::Steam
     class PrivateAccess < ThreadSafe
 
       include Concerns::Helpers
+      include Concerns::CsrfProtection
 
       def _call
         return if env['steam.private_access_disabled']
+        return unless site.private_access
 
-        if site.private_access
-          debug_log "Site with private access"
+        debug_log "Site with private access"
 
-          if access_granted?
-            store_password
-          else
-            render_lock_screen
-          end
+        return if unlocked?
+
+        if submitted_password.present?
+          return refuse_unverified_form unless form_token_verified?
+          return store_password if submitted_password == site.password
         end
+
+        render_lock_screen
       end
 
       private
@@ -35,16 +38,22 @@ module Locomotive::Steam
         end
       end
 
-      def access_granted?
-        !submitted_password.blank? && submitted_password == site.password
+      def unlocked?
+        stored = request.session[:private_access_password]
+        stored.present? && stored == site.password
       end
 
       def submitted_password
-        params[:private_access_password] || request.session[:private_access_password]
+        body_params['private_access_password'] if request.post?
       end
 
       def store_password
-        request.session[:private_access_password] = params[:private_access_password] if params[:private_access_password].present?
+        request.session[:private_access_password] = submitted_password
+      end
+
+      def token_field
+        service = services.csrf_protection
+        %(<input type="hidden" name="#{service.field}" value="#{service.token}" />) if service.enabled?
       end
 
       def lock_screen_html
@@ -63,6 +72,7 @@ module Locomotive::Steam
   </style>
   <body>
     <form action="#{mounted_on}" method="POST">
+      #{token_field}
       #{'<p>Wrong password</p>' unless submitted_password.blank?}
       <input type="password" name="private_access_password" placeholder="Password" />
       &nbsp;

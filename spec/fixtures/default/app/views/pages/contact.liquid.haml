@@ -26,6 +26,7 @@ position: 4
   / %input{ type: 'hidden', name: 'error_callback', value: '/contact' }
 
   %input{ type: 'hidden', name: 'some_variable', value: '42' }
+  {% csrf_param %}
 
   %p
     %label{ :for => 'name' } Name

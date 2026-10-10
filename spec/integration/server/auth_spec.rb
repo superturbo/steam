@@ -37,6 +37,17 @@ describe 'Authentication' do
         expect(last_response.location).to eq '/account/me'
       end
 
+      it 'accepts the token rendered in the sign up form' do
+        get '/account/sign-up'
+        token = last_response.body[/name="_csrf" value="([^"]+)"/, 1]
+        params[:auth_entry][:email] = 'jeff.ament@soundgarden.band'
+
+        post '/account/sign-up', params.merge(_csrf: token)
+
+        expect(last_response.status).to eq 301
+        expect(last_response.location).to eq '/account/me'
+      end
+
       it 'creates the account a lookup by its email finds' do
         params[:auth_entry][:email] = 'matt.cameron@soundgarden.band'
         sign_up(params)
@@ -63,7 +74,7 @@ describe 'Authentication' do
         sign_up(params)
         clear_cookies
 
-        post '/account/sign-in', {
+        post_form '/account/sign-in', {
           auth_action: 'sign_in', auth_content_type: 'accounts', auth_id_field: 'email',
           auth_password_field: 'password', auth_id: 'ben.shepherd@soundgarden.band', auth_password: 'a<b&c>d!',
           auth_callback: '/account/me' }
@@ -135,7 +146,7 @@ describe 'Authentication' do
                          .all('accounts', 'email' => "#{name}@soundgarden.band", '_visible' => nil)
             expect(accounts).to be_empty
 
-            post '/account/sign-in', {
+            post_form '/account/sign-in', {
               auth_action: 'sign_in', auth_content_type: 'accounts', auth_id_field: 'email',
               auth_password_field: 'password', auth_id: "#{name}@soundgarden.band", auth_password: 'easyone',
               auth_callback: '/account/me' }
@@ -146,7 +157,7 @@ describe 'Authentication' do
       end
 
       def sign_up(params, follow_redirect = false)
-        post '/account/sign-up', params
+        post_form '/account/sign-up', params
         follow_redirect! if follow_redirect
         last_response
       end
@@ -186,6 +197,23 @@ describe 'Authentication' do
         expect(last_response.body).to include "My name is John and I'm logged in!"
       end
 
+      it 'signs in with the fields of the rendered form' do
+        get '/account/sign-in'
+        fields = last_response.body.scan(/<input type="hidden" name="([^"]+)" value="([^"]*)"/).to_h
+
+        post '/account/sign-in', fields.merge('auth_id' => 'john@doe.net', 'auth_password' => 'easyone')
+
+        expect(last_response.status).to eq 301
+        follow_redirect!
+        expect(last_response.body).to include "My name is John and I'm logged in!"
+      end
+
+      it 'refuses a sign in without the form token' do
+        post '/account/sign-in', params
+        expect(last_response.status).to eq 422
+        expect(last_response.body).to eq 'The form could not be verified. Reload the page and submit it again.'
+      end
+
       context 'wrong credentials' do
 
         let(:params) { {
@@ -220,7 +248,7 @@ describe 'Authentication' do
       end
 
       def sign_in(params, follow_redirect = false)
-        post '/account/sign-in', params
+        post_form '/account/sign-in', params
         follow_redirect! if follow_redirect
         last_response
       end
@@ -242,13 +270,13 @@ describe 'Authentication' do
     } }
 
     it 'redirect to the requested page' do
-      post '/account/sign-in', params, { 'rack.session' => rack_session }
+      post_form '/account/sign-in', params, { 'rack.session' => rack_session }
       expect(last_response.status).to eq 301
       expect(last_response.location).to eq "/account/sign-in"
     end
 
     it 'displays the profile page as described in the params' do
-      post '/account/sign-in', params, { 'rack.session' => rack_session }
+      post_form '/account/sign-in', params, { 'rack.session' => rack_session }
       follow_redirect!
       expect(last_response.body).to include "Sign in"
       expect(last_response.body).not_to include "You're already authenticated!"
@@ -271,7 +299,7 @@ describe 'Authentication' do
     } }
 
     it 'renders the forgot password page with an error message' do
-      post '/account/forgot-password', params
+      post_form '/account/forgot-password', params
       expect(last_response.status).to eq 200
       expect(last_response.body).to include 'Forgot your password'
       expect(last_response.body).to include 'Your email is unknown'
@@ -282,7 +310,7 @@ describe 'Authentication' do
       let(:email) { 'john@doe.net' }
 
       it 'sends an email to the account' do
-        post '/account/forgot-password', params
+        post_form '/account/forgot-password', params
         expect(last_response.status).to eq 200
         expect(last_response.body).to include "The instructions for changing your password have been emailed to you"
       end
@@ -306,7 +334,7 @@ describe 'Authentication' do
     } }
 
     it 'renders the reset password page with an error message' do
-      post '/account/reset-password', params
+      post_form '/account/reset-password', params
       expect(last_response.status).to eq 200
       expect(last_response.body).to include 'Change your password'
       expect(last_response.body).to include 'The reset token is not valid anymore'
@@ -317,7 +345,7 @@ describe 'Authentication' do
       let(:token) { '420000000000001' }
 
       it 'renders the reset password page with an error message' do
-        post '/account/reset-password', params
+        post_form '/account/reset-password', params
         expect(last_response.status).to eq 200
         expect(last_response.body).to include 'Change your password'
         expect(last_response.body).to include 'The reset token is not valid anymore'
@@ -330,13 +358,13 @@ describe 'Authentication' do
       let(:email) { 'kim.reset@soundgarden.band' }
 
       it 'resets the password with the fields the form sends' do
-        post '/account/sign-up', {
+        post_form '/account/sign-up', {
           auth_action: 'sign_up', auth_content_type: 'accounts', auth_password_field: 'password',
           auth_callback: '/account/me',
           auth_entry: { name: 'Kim', email: email, password: 'easyone', password_confirmation: 'easyone' } }
         clear_cookies
 
-        post '/account/forgot-password', {
+        post_form '/account/forgot-password', {
           auth_action: 'forgot_password', auth_content_type: 'accounts', auth_id_field: 'email', auth_id: email,
           auth_reset_password_url: 'http://acme.com/account/reset-password',
           auth_email_handle: 'reset_password_instructions' }
@@ -346,7 +374,7 @@ describe 'Authentication' do
         get "/account/reset-password?auth_reset_token=#{token}"
         fields = last_response.body.scan(/<input type="hidden" name="(\w+)" value="([^"]*)"/).to_h
 
-        post '/account/reset-password', fields.merge('auth_password' => new_password)
+        post_form '/account/reset-password', fields.merge('auth_password' => new_password)
 
         expect(last_response.status).to eq 301
         follow_redirect!
@@ -360,7 +388,7 @@ describe 'Authentication' do
       let(:token) { '420000000000000' }
 
       it 'sends an email to the account' do
-        post '/account/reset-password', params
+        post_form '/account/reset-password', params
         expect(last_response.status).to eq 301
         follow_redirect!
         expect(last_response.body).to include "My name is Jane and I'm logged in!"
@@ -371,7 +399,7 @@ describe 'Authentication' do
         let(:new_password) { 'short' }
 
         it 'renders the reset password page with an error message' do
-          post '/account/reset-password', params
+          post_form '/account/reset-password', params
           expect(last_response.status).to eq 200
           expect(last_response.body).to include 'Change your password'
           expect(last_response.body).to include 'Your password is too short'
@@ -384,7 +412,7 @@ describe 'Authentication' do
         let(:new_password) { '      ' }
 
         it 'renders the reset password page with an error message' do
-          post '/account/reset-password', params
+          post_form '/account/reset-password', params
           expect(last_response.status).to eq 200
           expect(last_response.body).to include 'Change your password'
           expect(last_response.body).to include 'Your password is not valid'

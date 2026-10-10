@@ -16,6 +16,7 @@ module Locomotive::Steam
       include Concerns::Helpers
       include Concerns::AuthHelpers
       include Concerns::Recaptcha
+      include Concerns::CsrfProtection
 
       def _call
         load_authenticated_entry
@@ -23,6 +24,7 @@ module Locomotive::Steam
         auth_options = AuthOptions.new(site, params)
 
         return unless auth_options.valid?
+        return refuse_unverified_form unless form_token_verified?
 
         send(:"#{auth_options.action}", auth_options)
       end

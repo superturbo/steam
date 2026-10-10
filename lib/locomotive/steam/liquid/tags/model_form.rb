@@ -56,6 +56,7 @@ module Locomotive
 
           def csrf_html(context)
             service = context.registers[:services].csrf_protection
+            return '' unless service.enabled?
 
             html_tag :input, type: 'hidden', name: service.field, value: service.token
           end
