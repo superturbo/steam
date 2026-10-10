@@ -44,6 +44,31 @@ describe Locomotive::Steam::Liquid::MarshalCache do
 
   end
 
+  context 'a page extending a parent page' do
+
+    let(:parent)  { instance_double('Page', _id: 'id-b', fullpath: 'b', handle: 'b', slug: 'b', liquid_source: '<b>{% block body %}B{% endblock %}</b>') }
+    let(:page)    { instance_double('Page', _id: 'id-a', fullpath: 'a', handle: 'a', slug: 'a') }
+    let(:finder)  { instance_double('ParentFinder') }
+    let(:source)  { '{% extends b %}{% block body %}A{% endblock %}' }
+    let(:options) { { page: page, parent_finder: finder, parser: Locomotive::Steam::LiquidParserService.new(nil, nil) } }
+
+    before { allow(finder).to receive(:find).with(page, 'b').and_return(parent) }
+
+    def parent_block(template)
+      template.root.nodelist.first.nodelist.find { |node| node.respond_to?(:parse_context) }
+    end
+
+    it 'renders the same output after a Marshal round trip' do
+      expect(loaded.render).to eq '<b>A</b>'
+    end
+
+    it 'drops the pages it went through from the parse options' do
+      expect(parent_block(template).parse_context[:extended_pages]).to eq [page, parent]
+      expect(parent_block(loaded).parse_context[:extended_pages]).to eq nil
+    end
+
+  end
+
   context 'a template parsed against a custom Liquid environment' do
 
     let(:custom_environment) { ::Liquid::Environment.build(error_mode: :strict) }

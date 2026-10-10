@@ -19,7 +19,10 @@ describe 'A template error' do
       'app/views/pages/two-sections.liquid'    => "---\nlisted: false\n---\n{% section 'first_block' %}{% section 'second_block' %}\n",
       'app/views/pages/after-section.liquid'   => "---\nlisted: false\n---\n{% section 'first_block' %}{% action 'page' %}a.b(+}{% endaction %}\n",
       'app/views/pages/deep-hero.liquid'       => "---\nlisted: false\n---\n{% section 'deep_hero' %}\n",
-      'app/views/pages/blocks.liquid'          => "---\nlisted: false\n---\n{% section 'first_block' %}\n"
+      'app/views/pages/blocks.liquid'          => "---\nlisted: false\n---\n{% section 'first_block' %}\n",
+      'app/views/pages/cycle-a.liquid'         => "---\nhandle: cycle-a\nlisted: false\n---\n{% extends cycle-b %}\n{% block body %}A{% endblock %}\n",
+      'app/views/pages/cycle-b.liquid'         => "---\nhandle: cycle-b\nlisted: false\n---\n{% extends cycle-a %}\n{% block body %}B{% endblock %}\n",
+      'app/views/pages/self-page.liquid'       => "---\nhandle: self-page\nlisted: false\n---\n{% extends self-page %}\n"
     }
   end
 
@@ -83,6 +86,21 @@ describe 'A template error' do
   it 'in a page, after a section, names the page' do
     expect { get '/after-section' }.to raise_error(Locomotive::Steam::TemplateError) { |error|
       expect(error.template_name).to eq file('app/views/pages/after-section.liquid')
+    }
+  end
+
+  it 'from pages extending each other names the page that closes the loop' do
+    expect { get '/cycle-a' }.to raise_error(Locomotive::Steam::LiquidError) { |error|
+      expect(error.message).to include 'Pages extend each other in a loop: cycle-a, cycle-b, cycle-a'
+      expect(error.template_name).to eq file('app/views/pages/cycle-b.liquid')
+      expect(error.code_lines).to include [1, '{% extends cycle-a %}']
+    }
+  end
+
+  it 'from a page extending itself names the page' do
+    expect { get '/self-page' }.to raise_error(Locomotive::Steam::LiquidError) { |error|
+      expect(error.message).to include 'Pages extend each other in a loop: self-page, self-page'
+      expect(error.template_name).to eq file('app/views/pages/self-page.liquid')
     }
   end
 

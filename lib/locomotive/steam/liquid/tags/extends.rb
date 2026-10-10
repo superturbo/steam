@@ -68,17 +68,23 @@ module Locomotive
           def parse_parent_template
             parent = parse_context[:parent_finder].find(parse_context[:page], @template_name)
 
-            # no need to go further if the parent does not exist
             raise Liquid::PageNotFound.new("Extending a missing page. Page/Layout with fullpath '#{@template_name}' was not found") if parent.nil?
+
+            pages      = parse_context[:extended_pages] || [parse_context[:page]].compact
+            loop_start = pages.index { |page| page._id == parent._id }
+            raise_loop(pages[loop_start..] + [parent]) if loop_start
 
             ActiveSupport::Notifications.instrument('steam.parse.extends', page: parse_context[:page], parent: parent)
 
-            # define the layout name which is basically the handle of the parent page
-            # if there is no handle, we take the slug which might or might not be localized.
             @layout_name = parent.handle || parent.slug
 
-            # the source has already been parsed before
-            parse_context[:parser]._parse(parent, parse_context.merge(page: parent))
+            parse_context[:parser]._parse(parent, parse_context.merge(page: parent, extended_pages: pages + [parent]))
+          end
+
+          def raise_loop(pages)
+            error = Liquid::CyclicExtends.new("Pages extend each other in a loop: #{pages.map(&:fullpath).join(', ')}")
+            error.line_number = line_number
+            raise error
           end
         end
 

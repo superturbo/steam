@@ -3,6 +3,8 @@ module Locomotive
     module Liquid
       class PageNotFound < ::Liquid::Error; end
 
+      class CyclicExtends < ::Liquid::Error; end
+
       class SnippetNotFound < ::Liquid::Error; end
 
       class SectionNotFound < ::Liquid::Error; end

@@ -20,7 +20,7 @@ module Locomotive
         # option values injected at parse time, plus the Environment merged in
         # by Liquid::Template#configure_options
         UNMARSHALABLE_OPTION_KEYS = %i(
-          parser page parent_finder snippet_finder section_finder environment
+          parser page parent_finder snippet_finder section_finder environment extended_pages
         ).freeze
 
         module Template

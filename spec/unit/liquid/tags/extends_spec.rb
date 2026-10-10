@@ -88,7 +88,7 @@ describe Locomotive::Steam::Liquid::Tags::Extends do
   describe 'in Steam' do
 
     let(:source)      { '{% extends parent %} ' }
-    let(:page)        { instance_double('Page', title: 'About us') }
+    let(:page)        { instance_double('Page', _id: 'about-us', title: 'About us') }
     let(:site)        { instance_double('Site', default_locale: :en) }
     let!(:listener)   { Liquid::SimpleEventsListener.new }
     let(:finder)      { Locomotive::Steam::ParentFinderService.new(instance_double('PageRepository', site: site, locale: :en)) }
@@ -112,7 +112,7 @@ describe Locomotive::Steam::Liquid::Tags::Extends do
 
       let!(:template) { parse_template(source, options) }
 
-      let(:parent) { instance_double('Index', handle: nil, slug: nil, localized_attributes: { source: true, template: true }, source: { en: 'Hello world!' }, template: { en: nil }) }
+      let(:parent) { instance_double('Index', _id: 'index', handle: nil, slug: nil, localized_attributes: { source: true, template: true }, source: { en: 'Hello world!' }, template: { en: nil }) }
 
       it { expect(listener.event_names.first).to eq 'steam.parse.extends' }
       it { expect(template.render).to eq 'Hello world!' }
@@ -122,18 +122,109 @@ describe Locomotive::Steam::Liquid::Tags::Extends do
 
         let(:source) { '{% extends parent %}{% block message %}My layout: {{ layout_name }}{% endblock %}' }
 
-        let(:parent) { instance_double('Index', handle: nil, slug: 'index', localized_attributes: { source: true, template: true }, source: { en: 'Hello world! {% block message %}{% endblock %}' }, template: { en: nil }) }
+        let(:parent) { instance_double('Index', _id: 'index', handle: nil, slug: 'index', localized_attributes: { source: true, template: true }, source: { en: 'Hello world! {% block message %}{% endblock %}' }, template: { en: nil }) }
 
         it { expect(template.render).to eq 'Hello world! My layout: index' }
 
         context 'the handle of the parent page exists' do
 
-          let(:parent) { instance_double('Index', handle: 'home', slug: 'index', localized_attributes: { source: true, template: true }, source: { en: 'Hello world! {% block message %}{% endblock %}' }, template: { en: nil }) }
+          let(:parent) { instance_double('Index', _id: 'index', handle: 'home', slug: 'index', localized_attributes: { source: true, template: true }, source: { en: 'Hello world! {% block message %}{% endblock %}' }, template: { en: nil }) }
 
           it { expect(template.render).to eq 'Hello world! My layout: home' }
 
         end
 
+      end
+
+    end
+
+  end
+
+  describe 'pages extending each other' do
+
+    let(:site)   { instance_double('Site', default_locale: :en) }
+    let(:finder) { Locomotive::Steam::ParentFinderService.new(instance_double('PageRepository', site: site, locale: :en)) }
+    let(:parser) { Locomotive::Steam::LiquidParserService.new(nil, nil) }
+
+    def page(fullpath, liquid_source, id: "id-#{fullpath}")
+      instance_double('Page', _id: id, fullpath: fullpath, handle: fullpath, slug: fullpath,
+                              liquid_source: liquid_source, template_path: "app/views/pages/#{fullpath}.liquid")
+    end
+
+    def parse(start)
+      parse_template(start.liquid_source, parent_finder: finder, page: start, parser: parser)
+    end
+
+    def stub_parent(child, parent)
+      allow(finder).to receive(:find).with(child, parent.fullpath).and_return(parent)
+    end
+
+    context 'in a loop' do
+
+      let(:a) { page('cycle-a', "{% extends cycle-b %}\n{% block body %}A{% endblock %}") }
+      let(:b) { page('cycle-b', "{% extends cycle-a %}\n{% block body %}B{% endblock %}") }
+
+      before { stub_parent(a, b); stub_parent(b, a) }
+
+      it 'raises an error naming the page that closes the loop, at its extends' do
+        expect { parse(a) }.to raise_error(Locomotive::Steam::LiquidError) { |error|
+          expect(error.message).to include 'Pages extend each other in a loop: cycle-a, cycle-b, cycle-a'
+          expect(error.template_name).to eq 'app/views/pages/cycle-b.liquid'
+          expect(error.line_number).to eq 1
+        }
+      end
+
+    end
+
+    context 'a page extending itself' do
+
+      let(:a) { page('self-page', '{% extends self-page %}') }
+
+      before { stub_parent(a, a) }
+
+      it 'raises an error' do
+        expect { parse(a) }.to raise_error(Locomotive::Steam::Liquid::CyclicExtends, /in a loop: self-page, self-page/)
+      end
+
+    end
+
+    context 'reaching a page it went through under another path' do
+
+      let(:a)     { page('home', '{% extends welcome %}', id: 'page-1') }
+      let(:again) { page('welcome', '{% extends home %}', id: 'page-1') }
+
+      before { stub_parent(a, again) }
+
+      it 'raises an error, since it is the same page' do
+        expect { parse(a) }.to raise_error(Locomotive::Steam::Liquid::CyclicExtends, /in a loop: home, welcome/)
+      end
+
+    end
+
+    context 'a loop further up the chain' do
+
+      let(:a) { page('a', '{% extends b %}') }
+      let(:b) { page('b', '{% extends c %}') }
+      let(:c) { page('c', '{% extends b %}') }
+
+      before { stub_parent(a, b); stub_parent(b, c); stub_parent(c, b) }
+
+      it 'names the pages of the loop only' do
+        expect { parse(a) }.to raise_error(Locomotive::Steam::LiquidError, /in a loop: b, c, b\z/)
+      end
+
+    end
+
+    context 'in a chain without a loop' do
+
+      let(:a) { page('a', "{% extends b %}{% block body %}A{% endblock %}") }
+      let(:b) { page('b', "{% extends c %}") }
+      let(:c) { page('c', "<c>{% block body %}C{% endblock %}</c>") }
+
+      before { stub_parent(a, b); stub_parent(b, c) }
+
+      it 'renders the page through its ancestors' do
+        expect(parse(a).render).to eq '<c>A</c>'
       end
 
     end
