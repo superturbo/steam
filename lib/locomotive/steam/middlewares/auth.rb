@@ -21,6 +21,8 @@ module Locomotive::Steam
       def _call
         load_authenticated_entry
 
+        return unless originally_posted?
+
         auth_options = AuthOptions.new(site, params)
 
         return unless auth_options.valid?
@@ -30,6 +32,10 @@ module Locomotive::Steam
       end
 
       private
+
+      def originally_posted?
+        request.post? || env[Rack::RACK_METHODOVERRIDE_ORIGINAL_METHOD] == 'POST'
+      end
 
       def sign_up(options)
         return if authenticated? 

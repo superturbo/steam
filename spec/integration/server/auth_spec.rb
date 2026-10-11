@@ -269,6 +269,29 @@ describe 'Authentication' do
       'authenticated_entry_id'    => 'john'
     } }
 
+    context 'a form with _method=delete behind a method override, as in the Engine' do
+
+      def app
+        Rack::MethodOverride.new(run_server)
+      end
+
+      it 'signs the visitor out' do
+        post_form '/account/sign-in', params.merge(_method: 'delete'), { 'rack.session' => rack_session }
+
+        expect(last_response.status).to eq 301
+        expect(last_response.location).to eq '/account/sign-in'
+      end
+
+    end
+
+    it 'keeps the visitor signed in for a GET request' do
+      session = rack_session.merge(Rack::Csrf.key => form_token)
+      get '/account/me', params, { 'rack.session' => session, 'HTTP_X_CSRF_TOKEN' => form_token }
+
+      expect(last_response.status).to eq 200
+      expect(last_response.body).to include "My name is John and I'm logged in!"
+    end
+
     it 'redirect to the requested page' do
       post_form '/account/sign-in', params, { 'rack.session' => rack_session }
       expect(last_response.status).to eq 301

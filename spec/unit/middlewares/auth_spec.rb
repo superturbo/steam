@@ -71,10 +71,58 @@ describe Locomotive::Steam::Middlewares::Auth do
   let(:services)          { instance_double('Services', auth: auth_service, content_entry: entry_service, recaptcha: recaptcha_service, :locale= => 'en') }
   let(:session)           { { Rack::Csrf.key => 'token-1' } }
   let(:form)              { { auth_action: 'sign_up', auth_content_type: 'accounts', :'g-recaptcha-response' => 'mycode', _csrf: 'token-1' } }
+  let(:request_method)    { 'POST' }
   let(:rack_env)          { build_env }
 
   before do
     allow(services).to receive(:csrf_protection) { Locomotive::Steam::CsrfProtectionService.new(true, Rack::Csrf.field, rack_env) }
+  end
+
+  describe 'request method' do
+
+    let(:request_method) { 'GET' }
+
+    %w(sign_up sign_in sign_out forgot_password reset_password).each do |action|
+
+      it "runs no #{action} for a GET request carrying a valid token" do
+        form[:auth_action] = action
+        rack_env['HTTP_X_CSRF_TOKEN'] = 'token-1'
+        expect(auth_service).to receive(:find_authenticated_resource)
+
+        code, env = middleware.call(rack_env)
+
+        expect(code).to eq 200
+        expect(env['steam.liquid_assigns'].keys.grep(/\Aauth_/)).to be_empty
+      end
+
+    end
+
+    context 'a POST whose method an override turned into DELETE' do
+
+      let(:request_method) { 'POST' }
+      let(:form)   { { auth_action: 'sign_in', auth_content_type: 'accounts', _csrf: 'token-1' } }
+
+      it 'runs the action' do
+        rack_env['REQUEST_METHOD'] = 'DELETE'
+        rack_env['rack.methodoverride.original_method'] = 'POST'
+        expect(auth_service).to receive(:sign_in).and_return(:wrong_credentials)
+
+        middleware.call(rack_env)
+      end
+
+    end
+
+    context 'a DELETE request' do
+
+      let(:request_method) { 'DELETE' }
+      let(:form)   { { auth_action: 'sign_in', auth_content_type: 'accounts', _csrf: 'token-1' } }
+
+      it 'runs no action' do
+        expect(middleware.call(rack_env).first).to eq 200
+      end
+
+    end
+
   end
 
   describe 'form token' do
@@ -142,7 +190,7 @@ describe Locomotive::Steam::Middlewares::Auth do
   end
 
   def build_env
-    env_for('http://example.com/account', params: form, method: 'POST').tap do |env|
+    env_for('http://example.com/account', params: form, method: request_method).tap do |env|
       env['steam.request']        = Rack::Request.new(env)
       env['steam.site']           = site
       env['steam.services']       = services
