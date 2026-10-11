@@ -59,7 +59,7 @@ module Locomotive::Steam
       def lock_screen_html
 <<-HTML
 <html>
-  <title>#{site.name} - Password protected</title>
+  <title>#{CGI.escapeHTML(site.name.to_s)} - Password protected</title>
   <style>
     @import url(http://fonts.googleapis.com/css?family=Open+Sans:400,700);
     body { background: #f8f8f8; height: 100%; font-family: "Open Sans", sans-serif; font-size: 12px; -webkit-transform-style: preserve-3d; -moz-transform-style: preserve-3d; transform-style: preserve-3d; }
@@ -71,7 +71,7 @@ module Locomotive::Steam
   }
   </style>
   <body>
-    <form action="#{mounted_on}" method="POST">
+    <form action="#{CGI.escapeHTML(mounted_on.to_s)}" method="POST">
       #{token_field}
       #{'<p>Wrong password</p>' unless submitted_password.blank?}
       <input type="password" name="private_access_password" placeholder="Password" />

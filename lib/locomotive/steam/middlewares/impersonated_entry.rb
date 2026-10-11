@@ -63,7 +63,7 @@ module Locomotive::Steam
   class="locomotive-impersonating-banner"
   style="position: fixed; bottom: 0; left: 0; z-index: 9999; width: 100%;background: #61D5AB; text-align: center; color: #fff; padding: 1rem 0rem;"
 >
-  You're impersonating <b>#{entry._label}</b>.
+  You're impersonating <b>#{CGI.escapeHTML(entry._label.to_s)}</b>.
   <a href="?impersonating=stop" style="color: #fff; text-decoration: underline">
     Stop impersonating
   </a>

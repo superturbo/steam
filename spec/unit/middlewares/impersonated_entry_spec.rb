@@ -45,6 +45,20 @@ describe Locomotive::Steam::Middlewares::ImpersonatedEntry do
       it { expect(subject.first).to eq true }
       it { expect(subject.last.gsub(/\s*\n\s+/, ' ')).to include('<body><div class="locomotive-impersonating-banner" ') }
 
+      context 'whose label holds markup' do
+
+        let(:label) { 'John</b><script>alert(1)</script>' }
+        let(:entry) { instance_double('Account', _label: label) }
+
+        it 'renders the label as text, adding no element' do
+          html = Nokogiri::HTML5(subject.last)
+
+          expect(html.css('script')).to be_empty
+          expect(html.at_css('.locomotive-impersonating-banner b').text).to eq label
+        end
+
+      end
+
     end
 
     describe 'the administrator wants to leave the impersonating mode' do

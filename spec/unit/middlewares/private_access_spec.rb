@@ -62,6 +62,26 @@ describe Locomotive::Steam::Middlewares::PrivateAccess do
         is_expected.not_to match /Wrong password/
       end
 
+      describe 'a site name and a mount path holding markup' do
+
+        let(:name) { 'Acme</title><script>alert(1)</script> & Co' }
+        let(:path) { '/preview" onsubmit="alert(1)' }
+        let(:site) { instance_double('Site', name: name, private_access: true, password: password) }
+
+        before { rack_env['steam.mounted_on'] = path }
+
+        it 'renders them as text, adding no element or attribute' do
+          html = Nokogiri::HTML5(subject)
+          form = html.at_css('form')
+
+          expect(html.css('script')).to be_empty
+          expect(html.at_css('title').text).to eq "#{name} - Password protected"
+          expect(form.attributes.keys).to eq %w(action method)
+          expect(form['action']).to eq path
+        end
+
+      end
+
       describe 'right password submitted with the token' do
 
         let(:method) { 'POST' }
