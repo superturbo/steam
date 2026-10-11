@@ -11,6 +11,12 @@ describe Locomotive::Steam::Liquid::Tags::SEO do
 
   subject { render_template(source, context).strip }
 
+  let(:html) { Nokogiri::HTML5(subject) }
+
+  def meta(name)
+    html.at_css(%(meta[name="#{name}"]))['content']
+  end
+
   describe 'seo' do
 
     let(:source) { '{% seo %}' }
@@ -51,6 +57,39 @@ describe Locomotive::Steam::Liquid::Tags::SEO do
 
     end
 
+    describe 'a title holding markup' do
+
+      let(:title)         { 'Snow</title><script>alert(1)</script>' }
+      let(:content_entry) { liquid_instance_double('Entry', seo_title: title) }
+
+      it 'renders it as text, adding no element' do
+        expect(html.css('script')).to be_empty
+        expect(html.at_css('title').text).to eq title
+      end
+
+    end
+
+    describe 'a title holding quotes' do
+
+      let(:page) { liquid_instance_double('Page', seo_title: 'The "Snow" issue') }
+
+      it 'keeps them' do
+        expect(html.at_css('title').text).to eq 'The "Snow" issue'
+      end
+
+    end
+
+    describe 'a site name holding markup' do
+
+      let(:site) { liquid_instance_double('Site', name: 'Acme</title><script>alert(1)</script>', seo_title: nil, meta_description: nil, meta_keywords: nil) }
+
+      it 'renders it as text, adding no element' do
+        expect(html.css('script')).to be_empty
+        expect(html.at_css('title').text).to eq 'Acme</title><script>alert(1)</script>'
+      end
+
+    end
+
   end
 
   describe 'seo_metadata' do
@@ -67,16 +106,31 @@ describe Locomotive::Steam::Liquid::Tags::SEO do
     describe 'with a page' do
 
       let(:page) { liquid_instance_double('Page', meta_description: "It's snowing", meta_keywords: 'snow') }
-      it { is_expected.to include %Q[<meta name="description" content="It's snowing">] }
-      it { is_expected.to include %Q[<meta name="keywords" content="snow">] }
+      it { expect(meta('description')).to eq "It's snowing" }
+      it { expect(meta('keywords')).to eq 'snow' }
 
     end
 
     describe 'with a content entry' do
 
       let(:content_entry) { liquid_instance_double('Entry', meta_description: "It's snowing", meta_keywords: 'snow') }
-      it { is_expected.to include %Q[<meta name="description" content="It's snowing">] }
-      it { is_expected.to include %Q[<meta name="keywords" content="snow">] }
+      it { expect(meta('description')).to eq "It's snowing" }
+      it { expect(meta('keywords')).to eq 'snow' }
+
+    end
+
+    describe 'metadata holding quotes and markup' do
+
+      let(:description)   { 'Snow" onfocus="alert(1)"><script>alert(1)</script>' }
+      let(:keywords)      { 'snow" onfocus="alert(1)' }
+      let(:content_entry) { liquid_instance_double('Entry', meta_description: description, meta_keywords: keywords) }
+
+      it 'renders them as attribute values, adding no element or attribute' do
+        expect(html.css('script')).to be_empty
+        expect(html.css('meta').map { |tag| tag.attributes.keys }).to eq [%w(name content)] * 2
+        expect(meta('description')).to eq description
+        expect(meta('keywords')).to eq keywords
+      end
 
     end
 

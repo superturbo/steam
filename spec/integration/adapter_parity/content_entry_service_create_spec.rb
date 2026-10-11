@@ -421,6 +421,27 @@ describe 'Adapter parity' do
             expect(service.find('specimens', 'seo-custom')).not_to be_nil
           end
 
+          it 'stores the SEO attributes as the text they were given' do
+            text = %(A & B, A &amp; B, "quoted", <b>tag</b> < 1)
+            service.create('specimens', writable.merge(_slug: 'seo-text', seo_title: text, meta_description: text, meta_keywords: text))
+
+            stored = service.find('specimens', 'seo-text')
+            expect([stored.seo_title, stored.meta_description, stored.meta_keywords]).to eq [text] * 3
+
+            context = ::Liquid::Context.new({ 'site' => site.to_liquid, 'content_entry' => stored.to_liquid }, {},
+                                            { locale: AdapterParityFixture::LOCALE, site: site })
+            html    = Nokogiri::HTML5(render_template('{% seo %}', context))
+            expect(html.css('script, b')).to be_empty
+            expect(html.at_css('title').text).to eq text
+            expect(html.at_css('meta[name="description"]')['content']).to eq text
+          end
+
+          it 'still cleans the HTML of a declared text field' do
+            service.create('specimens', writable.merge(_slug: 'cleaned', name: 'Ada <script>x</script> & co'))
+
+            expect(service.find('specimens', 'cleaned').name).to eq 'Ada  &amp; co'
+          end
+
           [['name'], 'name', false].each do |input|
             it "refuses #{input.inspect} as a whole and writes nothing" do
               entry = nil

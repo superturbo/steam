@@ -7,12 +7,13 @@ module Locomotive
 
       include Locomotive::Steam::Services::Concerns::Decorator
 
-      PUBLIC_BUILT_IN_NAMES = %w(_slug seo_title meta_description meta_keywords).freeze
+      SEO_NAMES             = %w(seo_title meta_description meta_keywords).freeze
+      PUBLIC_BUILT_IN_NAMES = (%w(_slug) + SEO_NAMES).freeze
       WRITTEN_BY_NAME       = %i(string text email color integer float date date_time
                                  boolean json tags).freeze
       REFUSED_INPUT_NAME    = '_input'
 
-      private_constant :PUBLIC_BUILT_IN_NAMES, :WRITTEN_BY_NAME, :REFUSED_INPUT_NAME
+      private_constant :SEO_NAMES, :PUBLIC_BUILT_IN_NAMES, :WRITTEN_BY_NAME, :REFUSED_INPUT_NAME
 
       attr_accessor_initialize :content_type_repository, :repository, :locale
 
@@ -211,12 +212,12 @@ module Locomotive
         fields       = _repository.content_type.fields
         links        = fields.associations.select { |field| field.type == :belongs_to }
         passwords    = _repository.content_type.fields_by_name.each_value.select(&:write_only?)
-        skipped_keys = fields.json.map { |field| field.name.to_s } +
+        skipped_keys = SEO_NAMES +
+                       fields.json.map { |field| field.name.to_s } +
                        fields.selects.map { |field| field.persisted_name.to_s } +
                        links.map(&:persisted_name) +
                        passwords.flat_map { |field| [field.name.to_s, "#{field.name}_confirmation"] }
 
-        # JSON is validated as data, a password as typed; HTML escaping belongs to rendering.
         attributes.each do |key, value|
           next unless value.is_a?(String)
           next if skipped_keys.include?(key.to_s)

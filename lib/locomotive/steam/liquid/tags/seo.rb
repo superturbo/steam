@@ -15,29 +15,24 @@ module Locomotive
 
             def render_title(context)
               title = self.value_for(:seo_title, context)
-              title = context['site'].name if title.blank?
+              title = context['site'].name.to_s if title.blank?
 
               %{
-                <title>#{title}</title>
+                <title>#{CGI.escapeHTML(title)}</title>
               }
             end
 
             def render_metadata(context)
               %{
-                <meta name="description" content="#{self.value_for(:meta_description, context)}">
-                <meta name="keywords" content="#{self.value_for(:meta_keywords, context)}">
+                <meta name="description" content="#{CGI.escapeHTML(self.value_for(:meta_description, context))}">
+                <meta name="keywords" content="#{CGI.escapeHTML(self.value_for(:meta_keywords, context))}">
               }
-            end
-
-            # Removes whitespace and quote charactets from the input
-            def sanitized_string(string)
-              string ? string.strip.gsub(/"/, '') : ''
             end
 
             def value_for(attribute, context)
               object = self.metadata_object(context)
               value = object.try(attribute.to_sym).blank? ? context['site'].send(attribute.to_sym) : object.send(attribute.to_sym)
-              self.sanitized_string(value)
+              value.to_s.strip
             end
 
             def metadata_object(context)
