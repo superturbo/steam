@@ -14,7 +14,7 @@ module Locomotive
             next_link     = default_pagination_next_or_previous_link(:next, paginate, options, 'next')
             links         = default_pagination_links(paginate)
 
-            %{<div class="pagination #{options[:css]}">
+            %{<div class="pagination #{HtmlEscapedText.escape(options[:css])}">
                 #{previous_link}
                 #{links}
                 #{next_link}
@@ -26,7 +26,7 @@ module Locomotive
           def default_pagination_links(paginate)
             paginate['parts'].map do |part|
               if part['is_link']
-                "<a href=\"#{default_pagination_url(part['url'])}\">#{part['title']}</a>"
+                "<a href=\"#{default_pagination_href(part['url'])}\">#{part['title']}</a>"
               elsif part['hellip_break']
                 "<span class=\"gap\">#{part['title']}</span>"
               else
@@ -41,12 +41,12 @@ module Locomotive
             if paginate[type.to_s].blank?
               "<span class=\"disabled #{css}_page\">#{label}</span>"
             else
-              "<a href=\"#{default_pagination_url(paginate[type.to_s]['url'])}\" class=\"#{css}_page\">#{label}</a>"
+              "<a href=\"#{default_pagination_href(paginate[type.to_s]['url'])}\" class=\"#{css}_page\">#{label}</a>"
             end
           end
 
-          def default_pagination_url(url)
-            url.starts_with?('/') ? url : "/#{url}"
+          def default_pagination_href(url)
+            CGI.escapeHTML(url.starts_with?('/') ? url : "/#{url}")
           end
 
         end

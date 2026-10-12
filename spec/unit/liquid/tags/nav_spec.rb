@@ -167,6 +167,48 @@ describe 'Locomotive::Steam::Liquid::Tags::Nav' do
 
     end
 
+    describe 'a page title and path holding markup' do
+
+      let(:depth_1) { [instance_double('Child1', title: 'Home</a><script>alert(1)</script>', slug: 'child-1', fullpath: 'child-1" onclick="alert(1)', published?: true, listed?: true, templatized?: false, localized_attributes: [], to_liquid: { 'title' => 'x' })] }
+
+      before do
+        allow(repository).to receive(:root).and_return(index)
+        allow(repository).to receive(:children_of).with(index).and_return(depth_1)
+      end
+
+      it 'renders them as text and as one attribute, adding no element' do
+        html = Nokogiri::HTML5(subject)
+        link = html.at_css('a')
+
+        expect(html.css('script')).to be_empty
+        expect(link.attributes.keys).to eq %w(href)
+        expect(link['href']).to eq '/child-1" onclick="alert(1)'
+        expect(link.text).to eq 'Home</a><script>alert(1)</script>'
+      end
+
+    end
+
+    describe 'a page slug and a wrapper class holding markup' do
+
+      let(:source)  { %({% nav site, class: 'x&lt;y' %}) }
+      let(:depth_1) { [instance_double('Child1', title: 'Child #1', slug: 'child-1" onclick="alert(1)', fullpath: 'child-1', published?: true, listed?: true, templatized?: false, localized_attributes: [], to_liquid: { 'title' => 'x' })] }
+
+      before do
+        allow(repository).to receive(:root).and_return(index)
+        allow(repository).to receive(:children_of).with(index).and_return(depth_1)
+      end
+
+      it 'writes them as the values of the attributes the list builds' do
+        html = Nokogiri::HTML5(subject)
+        item = html.at_css('li')
+
+        expect(item.attributes.keys).to eq %w(id class)
+        expect(item['id']).to eq 'child-1" onclick="alert(1)-link'
+        expect(html.at_css('nav')['class']).to eq 'x&lt;y'
+      end
+
+    end
+
     describe 'using a snippet to render the title' do
 
       let(:source) { %({% nav site, snippet: "{{page.title}}!" %}) }
@@ -178,6 +220,16 @@ describe 'Locomotive::Steam::Liquid::Tags::Nav' do
       end
 
       it { is_expected.to include %{<a href="/child-1">Child #1!</a>} }
+
+      context 'holding markup' do
+
+        let(:source) { %({% nav site, snippet: "<b>{{page.title}}</b>" %}) }
+
+        it 'keeps the markup of the template' do
+          expect(Nokogiri::HTML5(subject).css('a b').size).to eq 2
+        end
+
+      end
 
       describe 'from a registered snippet' do
 

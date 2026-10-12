@@ -36,6 +36,22 @@ describe Locomotive::Steam::Liquid::Tags::LocaleSwitcher do
 
   end
 
+  describe 'site locales holding markup' do
+
+    let(:site)   { instance_double('Site', locales: ['en', 'x"y<b>'], default_locale: 'en', prefix_default_locale: prefix_default) }
+    let(:page)   { liquid_instance_double('Index', localized_attributes: { title: true, fullpath: true }, title: { en: 'Home', 'x"y<b>': 'Home' }, fullpath: { en: 'index', 'x"y<b>': 'index' }, templatized?: false) }
+    let(:source) { '{% locale_switcher %}' }
+
+    it 'writes them as the text and the class of each link' do
+      links = Nokogiri::HTML5(subject).css('a')
+
+      expect(links.map { |link| link.attributes.keys }).to eq [%w(href class)] * 2
+      expect(links.map { |link| link['class'] }).to eq ['en current', 'x"y<b>']
+      expect(links.map(&:text)).to eq ['en', 'x"y<b>']
+    end
+
+  end
+
   describe 'using the locale to display the links' do
 
     let(:source) { '{% locale_switcher label: "locale", sep: " - " %}' }
@@ -47,6 +63,21 @@ describe Locomotive::Steam::Liquid::Tags::LocaleSwitcher do
 
     let(:source) { '{% locale_switcher label: "title" %}' }
     it { is_expected.to eq '<div id="locale-switcher"><a href="/" class="en current">Home</a> | <a href="/fr" class="fr">Accueil</a></div>' }
+
+    context 'a title and a path holding markup' do
+
+      let(:page) { liquid_instance_double('Index', localized_attributes: { title: true, fullpath: true }, title: { en: 'Home</a><script>alert(1)</script>', fr: 'Home</a><script>alert(1)</script>' }, fullpath: { en: 'x" onclick="alert(1)', fr: 'x" onclick="alert(1)' }, templatized?: false) }
+
+      it 'renders them as text and as one attribute, adding no element' do
+        html = Nokogiri::HTML5(subject)
+
+        expect(html.css('script')).to be_empty
+        expect(html.css('a').map { |link| link.attributes.keys }).to eq [%w(href class)] * 2
+        expect(html.css('a').map { |link| link['href'] }).to eq ['/x" onclick="alert(1)', '/fr/x" onclick="alert(1)']
+        expect(html.css('a').map(&:text)).to eq ['Home</a><script>alert(1)</script>'] * 2
+      end
+
+    end
 
   end
 

@@ -12,9 +12,9 @@ module Locomotive
         # {% model_form 'newsletter_addresses' %}
         #    <input type='text' name='content[email]' />
         #     <input type='submit' value='Add' />
-        # {% endform_form %}
+        # {% endmodel_form %}
         #
-        # {% model_form 'newsletter_addresses', class: 'a-css-class', success: 'http://www.google.fr', error: '/error' %}...{% endform_form %}
+        # {% model_form 'newsletter_addresses', class: 'a-css-class', success: 'http://www.google.fr', error: '/error' %}...{% endmodel_form %}
         #
         class ModelForm < ::Liquid::Block
 
@@ -83,11 +83,9 @@ module Locomotive
             "<#{name} #{inline_options(options)} />"
           end
 
-          # Write options (Hash) into a string according to the following pattern:
-          # <key1>="<value1>", <key2>="<value2", ...etc
           def inline_options(options = {})
             return '' if options.empty?
-            (options.stringify_keys.to_a.collect { |a, b| "#{a}=\"#{b}\"" }).join(' ')
+            (options.stringify_keys.to_a.collect { |a, b| "#{a}=\"#{HtmlEscapedText.escape(b)}\"" }).join(' ')
           end
 
           def prepare_form_attributes(context, options)
@@ -100,7 +98,7 @@ module Locomotive
           end
 
           def action_url(context, options)
-            url = options[:action]
+            url = HtmlEscapedText.original(options[:action])
 
             if url.blank?
               if options[:json]

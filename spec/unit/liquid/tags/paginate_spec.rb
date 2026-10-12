@@ -94,7 +94,63 @@ EOF
 
     end
 
-    describe ''
+    describe 'a requested path holding markup' do
+
+      let(:fullpath) { '/projects?q="><script>alert(1)</script>' }
+      let(:page)     { 2 }
+      let(:assigns)  { { 'projects' => projects, 'current_page' => page, 'fullpath' => fullpath } }
+      let(:source)   { '{% paginate projects by 2 %}{{ paginate | default_pagination }}{% endpaginate %}' }
+
+      it 'renders it in the href of each link as one attribute, adding no element' do
+        html  = Nokogiri::HTML5(output)
+        links = html.css('a')
+
+        expect(html.css('script')).to be_empty
+        expect(links.map { |link| link['href'] }).to eq [1, 1, 3, 3].map { |number| "#{fullpath}&page=#{number}" }
+        expect(links.map { |link| link.attributes.keys }).to eq [%w(href class), %w(href), %w(href), %w(href class)]
+      end
+
+    end
+
+    describe 'a css option holding markup' do
+
+      let(:assigns) { { 'projects' => projects, 'current_page' => page, 'fullpath' => '/', 'option' => 'css:x" onmouseover="alert(1)' } }
+      let(:source)  { '{% paginate projects by 2 %}{{ paginate | default_pagination: option }}{% endpaginate %}' }
+
+      it 'renders it in the class of the wrapper as one attribute' do
+        wrapper = Nokogiri::HTML5(output).at_css('div')
+
+        expect(wrapper.attributes.keys).to eq %w(class)
+        expect(wrapper['class']).to eq 'pagination x" onmouseover="alert(1)'
+      end
+
+    end
+
+    describe 'options from a request parameter' do
+
+      let(:params)  { Locomotive::Steam::Liquid::Drops::Params.new('label' => 'previous_label:<img src=x onerror=alert(1)>', 'css' => 'css:a&b') }
+      let(:assigns) { { 'projects' => projects, 'current_page' => page, 'fullpath' => '/', 'params' => params } }
+      let(:source)  { '{% paginate projects by 2 %}{{ paginate | default_pagination: params.label, params.css }}{% endpaginate %}' }
+
+      it 'keeps the label as text and writes the class once' do
+        html = Nokogiri::HTML5(output)
+
+        expect(html.css('img')).to be_empty
+        expect(html.at_css('.prev_page').text).to eq '<img src=x onerror=alert(1)>'
+        expect(html.at_css('div')['class']).to eq 'pagination a&b'
+      end
+
+    end
+
+    describe 'labels given by the template' do
+
+      let(:source) { %({% paginate projects by 2 %}{{ paginate | default_pagination: 'previous_label:<b>Back</b>', 'next_label:<b>More</b>' }}{% endpaginate %}) }
+
+      it 'keeps their markup' do
+        expect(Nokogiri::HTML5(output).css('.prev_page b, .next_page b').map(&:text)).to eq %w(Back More)
+      end
+
+    end
 
   end
 

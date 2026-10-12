@@ -87,7 +87,7 @@ module Locomotive
               context['block'] = Drops::InheritedBlock.new(block)
 
               anchor_html = if live_editing?(context) && (attributes[:anchor] || attributes[:anchor].nil?)
-                %{<span class="locomotive-block-anchor" data-element-id="#{name}" style="visibility: hidden"></span>}
+                %{<span class="locomotive-block-anchor" data-element-id="#{CGI.escapeHTML(name)}" style="visibility: hidden"></span>}
               else
                 ''
               end

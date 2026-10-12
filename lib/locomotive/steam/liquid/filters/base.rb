@@ -15,18 +15,17 @@ module Locomotive
           def args_to_options(*args)
             options = {}
             args.flatten.each do |a|
-              if (a =~ /^(.*):(.*)$/)
-                options[$1.to_sym] = $2
-              end
+              next unless HtmlEscapedText.original(a) =~ /^([^:\n]*):(.*)$/
+
+              name, value = $1, $2
+              options[name.to_sym] = HtmlEscapedText.map(a) { value }
             end
             options
           end
 
-          # Write options (Hash) into a string according to the following pattern:
-          # <key1>="<value1>", <key2>="<value2", ...etc
           def inline_options(options = {})
             return '' if options.empty?
-            (options.stringify_keys.sort.to_a.collect { |a, b| "#{a}=\"#{b}\"" }).join(' ') << ' '
+            (options.stringify_keys.sort.to_a.collect { |a, b| "#{a}=\"#{HtmlEscapedText.escape(b)}\"" }).join(' ') << ' '
           end
 
           # Get the url to be used in html tags such as image_tag, flash_tag, ...etc

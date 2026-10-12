@@ -13,7 +13,7 @@ module Locomotive
           # Rejects non-allowlisted schemes and ASCII control chars; not for script/iframe/form/CSS/JS.
           # Output is attribute-safe — do NOT chain an extra `| escape`.
           def safe_url(input)
-            url = input.to_s
+            url = HtmlEscapedText.original(input).to_s
             return '' if url.match?(/[\x00-\x1F\x7F]/)
 
             url = url.strip
@@ -21,7 +21,7 @@ module Locomotive
 
             return '' if scheme && !SAFE_URL_SCHEMES.include?(scheme.downcase)
 
-            CGI.escapeHTML(url)
+            HtmlEscapedText.new(url)
           end
 
           # Return a link tag that browsers and news readers can use to auto-detect an RSS or ATOM feed.
@@ -35,18 +35,18 @@ module Locomotive
             type  = options[:type] || 'application/rss+xml'
             title = options[:title] || 'RSS'
 
-            %{<link rel="#{rel}" type="#{type}" title="#{title}" href="#{input}" />}
+            %{<link rel="#{HtmlEscapedText.escape(rel)}" type="#{HtmlEscapedText.escape(type)}" title="#{HtmlEscapedText.escape(title)}" href="#{HtmlEscapedText.escape(input)}" />}
           end
 
           # Write the url of any theme file
           def theme_asset_url(input)
-            any_asset_url(input)
+            HtmlEscapedText.map(input) { |text| any_asset_url(text) }
           end
 
           # Write the url of a theme stylesheet
           # input: name of the css file
           def stylesheet_url(input)
-            any_asset_url(input, '.css', 'stylesheets')
+            HtmlEscapedText.map(input) { |text| any_asset_url(text, '.css', 'stylesheets') }
           end
 
           # Write the link tag of a theme stylesheet
@@ -56,13 +56,13 @@ module Locomotive
 
             input = stylesheet_url(input)
 
-            %{<link href="#{input}" media="#{media}" rel="stylesheet" type="text/css" />}
+            %{<link href="#{HtmlEscapedText.escape(input)}" media="#{HtmlEscapedText.escape(media)}" rel="stylesheet" type="text/css" />}
           end
 
           # Write the url to javascript resource
           # input: name of the javascript file
           def javascript_url(input)
-            any_asset_url(input, '.js', 'javascripts')
+            HtmlEscapedText.map(input) { |text| any_asset_url(text, '.js', 'javascripts') }
           end
 
           # Write the link to javascript resource
@@ -73,24 +73,25 @@ module Locomotive
             javascript_options = inline_options(args_to_options(args))
             input = javascript_url(input)
 
-            %{<script src="#{input}" type="text/javascript" #{javascript_options}></script>}
+            %{<script src="#{HtmlEscapedText.escape(input)}" type="text/javascript" #{javascript_options}></script>}
           end
 
           def theme_image_url(input)
             return '' if input.nil?
 
-            input = "images/#{input}" unless input.starts_with?('/')
+            HtmlEscapedText.map(input) do |text|
+              text = "images/#{text}" unless text.starts_with?('/')
 
-            asset_url(input)
+              asset_url(text)
+            end
           end
 
           # Write a theme image tag
           # input: name of file including folder
-          # example: 'about/myphoto.jpg' | theme_image # <img src="images/about/myphoto.jpg">
           def theme_image_tag(input, *args)
             image_options = inline_options(args_to_options(args))
 
-            %{<img src="#{theme_image_url(input)}" #{image_options}>}
+            %{<img src="#{HtmlEscapedText.escape(theme_image_url(input))}" #{image_options}>}
           end
 
           # Write an image tag
@@ -98,7 +99,7 @@ module Locomotive
           def image_tag(input, *args)
             image_options = inline_options(args_to_options(args))
 
-            %{<img src="#{get_url_from_asset(input)}" #{image_options}>}
+            %{<img src="#{HtmlEscapedText.escape(get_url_from_asset(input))}" #{image_options}>}
           end
 
           # Embed a flash movie into a page
@@ -106,7 +107,7 @@ module Locomotive
           # width: width (in pixel or in %) of the embedded movie
           # height: height (in pixel or in %) of the embedded movie
           def flash_tag(input, *args)
-            path = get_url_from_asset(input)
+            path = HtmlEscapedText.escape(get_url_from_asset(input))
             embed_options = inline_options(args_to_options(args))
             html = <<-EOF
 <object #{embed_options}>

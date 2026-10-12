@@ -44,7 +44,7 @@ module Locomotive
           private
 
           def html_escape(string)
-            string.blank? ? '' : CGI::escapeHTML(string)
+            string.blank? ? '' : HtmlEscapedText.new(string)
           end
 
         end

@@ -13,12 +13,12 @@ module Locomotive
             if @site.locales.size == 1
               ''
             else
-              ending_path = context['alt_page_links_ending_path'] || ''
+              ending_path = HtmlEscapedText.original(context['alt_page_links_ending_path']) || ''
 
               (
-                [%(<link rel="alternate" hreflang="x-default" href="#{url_for(@site.default_locale, ending_path, true)}" />)] +
+                [%(<link rel="alternate" hreflang="x-default" href="#{CGI.escapeHTML(url_for(@site.default_locale, ending_path, true))}" />)] +
                 @site.locales.map do |locale|
-                  %(<link rel="alternate" hreflang="#{locale}" href="#{url_for(locale, ending_path)}" />)
+                  %(<link rel="alternate" hreflang="#{CGI.escapeHTML(locale.to_s)}" href="#{CGI.escapeHTML(url_for(locale, ending_path))}" />)
                 end
               ).join("\n")
             end

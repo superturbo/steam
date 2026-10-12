@@ -35,6 +35,23 @@ describe Locomotive::Steam::Liquid::Drops::Params do
 
   end
 
+  describe 'a value in a template' do
+
+    let(:params) { { 'foo' => 'a&b' } }
+
+    def render(source)
+      render_template(source, ::Liquid::Context.new('params' => drop))
+    end
+
+    it 'is written, compared, appended and captured as its HTML' do
+      expect(render('{{ params.foo }}')).to eq 'a&amp;b'
+      expect(render("{% if params.foo == 'a&amp;b' %}same{% endif %}")).to eq 'same'
+      expect(render("{{ params.foo | append: '&c' }}")).to eq 'a&amp;b&c'
+      expect(render('{% capture foo %}{{ params.foo }}{% endcapture %}{{ foo }}')).to eq 'a&amp;b'
+    end
+
+  end
+
   describe 'gives access to the Hash object through the unsafe method' do
 
     let(:params) { { 'foo' => 'hello', 'bar' => 'world' } }

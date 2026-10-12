@@ -63,6 +63,17 @@ describe Locomotive::Steam::Liquid::Tags::InheritedBlock do
 
     it { expect(subject.render(context)).to eq 'My product: <span class="locomotive-block-anchor" data-element-id="product" style="visibility: hidden"></span>Skis' }
 
+    context 'a block name holding an entity' do
+
+      let(:parent_source) { "My product: {% block 'a&lt;b' %}Random{% endblock %}" }
+      let(:source)        { "{% extends parent %}{% block 'a&lt;b' %}Skis{% endblock %}" }
+
+      it 'writes it as the element id of the anchor' do
+        expect(Nokogiri::HTML5.fragment(subject.render(context)).at_css('span')['data-element-id']).to eq 'a&lt;b'
+      end
+
+    end
+
   end
 
 end

@@ -141,7 +141,7 @@ module Locomotive
               # Share Liquid 5 registers through an explicit context.
               @_options[:liquid_render].render(::Liquid::Context.build(environments: { 'page' => page }, registers: context.registers))
             else
-              page.title
+              CGI.escapeHTML(page.title.to_s)
             end
 
             if icon.blank?
@@ -200,7 +200,7 @@ module Locomotive
 
             self.render_tag(:li, id: "#{page.slug.to_s.dasherize}-link", css: css) do
               children_output = depth.succ <= @_options[:depth].to_i ? self.render_entry_children(page, depth.succ, context) : ''
-              %{<a href="#{url}"#{options}>#{label}</a>} + children_output
+              %{<a href="#{CGI.escapeHTML(url.to_s)}"#{options}>#{label}</a>} + children_output
             end
           end
 
@@ -282,8 +282,8 @@ module Locomotive
           #
           def render_tag(tag_name, html_options = {}, &block)
             options = ['']
-            options << %{id="#{html_options[:id]}"} if html_options[:id].present?
-            options << %{class="#{html_options[:css]}"} if html_options[:css].present?
+            options << %{id="#{CGI.escapeHTML(html_options[:id].to_s)}"} if html_options[:id].present?
+            options << %{class="#{CGI.escapeHTML(html_options[:css].to_s)}"} if html_options[:css].present?
 
             %{<#{tag_name}#{options.join(' ')}>#{yield}</#{tag_name}>}
           end

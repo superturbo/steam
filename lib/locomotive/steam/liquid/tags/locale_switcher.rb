@@ -48,7 +48,7 @@ module Locomotive
                 css   = link_class(locale)
                 path  = link_path(locale)
 
-                %(<a href="#{path}" class="#{css}">#{link_label(locale)}</a>)
+                %(<a href="#{CGI.escapeHTML(path.to_s)}" class="#{CGI.escapeHTML(css)}">#{CGI.escapeHTML(link_label(locale).to_s)}</a>)
               end
             end.join(attributes[:sep])
           end

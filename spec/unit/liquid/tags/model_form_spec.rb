@@ -37,6 +37,45 @@ describe Locomotive::Steam::Liquid::Tags::ModelForm do
 
   end
 
+  describe 'attribute values holding markup' do
+
+    let(:text)    { 'x" onclick="alert(1)' }
+    let(:context) { ::Liquid::Context.new({ 'path' => path, 'text' => text }, {}, { services: services }) }
+    let(:source)  { "{% model_form 'newsletter_addresses', class: text, success: text %}Newsletter Form{% endmodel_form %}" }
+
+    it 'writes them as the values of the attributes the form builds' do
+      html = Nokogiri::HTML5.fragment(subject)
+
+      expect(html.at_css('form').attributes.keys).to eq %w(method enctype class)
+      expect(html.at_css('form')['class']).to eq text
+      expect(html.at_css('input[name="success_callback"]')['value']).to eq text
+    end
+
+  end
+
+  describe 'a callback from a request parameter' do
+
+    let(:context) { ::Liquid::Context.new({ 'path' => path, 'params' => Locomotive::Steam::Liquid::Drops::Params.new('next' => '/x?a=1&b=2') }, {}, { services: services }) }
+    let(:source)  { "{% model_form 'newsletter_addresses', success: params.next %}Newsletter Form{% endmodel_form %}" }
+
+    it 'writes the parameter once' do
+      expect(Nokogiri::HTML5.fragment(subject).at_css('input[name="success_callback"]')['value']).to eq '/x?a=1&b=2'
+    end
+
+  end
+
+  describe 'an action from a request parameter on a mounted site' do
+
+    let(:env)     { { 'steam.mounted_on' => '/m' } }
+    let(:context) { ::Liquid::Context.new({ 'path' => path, 'params' => Locomotive::Steam::Liquid::Drops::Params.new('next' => 'x?a=1&b=2') }, {}, { services: services }) }
+    let(:source)  { "{% model_form 'newsletter_addresses', action: params.next %}Newsletter Form{% endmodel_form %}" }
+
+    it 'writes the parameter once' do
+      expect(Nokogiri::HTML5.fragment(subject).at_css('form')['action']).to eq '/m/x?a=1&b=2'
+    end
+
+  end
+
   describe 'with a different dom id and css class' do
 
     let(:source) { "{% model_form 'newsletter_addresses', id: 'my-form', class: 'col-md-12' %}Newsletter Form{% endmodel_form %}" }

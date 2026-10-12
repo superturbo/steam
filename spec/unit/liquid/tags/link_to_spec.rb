@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-describe Locomotive::Steam::Liquid::Tags::PathTo do
+describe Locomotive::Steam::Liquid::Tags::LinkTo do
 
   let(:prefix_default)  { false }
   let(:assigns)         { {} }
@@ -82,12 +82,64 @@ describe Locomotive::Steam::Liquid::Tags::PathTo do
 
       end
 
+      context 'with a CSS class from a variable holding quotes' do
+
+        let(:assigns) { { 'css' => 'button" onclick="alert(1)' } }
+        let(:source)  { '{% link_to index, class: css %}' }
+
+        it 'renders it as one attribute' do
+          link = Nokogiri::HTML5(subject).at_css('a')
+
+          expect(link.attributes.keys).to eq %w(href class)
+          expect(link['class']).to eq 'button" onclick="alert(1)'
+        end
+
+      end
+
+      context 'with a CSS class from a request parameter' do
+
+        let(:assigns) { { 'params' => Locomotive::Steam::Liquid::Drops::Params.new('css' => 'a&b') } }
+        let(:source)  { '{% link_to index, class: params.css %}' }
+
+        it 'writes the parameter once' do
+          expect(Nokogiri::HTML5(subject).at_css('a')['class']).to eq 'a&b'
+        end
+
+      end
+
+    end
+
+    describe 'a title and a path holding markup' do
+
+      let(:page) { liquid_instance_double('Index', handle: 'index', localized_attributes: { title: true, fullpath: true }, title: { en: 'Home</a><script>alert(1)</script>' }, fullpath: { en: 'x" onclick="alert(1)' }, templatized?: false) }
+      let(:source) { '{% link_to index %}' }
+
+      it 'renders them as text and as one attribute, adding no element' do
+        html = Nokogiri::HTML5(subject)
+        link = html.at_css('a')
+
+        expect(html.css('script')).to be_empty
+        expect(link.attributes.keys).to eq %w(href)
+        expect(link['href']).to eq '/x" onclick="alert(1)'
+        expect(link.text).to eq 'Home</a><script>alert(1)</script>'
+      end
+
     end
 
     describe 'used as a block' do
 
       let(:source)    { 'My link: {% link_to index %}click here{% endlink_to %}!' }
       it { is_expected.to eq 'My link: <a href="/">click here</a>!' }
+
+      context 'holding markup' do
+
+        let(:source) { '{% link_to index %}<b>click</b>{% endlink_to %}' }
+
+        it 'keeps the markup of the template' do
+          expect(Nokogiri::HTML5(subject).css('a b').size).to eq 1
+        end
+
+      end
 
       context 'and a different locale' do
 
@@ -117,6 +169,22 @@ describe Locomotive::Steam::Liquid::Tags::PathTo do
 
         let(:source) { "{% link_to article, locale: 'fr' %}" }
         it { is_expected.to eq '<a href="/fr/mes-articles/bonjour-monde">Bonjour monde</a>' }
+
+      end
+
+      context 'whose label and slug hold markup' do
+
+        let(:entry) { liquid_instance_double('Article', localized_attributes: { _label: true, _slug: true }, _label: { en: 'Home</a><script>alert(1)</script>' }, _slug: { en: 'hello" onclick="alert(1)' }) }
+
+        it 'renders them as text and as one attribute, adding no element' do
+          html = Nokogiri::HTML5(subject)
+          link = html.at_css('a')
+
+          expect(html.css('script')).to be_empty
+          expect(link.attributes.keys).to eq %w(href)
+          expect(link['href']).to eq '/my-articles/hello" onclick="alert(1)'
+          expect(link.text).to eq 'Home</a><script>alert(1)</script>'
+        end
 
       end
 

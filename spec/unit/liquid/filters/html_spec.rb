@@ -333,7 +333,127 @@ describe Locomotive::Steam::Liquid::Filters::Html do
 
   end
 
+  describe 'values holding markup' do
+
+    let(:text) { 'x" onclick="alert(1)' }
+
+    def attributes_of(html, selector)
+      Nokogiri::HTML5.fragment(html).css(selector).map { |element| element.attributes.transform_values(&:value) }
+    end
+
+    it 'writes them as the attribute values of auto_discovery_link_tag' do
+      html = auto_discovery_link_tag(text, "rel:#{text}", "type:#{text}", "title:#{text}")
+      expect(attributes_of(html, 'link')).to eq [{ 'rel' => text, 'type' => text, 'title' => text, 'href' => text }]
+    end
+
+    it 'writes them as the attribute values of stylesheet_tag' do
+      html = stylesheet_tag('/main.css?x&lt;b', text)
+      expect(attributes_of(html, 'link')).to eq [{ 'href' => '/main.css?x&lt;b', 'media' => text, 'rel' => 'stylesheet', 'type' => 'text/css' }]
+    end
+
+    it 'writes them as the attribute values of javascript_tag' do
+      html = javascript_tag('/main.js?x&lt;b', "defer:#{text}")
+      expect(attributes_of(html, 'script')).to eq [{ 'src' => '/main.js?x&lt;b', 'type' => 'text/javascript', 'defer' => text }]
+    end
+
+    it 'writes them as the attribute values of theme_image_tag and image_tag' do
+      expect(attributes_of(theme_image_tag("/#{text}.jpg", "alt:#{text}"), 'img')).to eq [{ 'src' => theme_image_url("/#{text}.jpg"), 'alt' => text }]
+      expect(attributes_of(image_tag(text, "alt:#{text}"), 'img')).to eq [{ 'src' => text, 'alt' => text }]
+    end
+
+    it 'writes them as the attribute values of flash_tag' do
+      html = flash_tag(text, "width:#{text}")
+      expect(attributes_of(html, 'object, param, embed')).to eq [{ 'width' => text }, { 'name' => 'movie', 'value' => text }, { 'src' => text, 'width' => text }]
+    end
+
+  end
+
+  describe 'options of a tag' do
+
+    let(:params)  { Locomotive::Steam::Liquid::Drops::Params.new('image' => '/i.jpg?w=1&h=2') }
+    let(:assigns) { { 'params' => params, 'title' => 'Kaunas onload=alert(1) x: old town' } }
+
+    def render_img(source)
+      Nokogiri::HTML5.fragment(render_template(source, ::Liquid::Context.new(assigns))).at_css('img').attributes.transform_values(&:value)
+    end
+
+    it 'keeps the names the template writes, with values holding colons' do
+      expect(image_tag('/m.jpg', 'style:width:100px', 'role:img')).to eq '<img src="/m.jpg" role="img" style="width:100px" >'
+    end
+
+    it 'reads the name up to the first colon' do
+      expect(render_img(%({% capture option %}\nalt:{{ title }}\n{% endcapture %}{{ '/m.jpg' | image_tag: option }}))).to eq('src' => '/m.jpg', 'alt' => 'Kaunas onload=alert(1) x: old town')
+    end
+
+    it 'takes the raw value of a request parameter' do
+      expect(render_img(%({{ params.unsafe.image | image_tag }}))).to eq('src' => '/i.jpg?w=1&h=2')
+    end
+
+  end
+
+  describe 'a request parameter or a safe_url result as the input' do
+
+    let(:params)  { Locomotive::Steam::Liquid::Drops::Params.new('url' => '/i.jpg?w=1&h=2', 'css' => '/main.css?a=1&b=2', 'js' => '/main.js?a=1&b=2', 'media' => 'a&b', 'option' => 'alt:A&B', 'rel' => 'rel:a&b', 'type' => 'type:c&d', 'title' => 'title:A&B') }
+    let(:assigns) { { 'params' => params } }
+
+    def render_html(source)
+      Nokogiri::HTML5.fragment(render_template(source, ::Liquid::Context.new(assigns, {}, { services: services })))
+    end
+
+    it 'is written once by image_tag' do
+      expect(render_html('{{ params.url | image_tag }}').at_css('img')['src']).to eq '/i.jpg?w=1&h=2'
+    end
+
+    it 'is written once by theme_image_tag' do
+      expect(render_html('{{ params.url | theme_image_tag }}').at_css('img')['src']).to eq theme_image_url('/i.jpg?w=1&h=2')
+    end
+
+    it 'is written once by stylesheet_tag' do
+      link = render_html('{{ params.css | stylesheet_tag: params.media }}').at_css('link')
+      expect([link['href'], link['media']]).to eq ['/main.css?a=1&b=2', 'a&b']
+    end
+
+    it 'is written once by javascript_tag and flash_tag' do
+      expect(render_html('{{ params.js | javascript_tag }}').at_css('script')['src']).to eq '/main.js?a=1&b=2'
+      expect(render_html('{{ params.url | flash_tag }}').css('param, embed').map { |element| element['value'] || element['src'] }).to eq ['/i.jpg?w=1&h=2'] * 2
+    end
+
+    it 'is written once by auto_discovery_link_tag' do
+      expect(render_html('{{ params.url | auto_discovery_link_tag }}').at_css('link')['href']).to eq '/i.jpg?w=1&h=2'
+    end
+
+    it 'writes the value of an escaped option once' do
+      expect(render_html(%({{ '/i.jpg' | image_tag: params.option }})).at_css('img')['alt']).to eq 'A&B'
+    end
+
+    it 'writes the escaped options of auto_discovery_link_tag once' do
+      link = render_html(%({{ '/feed' | auto_discovery_link_tag: params.rel, params.type, params.title }})).at_css('link')
+      expect([link['rel'], link['type'], link['title']]).to eq ['a&b', 'c&d', 'A&B']
+    end
+
+    it 'is written once through a url filter' do
+      expect(render_html('{{ params.url | theme_image_url | image_tag }}').at_css('img')['src']).to eq theme_image_url('/i.jpg?w=1&h=2')
+      expect(render_html('{{ params.url | theme_asset_url | image_tag }}').at_css('img')['src']).to eq theme_asset_url('/i.jpg?w=1&h=2')
+    end
+
+    it 'stays escaped where a filter returns a url into the template' do
+      assigns['params'] = Locomotive::Steam::Liquid::Drops::Params.new('url' => '"><b>x</b>')
+      expect(render_html('{{ params.url | theme_image_url }}').css('b')).to be_empty
+    end
+
+    it 'is checked once by safe_url and written once as the url it checked' do
+      expect(render_template('{{ params.url | safe_url }}', ::Liquid::Context.new(assigns))).to eq '/i.jpg?w=1&amp;h=2'
+      expect(render_html('{{ params.url | safe_url | image_tag }}').at_css('img')['src']).to eq '/i.jpg?w=1&h=2'
+      expect(render_html("{{ '  /i.jpg?w=1&h=2 ' | safe_url | image_tag }}").at_css('img')['src']).to eq '/i.jpg?w=1&h=2'
+    end
+
+  end
+
   describe '#safe_url' do
+
+    it 'returns a plain empty string for a refused url' do
+      expect(safe_url('javascript:alert(1)')).to be_an_instance_of(String).and eq ''
+    end
 
     it 'passes allowlisted schemes through (escaped)' do
       expect(safe_url('http://x')).to eq 'http://x'

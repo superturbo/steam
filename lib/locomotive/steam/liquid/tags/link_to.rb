@@ -10,7 +10,7 @@ module Locomotive
 
           def render(context)
             render_path(context) do |page, path|
-              label = label_from_page(page)
+              label = CGI.escapeHTML(label_from_page(page).to_s)
 
               if render_as_block?
                 context.stack do
@@ -19,8 +19,8 @@ module Locomotive
                 end
               end
 
-              tag_href  = %(href="#{path}")
-              tag_class = %( class="#{css}") if css.present?
+              tag_href  = %(href="#{CGI.escapeHTML(path.to_s)}")
+              tag_class = %( class="#{HtmlEscapedText.escape(css)}") if css.present?
 
               %{<a #{tag_href}#{tag_class}>#{label}</a>}
             end
