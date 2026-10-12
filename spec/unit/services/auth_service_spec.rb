@@ -387,7 +387,7 @@ EMAIL
     context 'valid auth token and password' do
 
       it 'returns :password_reset and entry' do
-        entry = instance_double('Account', :[] => (Time.zone.now - 1.hours).iso8601)
+        entry = instance_double('Account', :[] => (Time.zone.now - 30.minutes).iso8601)
         expect(entries).to receive(:all).with('accounts', { '_auth_reset_token' => '42' }).and_return([entry])
         expect(BCrypt::Password).to receive(:create).with('easyone').and_return('hashedeasyone')
         expect(entries).to receive(:update_decorated_entry).with(entry, { 'password_hash' => 'hashedeasyone', '_auth_reset_token' => nil, '_auth_reset_sent_at' => nil })

@@ -35,7 +35,11 @@ require_relative 'support'
 Locomotive::Steam.configure do |config|
   config.mode                 = :test
   config.image_resizer_secret = 'steam spec key'
+  config.asset_path           = File.expand_path('fixtures/default/public', __dir__)
 end
+
+# Rack::Static keeps the asset_path from the first stack build.
+Locomotive::Steam.to_app
 
 RSpec.configure do |config|
   config.include Spec::Helpers

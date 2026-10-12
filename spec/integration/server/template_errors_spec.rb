@@ -44,7 +44,7 @@ describe 'A template error' do
     Locomotive::Steam.configure do |config|
       config.mode       = :test
       config.adapter    = { name: :filesystem, path: @site_path }
-      config.asset_path = File.join(@site_path, 'public')
+      config.asset_path = File.expand_path(File.join(default_fixture_site_path, 'public'))
       config.log_file   = File.join(@site_path, 'log/steam.log')
     end
 
