@@ -16,6 +16,41 @@ describe Locomotive::Steam::Middlewares::ThreadSafe do
     middleware_for(body).params
   end
 
+  describe 'the params of a request' do
+
+    def middleware_with(url, body, content_type, env = nil)
+      env ||= Rack::MockRequest.env_for(url, method: 'POST', input: body, 'CONTENT_TYPE' => content_type)
+      env['steam.request'] ||= Rack::Request.new(env)
+      described_class.new(nil).tap { |middleware| middleware.env = env }
+    end
+
+    {
+      'a form'      => ['name=body&id=body', 'application/x-www-form-urlencoded'],
+      'a JSON body' => ['{"name": "body", "id": "body"}', 'application/json']
+    }.each do |kind, (body, content_type)|
+
+      it "reads the query, #{kind} and the route, each over the one before" do
+        middleware = middleware_with('/?name=query&id=query&q=1', body, content_type)
+        expect(middleware.params['id']).to eq 'body'
+
+        middleware.merge_route_params('id' => 'route')
+        middleware.merge_route_params('page' => '2')
+
+        expect(middleware.params.to_h).to eq('name' => 'body', 'id' => 'route', 'q' => '1', 'page' => '2')
+      end
+
+    end
+
+    it 'keeps the route params for any later middleware, also once the request params change' do
+      middleware = middleware_with('/?a=1', 'b=2', 'application/x-www-form-urlencoded')
+      middleware.merge_route_params('id' => 'route')
+      middleware.request.update_param('c', '3')
+
+      expect(middleware_with(nil, nil, nil, middleware.env).params.to_h).to eq('a' => '1', 'b' => '2', 'c' => '3', 'id' => 'route')
+    end
+
+  end
+
   describe 'the params of a JSON body' do
 
     it 'reads a JSON object' do

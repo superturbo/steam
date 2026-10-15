@@ -48,10 +48,7 @@ module Locomotive::Steam
 
           if (matches = path.match(regexp))
             debug_log "Route found! #{route} (#{handle})"
-
-            # we want the named route parameters in the request params object
-            # because they will be needed in the liquid template.
-            self.merge_with_params(matches.named_captures)
+            self.merge_route_params(matches.named_captures)
 
             return page_finder.by_handle(handle, false)
           end

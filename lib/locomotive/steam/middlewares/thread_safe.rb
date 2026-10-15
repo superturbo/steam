@@ -60,11 +60,7 @@ module Locomotive::Steam::Middlewares
     end
 
     def params
-      @params ||= if json_request?
-        (json_body || {}).with_indifferent_access
-      else
-        request.params.with_indifferent_access
-      end
+      @params ||= request.GET.merge(body_params).merge(env['steam.route_params'] || {}).with_indifferent_access
     end
 
     # The fields of the request body, without the query string.
@@ -96,8 +92,8 @@ module Locomotive::Steam::Middlewares
       raise Locomotive::Steam::InvalidJsonBody, cause: nil
     end
 
-    def merge_with_params(values)
-      values.each { |name, value| self.request.params[name] = value }
+    def merge_route_params(values)
+      env['steam.route_params'] = (env['steam.route_params'] || {}).merge(values)
       @params = nil
     end
 

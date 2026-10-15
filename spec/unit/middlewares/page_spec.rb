@@ -26,7 +26,7 @@ describe Locomotive::Steam::Middlewares::Page do
     env['steam.live_editing'] = live_editing
     env['steam.request']      = Rack::Request.new(env)
     code, env = middleware.call(env)
-    [env['steam.page'], env['steam.request'].params]
+    [env['steam.page'], env['steam.route_params'].to_h]
   end
 
   before do

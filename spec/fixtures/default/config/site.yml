@@ -37,3 +37,6 @@ metafields:
     port: 25
     user_name: user
     password: password
+
+routes:
+  - "/song-by-id/:id": "a-song-template"
