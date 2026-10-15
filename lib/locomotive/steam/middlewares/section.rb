@@ -47,7 +47,12 @@ module Locomotive::Steam
       end
 
       def section_content
-        (data = json_body) ? data['section_content'] : {}
+        return {} unless (data = json_body)
+
+        content = data['section_content']
+        return content if content.nil? || content.is_a?(Hash)
+
+        raise InvalidJsonBody, 'The section content is not a JSON object.'
       end
 
       def live_editing?

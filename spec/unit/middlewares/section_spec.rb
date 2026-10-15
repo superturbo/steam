@@ -147,6 +147,31 @@ describe Locomotive::Steam::Middlewares::Section do
 
   end
 
+  [[], 'x', 42, true, false].each do |content|
+
+    context "with section content #{content.inspect}, which is not an object" do
+
+      let(:body) { JSON.generate(section_content: content) }
+
+      it 'raises a bad request' do
+        expect { subject }.to raise_error(Locomotive::Steam::InvalidJsonBody, 'The section content is not a JSON object.')
+      end
+
+    end
+
+  end
+
+  context 'with null section content' do
+
+    let(:body) { JSON.generate(section_content: nil) }
+
+    it 'renders the content the page holds for the section' do
+      _, _, body = subject
+      expect(body.first).to include('id="locomotive-section-page-header"')
+    end
+
+  end
+
   context 'with a JSON request body that is not an object' do
 
     let(:body) { '[]' }
