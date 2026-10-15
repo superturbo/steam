@@ -72,6 +72,7 @@ describe Locomotive::Steam::Middlewares::Auth do
   let(:session)           { { Rack::Csrf.key => 'token-1' } }
   let(:form)              { { auth_action: 'sign_up', auth_content_type: 'accounts', :'g-recaptcha-response' => 'mycode', _csrf: 'token-1' } }
   let(:request_method)    { 'POST' }
+  let(:url)               { 'http://example.com/account' }
   let(:rack_env)          { build_env }
 
   before do
@@ -184,13 +185,88 @@ describe Locomotive::Steam::Middlewares::Auth do
       code, headers = middleware.call(rack_env)
 
       expect(session[:authenticated_entry_id]).to eq '42'
-      expect([code, headers['location']]).to eq [301, '/me']
+      expect([code, headers['location']]).to eq [303, '/me']
+    end
+
+  end
+
+  describe 'a successful action without a callback' do
+
+    let(:content_type) { instance_double('ContentType', slug: 'accounts', recaptcha_required?: false) }
+    let(:entry)        { instance_double('Account', _id: 42, content_type: content_type) }
+
+    def redirection
+      code, headers = middleware.call(rack_env)
+      [code, headers['location']]
+    end
+
+    before do
+      allow(auth_service).to receive(:sign_in).and_return([:signed_in, entry])
+      allow(auth_service).to receive(:reset_password).and_return([:password_reset, entry])
+    end
+
+    %w(sign_in reset_password).each do |action|
+
+      context action do
+
+        before { form[:auth_action] = action }
+
+        it 'sends the visitor to the home page with a See Other' do
+          expect(redirection).to eq [303, '/']
+        end
+
+        it 'reads a blank callback as none' do
+          form[:auth_callback] = '  '
+          expect(redirection).to eq [303, '/']
+        end
+
+        it 'sends the visitor to the home page of a mounted site' do
+          rack_env['steam.mounted_on'] = '/locomotive/acme/preview'
+          expect(redirection).to eq [303, '/locomotive/acme/preview/']
+        end
+
+      end
+
+    end
+
+    describe 'sign_out' do
+
+      let(:url)      { 'http://example.com/fr/account' }
+      let(:rack_env) { build_env.tap { |env| env['steam.path'] = '/account' } }
+
+      before do
+        allow(auth_service).to receive(:find_authenticated_resource).and_return(entry)
+        allow(auth_service).to receive(:sign_out)
+        session.merge!(authenticated_entry_type: 'accounts', authenticated_entry_id: '42')
+        form[:auth_action] = 'sign_out'
+      end
+
+      it 'sends the visitor back to the page, its locale included' do
+        expect(redirection).to eq [303, '/fr/account']
+      end
+
+      it 'reads a blank callback as none' do
+        form[:auth_callback] = ''
+        expect(redirection).to eq [303, '/fr/account']
+      end
+
+      it 'sends the visitor back to the page of a mounted site' do
+        rack_env['steam.mounted_on'] = '/locomotive/acme/preview'
+        expect(redirection).to eq [303, '/locomotive/acme/preview/fr/account']
+      end
+
+      it 'sends the visitor to the home page from the mount path itself' do
+        rack_env['steam.mounted_on'] = '/locomotive/acme/preview'
+        rack_env['PATH_INFO']        = ''
+        expect(redirection).to eq [303, '/locomotive/acme/preview/']
+      end
+
     end
 
   end
 
   def build_env
-    env_for('http://example.com/account', params: form, method: request_method).tap do |env|
+    env_for(url, params: form, method: request_method).tap do |env|
       env['steam.request']        = Rack::Request.new(env)
       env['steam.site']           = site
       env['steam.services']       = services

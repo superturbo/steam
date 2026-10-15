@@ -49,7 +49,7 @@ module Locomotive::Steam
 
         if status == :entry_created
           store_authenticated(entry)
-          redirect_to options.callback || mounted_on
+          redirect_to(options.callback || '/', 303)
         else
           liquid_assigns['auth_entry'] = entry
         end
@@ -64,7 +64,7 @@ module Locomotive::Steam
 
         if status == :signed_in
           store_authenticated(entry)
-          redirect_to options.callback || mounted_on
+          redirect_to(options.callback || '/', 303)
         end
 
         append_message(status)
@@ -77,7 +77,7 @@ module Locomotive::Steam
 
         store_authenticated(nil)
 
-        redirect_to options.callback || path
+        redirect_to(options.callback || request.path_info.presence || '/', 303)
 
         append_message(:signed_out)
       end
@@ -98,7 +98,7 @@ module Locomotive::Steam
         # Reset success status depends on the password field.
         if entry
           store_authenticated(entry)
-          redirect_to options.callback || mounted_on
+          redirect_to(options.callback || '/', 303)
         end
 
         append_message(status)
@@ -160,7 +160,7 @@ module Locomotive::Steam
         end
 
         def callback
-          params[:auth_callback]
+          params[:auth_callback].presence
         end
 
         def reset_password_url

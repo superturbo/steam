@@ -33,8 +33,17 @@ describe 'Authentication' do
 
       it 'redirects to the callback' do
         sign_up(params)
-        expect(last_response.status).to eq 301
+        expect(last_response.status).to eq 303
         expect(last_response.location).to eq '/account/me'
+      end
+
+      it 'redirects to the home page without a callback' do
+        params.delete(:auth_callback)
+        params[:auth_entry][:email] = 'hiro.yamamoto@soundgarden.band'
+
+        sign_up(params)
+        expect(last_response.status).to eq 303
+        expect(last_response.location).to eq '/'
       end
 
       it 'accepts the token rendered in the sign up form' do
@@ -44,7 +53,7 @@ describe 'Authentication' do
 
         post '/account/sign-up', params.merge(_csrf: token)
 
-        expect(last_response.status).to eq 301
+        expect(last_response.status).to eq 303
         expect(last_response.location).to eq '/account/me'
       end
 
@@ -78,7 +87,7 @@ describe 'Authentication' do
           auth_action: 'sign_in', auth_content_type: 'accounts', auth_id_field: 'email',
           auth_password_field: 'password', auth_id: 'ben.shepherd@soundgarden.band', auth_password: 'a<b&c>d!',
           auth_callback: '/account/me' }
-        expect(last_response.status).to eq 301
+        expect(last_response.status).to eq 303
         expect(last_response.location).to eq '/account/me'
       end
 
@@ -188,7 +197,7 @@ describe 'Authentication' do
 
       it 'redirects to the callback' do
         sign_in(params)
-        expect(last_response.status).to eq 301
+        expect(last_response.status).to eq 303
         expect(last_response.location).to eq '/account/me'
       end
 
@@ -203,8 +212,9 @@ describe 'Authentication' do
 
         post '/account/sign-in', fields.merge('auth_id' => 'john@doe.net', 'auth_password' => 'easyone')
 
-        expect(last_response.status).to eq 301
+        expect(last_response.status).to eq 303
         follow_redirect!
+        expect(last_request.request_method).to eq 'GET'
         expect(last_response.body).to include "My name is John and I'm logged in!"
       end
 
@@ -278,7 +288,7 @@ describe 'Authentication' do
       it 'signs the visitor out' do
         post_form '/account/sign-in', params.merge(_method: 'delete'), { 'rack.session' => rack_session }
 
-        expect(last_response.status).to eq 301
+        expect(last_response.status).to eq 303
         expect(last_response.location).to eq '/account/sign-in'
       end
 
@@ -294,7 +304,7 @@ describe 'Authentication' do
 
     it 'redirect to the requested page' do
       post_form '/account/sign-in', params, { 'rack.session' => rack_session }
-      expect(last_response.status).to eq 301
+      expect(last_response.status).to eq 303
       expect(last_response.location).to eq "/account/sign-in"
     end
 
@@ -399,7 +409,7 @@ describe 'Authentication' do
 
         post_form '/account/reset-password', fields.merge('auth_password' => new_password)
 
-        expect(last_response.status).to eq 301
+        expect(last_response.status).to eq 303
         follow_redirect!
         expect(last_response.body).to include "My name is Kim and I'm logged in!"
       end
@@ -412,7 +422,7 @@ describe 'Authentication' do
 
       it 'sends an email to the account' do
         post_form '/account/reset-password', params
-        expect(last_response.status).to eq 301
+        expect(last_response.status).to eq 303
         follow_redirect!
         expect(last_response.body).to include "My name is Jane and I'm logged in!"
       end
