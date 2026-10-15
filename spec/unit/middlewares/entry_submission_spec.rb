@@ -130,6 +130,33 @@ describe Locomotive::Steam::Middlewares::EntrySubmission do
           expect(middleware.call(rack_env).first).to eq 200
         end
 
+        context 'sent with a JSON type with parameters to a page path' do
+
+          before do
+            rack_env['PATH_INFO']    = '/contact-us'
+            rack_env['CONTENT_TYPE'] = 'application/json; charset=utf-8'
+          end
+
+          it 'answers with the entry in JSON' do
+            code, headers, body = middleware.call(rack_env)
+
+            expect([code, headers['content-type'], body]).to eq [200, 'application/json', ['{}']]
+          end
+
+          context 'when the entry is not valid' do
+
+            let(:errors) { instance_double('Error', empty?: false) }
+
+            it 'answers with the errors in JSON' do
+              code, headers, body = middleware.call(rack_env)
+
+              expect([code, headers['content-type'], body]).to eq [422, 'application/json', ['{}']]
+            end
+
+          end
+
+        end
+
       end
 
       context 'with another token' do

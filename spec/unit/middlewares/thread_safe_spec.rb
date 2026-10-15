@@ -41,6 +41,13 @@ describe Locomotive::Steam::Middlewares::ThreadSafe do
 
     end
 
+    it 'reads a body as JSON for the JSON media type only' do
+      with_charset = middleware_with('/', '{"name": "x"}', 'application/json; charset=utf-8')
+      other_type   = middleware_with('/', '{"name": "x"}', 'application/jsonx')
+
+      expect([with_charset.params['name'], other_type.params['name']]).to eq ['x', nil]
+    end
+
     it 'keeps the route params for any later middleware, also once the request params change' do
       middleware = middleware_with('/?a=1', 'b=2', 'application/x-www-form-urlencoded')
       middleware.merge_route_params('id' => 'route')

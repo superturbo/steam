@@ -19,7 +19,7 @@ module Locomotive::Steam
         end
 
         def json?
-          self.request.content_type == 'application/json' || File.extname(self.request.path) == '.json'
+          self.request.media_type == 'application/json' || File.extname(self.request.path) == '.json'
         end
 
         def render_response(content, code = 200, type = nil)

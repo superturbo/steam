@@ -69,7 +69,7 @@ module Locomotive::Steam::Middlewares
     end
 
     def json_request?
-      request.content_type&.start_with?('application/json') && (request.post? || request.put?)
+      request.media_type == 'application/json' && (request.post? || request.put?)
     end
 
     def json_body
