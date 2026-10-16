@@ -220,6 +220,23 @@ describe Locomotive::Steam::Middlewares::Auth do
           expect(redirection).to eq [303, '/']
         end
 
+        it 'reads a callback leaving the site as none' do
+          form[:auth_callback] = 'https://evil.com/x'
+          expect(redirection).to eq [303, '/']
+        end
+
+        it 'follows an absolute URL of the site as it is, under a mount path too' do
+          form[:auth_callback] = 'http://example.com/account/me'
+          rack_env['steam.mounted_on'] = '/locomotive/acme/preview'
+          expect(redirection).to eq [303, 'http://example.com/account/me']
+        end
+
+        it 'reads a URL whose scheme it would not follow as absolute as none' do
+          form[:auth_callback] = 'HTTP://example.com/account/me'
+          rack_env['steam.mounted_on'] = '/locomotive/acme/preview'
+          expect(redirection).to eq [303, '/locomotive/acme/preview/']
+        end
+
         it 'sends the visitor to the home page of a mounted site' do
           rack_env['steam.mounted_on'] = '/locomotive/acme/preview'
           expect(redirection).to eq [303, '/locomotive/acme/preview/']
@@ -248,6 +265,20 @@ describe Locomotive::Steam::Middlewares::Auth do
       it 'reads a blank callback as none' do
         form[:auth_callback] = ''
         expect(redirection).to eq [303, '/fr/account']
+      end
+
+      it 'reads a callback leaving the site as none' do
+        form[:auth_callback] = '//evil.com/x'
+        expect(redirection).to eq [303, '/fr/account']
+      end
+
+      ['//evil.com/x', '/\\evil.com/x'].each do |path|
+
+        it "sends the visitor to the home page from #{path.inspect}, a path browsers read as another host" do
+          rack_env['PATH_INFO'] = path
+          expect(redirection).to eq [303, '/']
+        end
+
       end
 
       it 'sends the visitor back to the page of a mounted site' do

@@ -77,6 +77,33 @@ module Locomotive::Steam
           request.env['steam.mounted_on']
         end
 
+        def redirect_location(value, name)
+          location = value.to_s
+          return if location.blank?
+          return location if local_path?(location) || request_origin_url?(location)
+
+          Locomotive::Common::Logger.warn "[#{self.class.name.to_s.demodulize}] Refused the #{name}"
+          nil
+        end
+
+        def local_request_path
+          local_path?(request.path_info) ? request.path_info : '/'
+        end
+
+        def local_path?(location)
+          location.match?(%r{\A/(?![/\\])[^\s\x00-\x1F\x7F]*\z})
+        end
+
+        # Reject URLs that redirect_to would treat as relative.
+        def request_origin_url?(location)
+          return false unless location.match?(Locomotive::Steam::IsHTTP)
+
+          uri = URI.parse(location)
+          uri.userinfo.nil? && "#{uri.scheme}://#{uri.host}#{":#{uri.port}" unless uri.port == uri.default_port}".casecmp?(request.base_url)
+        rescue URI::InvalidURIError
+          false
+        end
+
         def log(msg, offset = 2)
           Locomotive::Common::Logger.info (' ' * offset) + msg
         end

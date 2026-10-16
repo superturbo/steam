@@ -63,10 +63,12 @@ module Locomotive::Steam
       end
 
       def navigation_html_error(entry)
-        if error_location =~ HTTP_REGEXP
-          redirect_to error_location
+        location = error_location
+
+        if location =~ HTTP_REGEXP
+          redirect_to location
         else
-          env['PATH_INFO'] = make_local_path(error_location)
+          env['PATH_INFO'] = make_local_path(location)
           store_in_liquid(entry)
           self.next
         end
@@ -119,7 +121,7 @@ module Locomotive::Steam
       def error_location; location(:error); end
 
       def location(state, query = '')
-        location = params[:"#{state}_callback"] || (entry_submissions_path? ? '/' : request.path_info)
+        location = redirect_location(params[:"#{state}_callback"], "#{state}_callback") || (entry_submissions_path? ? '/' : local_request_path)
 
         if query.blank?
           location

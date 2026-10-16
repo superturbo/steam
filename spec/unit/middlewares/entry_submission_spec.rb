@@ -50,6 +50,16 @@ describe Locomotive::Steam::Middlewares::EntrySubmission do
       expect(location).to include('submitted_type_slug=contacts')
     end
 
+    ['//evil.com/x', '/\\evil.com/x'].each do |path|
+
+      it "sends a submission posted at #{path.inspect}, a path browsers read as another host, to the home page" do
+        rack_env['PATH_INFO'] = path
+        _code, headers = middleware.call(rack_env)
+        expect(headers['location']).to start_with '/?'
+      end
+
+    end
+
   end
 
   context 'form token' do
@@ -183,6 +193,20 @@ describe Locomotive::Steam::Middlewares::EntrySubmission do
 
       end
 
+    end
+
+  end
+
+  context 'an error callback leaving the site' do
+
+    it 'is refused once, and the errors render at the requested page' do
+      form[:error_callback] = 'https://evil.com/x'
+      allow(Locomotive::Common::Logger).to receive(:warn)
+
+      code, env = middleware.call(rack_env)
+
+      expect([code, env['PATH_INFO']]).to eq [200, '/contact-us']
+      expect(Locomotive::Common::Logger).to have_received(:warn).with(/error_callback/).once
     end
 
   end

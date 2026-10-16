@@ -175,12 +175,32 @@ describe 'ContactForm' do
 
         end
 
-        context 'redirects outside the site' do
+        context 'with an error callback leaving the site' do
 
           let(:params) { { 'error_callback' => 'http://www.locomotivecms.com' } }
 
-          it 'returns a success status' do
-            expect(response.status).to eq 301
+          it 'renders the errors on the site' do
+            expect([response.status, response.location]).to eq [200, nil]
+          end
+
+        end
+
+        context 'with an absolute error callback of the site' do
+
+          let(:params) { { 'error_callback' => 'http://example.org/contact' } }
+
+          it 'redirects to it' do
+            expect([response.status, response.location]).to eq [301, 'http://example.org/contact']
+          end
+
+          context 'whose scheme is written in upper case' do
+
+            let(:params) { { 'error_callback' => 'HTTP://example.org/contact' } }
+
+            it 'renders the errors on the site' do
+              expect([response.status, response.location]).to eq [200, nil]
+            end
+
           end
 
         end
@@ -203,6 +223,17 @@ describe 'ContactForm' do
 
         it 'displays a success message' do
           expect(response.body.to_s).to include 'Thank you John'
+        end
+
+        context 'with a success callback leaving the site' do
+
+          let(:follow_redirect) { false }
+          let(:params)          { super().merge('success_callback' => 'https://www.locomotivecms.com/') }
+
+          it 'redirects to the home page of the site' do
+            expect(response.location).to start_with '/?submitted_type_slug=messages'
+          end
+
         end
 
         context 'mounted on a different path than /' do
