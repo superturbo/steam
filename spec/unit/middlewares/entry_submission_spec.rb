@@ -50,6 +50,41 @@ describe Locomotive::Steam::Middlewares::EntrySubmission do
       expect(location).to include('submitted_type_slug=contacts')
     end
 
+    it 'encodes the other submitted values in the redirect URL, so they read back as sent' do
+      form.merge!('note' => "a&b=c #d\nnew line", 'name' => 'Rūta', 'filter' => { 'tag' => 'x&y', 'page' => '2' })
+
+      _code, headers = middleware.call(rack_env)
+      location = headers['location']
+
+      expect(location).not_to match(/[\s#]/)
+      expect(Rack::Utils.parse_nested_query(location.split('?', 2).last)).to eq(
+        'note'                 => "a&b=c #d\nnew line",
+        'name'                 => 'Rūta',
+        'filter'               => { 'tag' => 'x&y', 'page' => '2' },
+        'submitted_type_slug'  => 'contacts',
+        'submitted_entry_slug' => 'john'
+      )
+    end
+
+    {
+      '/thanks#done'           => {},
+      '/thanks?from=form#done' => { 'from' => 'form' }
+    }.each do |callback, callback_query|
+
+      it "adds those values to the query of #{callback.inspect}, before its fragment" do
+        form.merge!('success_callback' => callback, 'note' => 'a&b')
+
+        _code, headers = middleware.call(rack_env)
+        path, fragment = headers['location'].split('#', 2)
+
+        expect([path.split('?', 2).first, fragment]).to eq ['/thanks', 'done']
+        expect(Rack::Utils.parse_nested_query(path.split('?', 2).last)).to eq(callback_query.merge(
+          'note' => 'a&b', 'submitted_type_slug' => 'contacts', 'submitted_entry_slug' => 'john'
+        ))
+      end
+
+    end
+
     ['//evil.com/x', '/\\evil.com/x'].each do |path|
 
       it "sends a submission posted at #{path.inspect}, a path browsers read as another host, to the home page" do

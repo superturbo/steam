@@ -94,15 +94,10 @@ module Locomotive::Steam
           'recaptcha_sitekey'
         ]
 
-        [].tap do |list|
-          params.each do |key, value|
-            next if service_params.include?(key)
-            list << "#{key}=#{value}"
-          end
-
-          list << "#{SUBMITTED_TYPE_PARAM}=#{entry.content_type_slug}"
-          list << "#{SUBMITTED_PARAM}=#{entry._slug}"
-        end.join('&')
+        Rack::Utils.build_nested_query(params.except(*service_params).merge(
+          SUBMITTED_TYPE_PARAM  => entry.content_type_slug,
+          SUBMITTED_PARAM       => entry._slug
+        ))
       end
 
       def with_locale(&block)
@@ -123,11 +118,11 @@ module Locomotive::Steam
       def location(state, query = '')
         location = redirect_location(params[:"#{state}_callback"], "#{state}_callback") || (entry_submissions_path? ? '/' : local_request_path)
 
-        if query.blank?
-          location
-        else
-          location += (location.include?('?') ? '&' : '?') + query
-        end
+        return location if query.blank?
+
+        path, fragment = location.split('#', 2)
+        path += (path.include?('?') ? '&' : '?') + query
+        [path, fragment].compact.join('#')
       end
 
       def entry_submissions_path?

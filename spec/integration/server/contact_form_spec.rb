@@ -14,6 +14,21 @@ describe 'ContactForm' do
     expect(last_response.body).to match(/name="_csrf" value="[^"]+"/)
   end
 
+  describe 'the redirect after a submission' do
+
+    it 'carries the other submitted values to the next page as they were sent' do
+      get '/events'
+      token = last_response.body[/name="_csrf" value="([^"]+)"/, 1]
+      entry = { 'name' => 'John', 'email' => 'j@doe.net', 'message' => 'Bla bla' }
+
+      post '/events', { 'content_type_slug' => 'messages', 'entry' => entry, '_csrf' => token, 'note' => "a&b #c\nd" }
+
+      expect(last_response.status).to eq 301
+      expect(Rack::Utils.parse_nested_query(URI(last_response.location).query)).to include('note' => "a&b #c\nd")
+    end
+
+  end
+
   describe 'form token' do
 
     let(:entry) { { 'name' => 'John', 'email' => 'j@doe.net', 'message' => 'Bla bla' } }
