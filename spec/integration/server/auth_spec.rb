@@ -319,17 +319,19 @@ describe 'Authentication' do
 
   describe 'forgot password action' do
 
-    let(:email) { '' }
+    let(:email)         { '' }
+    let(:public_origin) { ->(site) { "http://#{site.domains.first}" } }
 
     let(:params) { {
       auth_action:                'forgot_password',
       auth_content_type:          'accounts',
       auth_id_field:              'email',
       auth_id:                    email,
-      auth_reset_password_url:    'http://acme.com/account/reset-password',
       auth_callback:              '/account/sign-in',
       auth_email_handle:          'reset_password_instructions',
     } }
+
+    before { allow(Locomotive::Steam.configuration).to receive(:public_origin).and_return(public_origin) }
 
     it 'renders the forgot password page with an error message' do
       post_form '/account/forgot-password', params
@@ -346,6 +348,37 @@ describe 'Authentication' do
         post_form '/account/forgot-password', params
         expect(last_response.status).to eq 200
         expect(last_response.body).to include "The instructions for changing your password have been emailed to you"
+      end
+
+      it 'links to the reset password page at the public origin of the site, whatever the Host and the form say' do
+        link = nil
+        allow_any_instance_of(Locomotive::Steam::EmailService).to receive(:send_email) { |_, _, context| link = context['reset_password_url'] }
+
+        post_form 'http://sample.lvh.me/account/forgot-password', params.merge(auth_reset_password_url: 'https://evil.example/reset')
+
+        token = last_request.env['steam.services'].content_entry.all('accounts', 'email' => email, '_visible' => nil).first['_auth_reset_token']
+        expect(link).to eq "http://example.org/account/reset-password?auth_reset_token=#{token}"
+      end
+
+    end
+
+    context 'without a public origin for the site' do
+
+      let(:email)         { 'no.origin@soundgarden.band' }
+      let(:public_origin) { nil }
+
+      it 'answers 503, and writes no token and sends no email' do
+        post_form '/account/sign-up', {
+          auth_action: 'sign_up', auth_content_type: 'accounts', auth_password_field: 'password',
+          auth_entry: { name: 'No Origin', email: email, password: 'easyone', password_confirmation: 'easyone' } }
+        clear_cookies
+        expect_any_instance_of(Locomotive::Steam::EmailService).not_to receive(:send_email)
+
+        post_form '/account/forgot-password', params
+
+        expect([last_response.status, last_response.body]).to eq [503, 'The password cannot be reset at the moment.']
+        account = last_request.env['steam.services'].content_entry.all('accounts', 'email' => email, '_visible' => nil).first
+        expect(account['_auth_reset_token']).to be_nil
       end
 
     end
@@ -390,6 +423,8 @@ describe 'Authentication' do
 
       let(:email) { 'kim.reset@soundgarden.band' }
 
+      before { allow(Locomotive::Steam.configuration).to receive(:public_origin).and_return('http://example.org') }
+
       it 'resets the password with the fields the form sends' do
         post_form '/account/sign-up', {
           auth_action: 'sign_up', auth_content_type: 'accounts', auth_password_field: 'password',
@@ -399,7 +434,6 @@ describe 'Authentication' do
 
         post_form '/account/forgot-password', {
           auth_action: 'forgot_password', auth_content_type: 'accounts', auth_id_field: 'email', auth_id: email,
-          auth_reset_password_url: 'http://acme.com/account/reset-password',
           auth_email_handle: 'reset_password_instructions' }
         token = last_request.env['steam.services'].content_entry
                   .all('accounts', 'email' => email, '_visible' => nil).first['_auth_reset_token']

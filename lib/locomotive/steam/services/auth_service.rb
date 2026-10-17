@@ -4,8 +4,9 @@ module Locomotive
     class AuthService
 
       RESET_TOKEN_LIFETIME  = 1 * 3600 # 1 hour in seconds
+      RESET_PASSWORD_HANDLE = 'reset_password'
 
-      attr_accessor_initialize :site, :entries, :email_service
+      attr_accessor_initialize :site, :entries, :email_service, [:page_finder, :url_builder, :public_origin]
 
       def find_authenticated_resource(type, id)
         entries.find(type, id)
@@ -55,6 +56,8 @@ module Locomotive
 
       # options is an instance of the AuthOptions class
       def forgot_password(options, context)
+        return :reset_password_unavailable unless (url = reset_password_url)
+
         field = password_field(options)
         entry = field && entries.all(options.type, options.id_field => options.id).first
 
@@ -66,7 +69,7 @@ module Locomotive
             '_auth_reset_sent_at' => Time.zone.now.iso8601
           })
 
-          context['reset_password_url'] = options.reset_password_url + '?auth_reset_token=' + entry['_auth_reset_token']
+          context['reset_password_url'] = "#{url}?auth_reset_token=#{entry['_auth_reset_token']}"
           context[options.type.singularize] = entry
 
           send_reset_password_instructions(options, context)
@@ -113,6 +116,45 @@ module Locomotive
       end
 
       private
+
+      # Reset links use the site's origin and page, never the request's host or fields.
+      def reset_password_url
+        origin = public_origin.respond_to?(:call) ? public_origin.call(site) : public_origin
+        return no_reset_password_url('no public origin') if origin.blank?
+        return no_reset_password_url('an invalid or off-site public origin') unless site_origin?(origin)
+
+        page = page_finder.by_handle(RESET_PASSWORD_HANDLE, false)
+        return no_reset_password_url('no published reset_password page') unless reset_password_page?(page)
+
+        path = url_builder._url_for(page)
+        return no_reset_password_url('a reset_password page path that cannot carry the token') unless plain_path?(path)
+
+        "#{origin}#{path}"
+      end
+
+      def site_origin?(origin)
+        uri = URI.parse(origin.to_s)
+        return false unless uri.is_a?(URI::HTTP)
+        # URI#origin leaves out a default port, which the origin may write.
+        return false unless [uri.origin, "#{uri.scheme}://#{uri.host}:#{uri.port}"].include?(origin)
+
+        site.domains.any? { |domain| domain.casecmp?(uri.host) } && (uri.scheme == 'https' || !site.redirect_to_https)
+      rescue URI::InvalidURIError
+        false
+      end
+
+      def reset_password_page?(page)
+        !page.nil? && page.published? && !page.redirect? && !page.templatized?
+      end
+
+      def plain_path?(path)
+        path.match?(%r{\A/[^?#\s\x00-\x1F\x7F]*\z})
+      end
+
+      def no_reset_password_url(reason)
+        Locomotive::Common::Logger.error "[Auth] No password reset link for the site #{site._id}: it has #{reason}"
+        nil
+      end
 
       # An auth type declares one password field; a visitor may name it, never another.
       def password_field(options)

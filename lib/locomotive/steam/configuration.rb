@@ -53,6 +53,13 @@ module Locomotive
       #
       attr_accessor :asset_host
 
+      # The public origin of a site (scheme://host[:port]) in its password reset links.
+      # A callable receives the site; a host serving several sites passes one.
+      #
+      # default: nil
+      #
+      attr_accessor :public_origin
+
       # Tell if Steam has to also serve static (images) or dynamic (SASS, Coffeescript) assets.
       #
       # default: true

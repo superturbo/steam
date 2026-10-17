@@ -2,12 +2,16 @@ require 'spec_helper'
 
 describe Locomotive::Steam::AuthService do
 
-  let(:site)            { instance_double('CurrentSite') }
+  let(:site)            { instance_double('CurrentSite', _id: 'site-1', domains: ['acme.org', 'localhost'], redirect_to_https: false) }
   let(:password_field)  { instance_double('Field', name: 'password') }
   let(:account_type)    { instance_double('ContentType', password_fields: [password_field]) }
   let(:entries)         { instance_double('ContentService', locale: 'en', get_type: account_type) }
   let(:emails)          { instance_double('EmailService') }
-  let(:service)         { described_class.new(site, entries, emails) }
+  let(:reset_page)      { instance_double('Page', published?: true, redirect?: false, templatized?: false) }
+  let(:page_finder)     { instance_double('PageFinderService', by_handle: reset_page) }
+  let(:url_builder)     { instance_double('UrlBuilderService', _url_for: '/account/reset-password') }
+  let(:public_origin)   { 'https://acme.org' }
+  let(:service)         { described_class.new(site, entries, emails, page_finder: page_finder, url_builder: url_builder, public_origin: public_origin) }
   let(:liquid_context)  { {} }
 
   let(:default_auth_options) { {
@@ -16,7 +20,6 @@ describe Locomotive::Steam::AuthService do
     id:                 'john@doe.net',
     password_field:     'password',
     password:           'easyone',
-    reset_password_url: '/reset-password',
     reset_token:        '42',
     from:               'contact@acme.org',
     subject:            'Instructions for changing your password',
@@ -296,7 +299,201 @@ describe Locomotive::Steam::AuthService do
         page_handle:  'reset-password-email',
         smtp:         {} }, liquid_context)
       is_expected.to eq :reset_password_instructions_sent
-      expect(liquid_context['reset_password_url']).to eq '/reset-password?auth_reset_token=42a'
+      expect(liquid_context['reset_password_url']).to eq 'https://acme.org/account/reset-password?auth_reset_token=42a'
+    end
+
+    it 'finds the reset password page by its handle, with its stored state' do
+      allow(entries).to receive(:all).and_return([])
+      expect(page_finder).to receive(:by_handle).with('reset_password', false).and_return(reset_page)
+      is_expected.to eq :wrong_email
+    end
+
+    context 'a public origin given by a callable' do
+
+      let(:public_origin) { ->(site) { "http://#{site.domains.last}:3333" } }
+
+      it 'links to the origin it gives for the site' do
+        allow(entries).to receive(:all).and_return([build_account('42a')])
+        allow(entries).to receive(:update_decorated_entry)
+        allow(emails).to receive(:send_email)
+
+        is_expected.to eq :reset_password_instructions_sent
+        expect(liquid_context['reset_password_url']).to eq 'http://localhost:3333/account/reset-password?auth_reset_token=42a'
+      end
+
+    end
+
+    context 'the current locale and a mount path' do
+
+      let(:site)        { instance_double('CurrentSite', domains: ['acme.org'], redirect_to_https: false, default_locale: 'en', prefix_default_locale: false) }
+      let(:reset_page)  { instance_double('Page', published?: true, redirect?: false, templatized?: false, fullpath: 'account/reset-password') }
+      let(:url_builder) { Locomotive::Steam::UrlBuilderService.new(site, 'fr', '/locomotive/acme/preview') }
+
+      it 'links to the public path of the page in that locale, without the mount path' do
+        allow(entries).to receive(:all).and_return([build_account('42a')])
+        allow(entries).to receive(:update_decorated_entry)
+        allow(emails).to receive(:send_email)
+
+        is_expected.to eq :reset_password_instructions_sent
+        expect(liquid_context['reset_password_url']).to eq 'https://acme.org/fr/account/reset-password?auth_reset_token=42a'
+      end
+
+    end
+
+    shared_examples 'no reset link' do |reason|
+
+      it "writes no token and sends no email, and logs that the site has #{reason}" do
+        expect(entries).not_to receive(:all)
+        expect(entries).not_to receive(:update_decorated_entry)
+        expect(emails).not_to receive(:send_email)
+        expect(Locomotive::Common::Logger).to receive(:error) do |message|
+          expect(message).to include(reason, 'site-1')
+          expect(message).not_to match(%r{acme|other|ftp|/x|account/}i)
+        end
+
+        is_expected.to eq :reset_password_unavailable
+      end
+
+    end
+
+    [nil, ''].each do |origin|
+
+      context "a public origin #{origin.inspect}" do
+        let(:public_origin) { origin }
+        include_examples 'no reset link', 'no public origin'
+      end
+
+    end
+
+    ['https://acme.org/', 'https://acme.org/x', 'https://acme.org?x=1', 'https://acme.org#x', 'https://u@acme.org',
+     'ftp://acme.org', 'HTTPS://acme.org', 'https://other.org', 'https://acme.org.other.org', ['https://acme.org'],
+     'https://acme.org:', 'https://acme.org:0443'].each do |origin|
+
+      context "a public origin #{origin.inspect}" do
+        let(:public_origin) { origin }
+        include_examples 'no reset link', 'an invalid or off-site public origin'
+      end
+
+    end
+
+    {
+      'the HTTPS default port'    => 'https://acme.org:443',
+      'the HTTP default port'     => 'http://acme.org:80'
+    }.each do |kind, origin|
+
+      context "a public origin with #{kind}" do
+
+        let(:public_origin) { origin }
+
+        it 'links to it' do
+          allow(entries).to receive(:all).and_return([build_account('42a')])
+          allow(entries).to receive(:update_decorated_entry)
+          allow(emails).to receive(:send_email)
+
+          is_expected.to eq :reset_password_instructions_sent
+          expect(liquid_context['reset_password_url']).to eq "#{origin}/account/reset-password?auth_reset_token=42a"
+        end
+
+      end
+
+    end
+
+    context 'a site served over HTTPS only' do
+
+      let(:site) { instance_double('CurrentSite', _id: 'site-1', domains: ['acme.org'], redirect_to_https: true) }
+
+      context 'with an HTTP public origin' do
+        let(:public_origin) { 'http://acme.org' }
+        include_examples 'no reset link', 'an invalid or off-site public origin'
+      end
+
+      it 'links to its HTTPS origin' do
+        allow(entries).to receive(:all).and_return([build_account('42a')])
+        allow(entries).to receive(:update_decorated_entry)
+        allow(emails).to receive(:send_email)
+
+        is_expected.to eq :reset_password_instructions_sent
+        expect(liquid_context['reset_password_url']).to eq 'https://acme.org/account/reset-password?auth_reset_token=42a'
+      end
+
+    end
+
+    context 'a site not served over HTTPS only' do
+
+      let(:public_origin) { 'http://ACME.org' }
+
+      it 'keeps the configured HTTP origin' do
+        allow(entries).to receive(:all).and_return([build_account('42a')])
+        allow(entries).to receive(:update_decorated_entry)
+        allow(emails).to receive(:send_email)
+
+        is_expected.to eq :reset_password_instructions_sent
+        expect(liquid_context['reset_password_url']).to eq 'http://ACME.org/account/reset-password?auth_reset_token=42a'
+      end
+
+    end
+
+    {
+      'missing'      => nil,
+      'unpublished'  => { published?: false },
+      'redirecting'  => { redirect?: true },
+      'templatized'  => { templatized?: true }
+    }.each do |kind, state|
+
+      context "a reset password page #{kind}" do
+        let(:reset_page) { state && instance_double('Page', { published?: true, redirect?: false, templatized?: false }.merge(state)) }
+        include_examples 'no reset link', 'no published reset_password page'
+      end
+
+    end
+
+    ['/account/reset?x=1', '/account/reset#x', '/account/re set', 'account/reset'].each do |path|
+
+      context "a reset password page at #{path.inspect}" do
+        let(:url_builder) { instance_double('UrlBuilderService', _url_for: path) }
+        include_examples 'no reset link', 'a reset_password page path that cannot carry the token'
+      end
+
+    end
+
+    describe 'two sites under one public_origin callable' do
+
+      let(:public_origin)  { ->(site) { "https://#{site.domains.first}" } }
+      let(:other_site)     { instance_double('CurrentSite', _id: 'site-2', domains: ['other.org'], redirect_to_https: false) }
+      let(:other_service)  { described_class.new(other_site, entries, emails, page_finder: page_finder, url_builder: url_builder, public_origin: public_origin) }
+      let(:other_context)  { {} }
+
+      before do
+        allow(entries).to receive(:all).and_return([build_account('42a')], [build_account('42b')])
+        allow(emails).to receive(:send_email)
+      end
+
+      it 'links each site to its own domain' do
+        allow(entries).to receive(:update_decorated_entry)
+
+        expect(service.forgot_password(auth_options, liquid_context)).to eq :reset_password_instructions_sent
+        expect(other_service.forgot_password(auth_options, other_context)).to eq :reset_password_instructions_sent
+        expect([liquid_context['reset_password_url'], other_context['reset_password_url']]).to eq [
+          'https://acme.org/account/reset-password?auth_reset_token=42a',
+          'https://other.org/account/reset-password?auth_reset_token=42b'
+        ]
+      end
+
+      context 'a callable giving both sites the origin of one' do
+
+        let(:public_origin) { ->(_site) { 'https://acme.org' } }
+
+        it 'refuses the other site before writing its token' do
+          expect(entries).to receive(:update_decorated_entry).once
+          expect(Locomotive::Common::Logger).to receive(:error).with(/site-2/)
+
+          expect(service.forgot_password(auth_options, liquid_context)).to eq :reset_password_instructions_sent
+          expect(other_service.forgot_password(auth_options, other_context)).to eq :reset_password_unavailable
+          expect(other_context).to be_empty
+        end
+
+      end
+
     end
 
     context 'no email template' do
@@ -314,13 +511,13 @@ describe Locomotive::Steam::AuthService do
           subject:      'Instructions for changing your password',
           body:         (<<-EMAIL
 Hi,
-To reset your password please follow the link below: /reset-password?auth_reset_token=42a.
+To reset your password please follow the link below: https://acme.org/account/reset-password?auth_reset_token=42a.
 Thanks!
 EMAIL
           ),
           smtp:         {} }, liquid_context)
         is_expected.to eq :reset_password_instructions_sent
-        expect(liquid_context['reset_password_url']).to eq '/reset-password?auth_reset_token=42a'
+        expect(liquid_context['reset_password_url']).to eq 'https://acme.org/account/reset-password?auth_reset_token=42a'
       end
 
     end

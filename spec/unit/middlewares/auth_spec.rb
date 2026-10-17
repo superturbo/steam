@@ -296,6 +296,34 @@ describe Locomotive::Steam::Middlewares::Auth do
 
   end
 
+  describe 'forgot_password' do
+
+    let(:form)     { { auth_action: 'forgot_password', auth_content_type: 'accounts', auth_id: 'john@doe.net', _csrf: 'token-1' } }
+    let(:rack_env) { build_env.tap { |env| env['steam.locale'] = 'en' } }
+
+    before do
+      allow(site).to receive(:to_liquid).and_return({})
+      allow(services).to receive(:repositories)
+    end
+
+    it 'tells the page the instructions were sent' do
+      allow(auth_service).to receive(:forgot_password).and_return(:reset_password_instructions_sent)
+
+      _, env = middleware.call(rack_env)
+
+      expect(env['steam.liquid_assigns']).to eq('auth_reset_password_instructions_sent' => 'auth_reset_password_instructions_sent')
+    end
+
+    it 'answers 503 when the site has no reset link' do
+      allow(auth_service).to receive(:forgot_password).and_return(:reset_password_unavailable)
+
+      code, headers, body = middleware.call(rack_env)
+
+      expect([code, headers['content-type'], body.join]).to eq [503, 'text/plain', 'The password cannot be reset at the moment.']
+    end
+
+  end
+
   def build_env
     env_for(url, params: form, method: request_method).tap do |env|
       env['steam.request']        = Rack::Request.new(env)

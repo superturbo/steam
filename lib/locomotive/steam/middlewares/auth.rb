@@ -87,7 +87,11 @@ module Locomotive::Steam
 
         status = services.auth.forgot_password(options, default_liquid_context)
 
-        append_message(status)
+        if status == :reset_password_unavailable
+          render_response('The password cannot be reset at the moment.', 503, 'text/plain')
+        else
+          append_message(status)
+        end
       end
 
       def reset_password(options)
@@ -165,10 +169,6 @@ module Locomotive::Steam
 
         def callback
           params[:auth_callback]
-        end
-
-        def reset_password_url
-          params[:auth_reset_password_url]
         end
 
         def reset_token

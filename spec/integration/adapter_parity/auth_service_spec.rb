@@ -18,12 +18,18 @@ describe 'Adapter parity' do
 
       let(:writable_types) { %w(submissions members keyrings) }
       let(:emails)         { instance_double('EmailService', send_email: true) }
-      let(:auth)           { Locomotive::Steam::AuthService.new(site, service, emails) }
+      let(:reset_page)     { instance_double('Page', published?: true, redirect?: false, templatized?: false) }
+      let(:auth) do
+        Locomotive::Steam::AuthService.new(site, service, emails,
+          page_finder:    instance_double('PageFinderService', by_handle: reset_page),
+          url_builder:    instance_double('UrlBuilderService', _url_for: '/reset'),
+          public_origin:  'https://adapter-parity.example.com')
+      end
 
       def options(type, **values)
         instance_double('AuthOptions', {
           type: type, id_field: 'email', id: 'ada@example.com', password_field: nil, password: 'easyone',
-          entry: nil, disable_email: true, reset_token: nil, reset_password_url: '/reset',
+          entry: nil, disable_email: true, reset_token: nil,
           from: 'site@example.com', subject: 'Reset', email_handle: nil, smtp: {}
         }.merge(values))
       end

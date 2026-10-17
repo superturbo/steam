@@ -139,7 +139,8 @@ module Locomotive
         end
 
         register :auth do
-          Steam::AuthService.new(current_site, content_entry, email)
+          Steam::AuthService.new(current_site, content_entry, email,
+            page_finder: page_finder, url_builder: url_builder, public_origin: configuration.public_origin)
         end
 
         register :recaptcha do
