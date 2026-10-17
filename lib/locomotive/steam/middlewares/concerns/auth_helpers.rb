@@ -17,6 +17,9 @@ module Locomotive::Steam
           request.session[:authenticated_entry_type]  = type.to_s
           request.session[:authenticated_entry_id]    = entry&._id.to_s
 
+          # The Engine starts an impersonation on its own; any sign in or out here ends it.
+          request.session.delete(:authenticated_impersonation)
+
           env['steam.authenticated_entry'] = nil if entry.nil?
 
           debug_log "[Auth] authenticated #{type.to_s.singularize} ##{entry&._id.to_s}"

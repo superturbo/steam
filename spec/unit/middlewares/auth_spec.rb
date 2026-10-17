@@ -258,6 +258,12 @@ describe Locomotive::Steam::Middlewares::Auth do
         form[:auth_action] = 'sign_out'
       end
 
+      it 'ends an impersonation the session holds' do
+        session[:authenticated_impersonation] = '1'
+        middleware.call(rack_env)
+        expect(session).not_to have_key(:authenticated_impersonation)
+      end
+
       it 'sends the visitor back to the page, its locale included' do
         expect(redirection).to eq [303, '/fr/account']
       end

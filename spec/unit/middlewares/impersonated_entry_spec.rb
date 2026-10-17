@@ -26,6 +26,35 @@ describe Locomotive::Steam::Middlewares::ImpersonatedEntry do
 
     it { is_expected.to eq [nil, '<html><body></body></html>'] }
 
+    context 'with a link to stop impersonating' do
+
+      let(:params) { { impersonating: 'stop' } }
+
+      def stop_without_impersonation
+        expect(auth_service).not_to receive(:notify)
+        code, headers = call
+        [code, headers['location']]
+      end
+
+      it 'leaves an anonymous visitor on the page' do
+        expect(stop_without_impersonation).to eq [200, nil]
+        expect(session).to be_empty
+      end
+
+      context 'for a signed in member' do
+
+        let(:session) { { authenticated_entry_type: 'accounts', authenticated_entry_id: '42' } }
+        let(:entry)   { instance_double('Account', _label: 'John') }
+
+        it 'keeps the member signed in on the page' do
+          expect(stop_without_impersonation).to eq [200, nil]
+          expect(session).to eq(authenticated_entry_type: 'accounts', authenticated_entry_id: '42')
+        end
+
+      end
+
+    end
+
   end
 
   describe 'impersonating is on' do
@@ -61,6 +90,31 @@ describe Locomotive::Steam::Middlewares::ImpersonatedEntry do
 
     end
 
+    describe 'a link to stop a stale impersonation, whose entry is no longer signed in' do
+
+      let(:params) { { impersonating: 'stop' } }
+
+      [{ authenticated_impersonation: '1', authenticated_entry_type: 'accounts' }, { authenticated_impersonation: '1' }].each do |stale|
+
+        context "with #{stale.keys.join(' and ')}" do
+
+          let(:session) { stale.dup }
+
+          it 'signs nobody out and leaves the visitor on the page' do
+            expect(auth_service).not_to receive(:notify)
+            code, headers = call
+
+            expect([code, headers['location']]).to eq [200, nil]
+            expect(session.slice(:authenticated_entry_type, :authenticated_entry_id))
+              .to eq stale.slice(:authenticated_entry_type, :authenticated_entry_id)
+          end
+
+        end
+
+      end
+
+    end
+
     describe 'the administrator wants to leave the impersonating mode' do
 
       let(:entry) { instance_double('Account', _label: 'John') }
@@ -77,20 +131,41 @@ describe Locomotive::Steam::Middlewares::ImpersonatedEntry do
 
       it { is_expected.to eq [302, nil, '/'] }
 
-      it "resets the session variable used to tell if we're in the impersonating mode" do
+      it 'ends the impersonating mode of the session' do
         subject
-        expect(session[:authenticated_impersonation]).to eq '0'
+        expect(session).not_to have_key(:authenticated_impersonation)
+      end
+
+      [
+        ['/fr/about-us',    '/about-us',      nil,                         '/fr/about-us'],
+        ['//evil.example',  '//evil.example', nil,                         '/'],
+        ['/\\evil.example', '/\\evil.example', nil,                        '/'],
+        ['/locomotive/acme/preview/fr/about-us', '/about-us', '/locomotive/acme/preview', '/locomotive/acme/preview/fr/about-us']
+      ].each do |path_info, steam_path, mounted_on, location|
+
+        it "sends the administrator from #{path_info.inspect} back to #{location.inspect}, on the site" do
+          _, headers = call(path_info: path_info, steam_path: steam_path, mounted_on: mounted_on)
+          expect(headers['location']).to eq location
+        end
+
+      end
+
+      it 'does not redirect under a mount path a browser would read as another host' do
+        code, headers = call(path_info: '//evil.example/fr', steam_path: '/fr', mounted_on: '//evil.example')
+        expect([code, headers['location']]).to eq [200, nil]
       end
 
     end
 
   end
 
-  def call
+  def call(path_info: nil, steam_path: '/', mounted_on: nil)
     env = env_for(url, params: params)
+    env['PATH_INFO']                  = path_info if path_info
+    env['steam.mounted_on']           = mounted_on
     env['rack.session']               = session
     env['steam.site']                 = site
-    env['steam.path']                 = '/'
+    env['steam.path']                 = steam_path
     env['steam.request']              = Rack::Request.new(env)
     env['steam.liquid_assigns']       = {}
     env['steam.authenticated_entry']  = entry

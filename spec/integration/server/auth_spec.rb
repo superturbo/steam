@@ -317,6 +317,46 @@ describe 'Authentication' do
 
   end
 
+  describe 'a link to stop impersonating' do
+
+    let(:member) { { 'authenticated_entry_type' => 'accounts', 'authenticated_entry_id' => 'john' } }
+
+    it 'shows the page to an anonymous visitor' do
+      get '/about-us?impersonating=stop'
+      expect(last_response.status).to eq 200
+    end
+
+    it 'shows the page to a visitor whose impersonation is stale' do
+      [{ 'authenticated_impersonation' => '1' }, member.merge('authenticated_impersonation' => '1', 'authenticated_entry_id' => 'gone')].each do |stale|
+        get '/about-us?impersonating=stop', {}, { 'rack.session' => stale }
+        expect([last_response.status, last_response.location]).to eq [200, nil]
+      end
+    end
+
+    it 'leaves no stale impersonation to a later sign in' do
+      post_form '/account/sign-in', {
+        auth_action: 'sign_in', auth_content_type: 'accounts', auth_id_field: 'email', auth_password_field: 'password',
+        auth_id: 'john@doe.net', auth_password: 'easyone', auth_callback: '/account/me'
+      }, { 'rack.session' => { 'authenticated_impersonation' => '1' } }
+      follow_redirect!
+
+      expect(last_response.body).to include "My name is John and I'm logged in!"
+      expect(last_response.body).not_to include 'locomotive-impersonating-banner'
+    end
+
+    it 'keeps a member nobody impersonates signed in' do
+      get '/account/me?impersonating=stop', {}, { 'rack.session' => member }
+      expect(last_response.status).to eq 200
+      expect(last_response.body).to include "My name is John and I'm logged in!"
+    end
+
+    it 'signs an impersonated member out, back to a page on the site' do
+      get '/?impersonating=stop', {}, { 'rack.session' => member.merge('authenticated_impersonation' => '1'), 'PATH_INFO' => '//evil.example' }
+      expect([last_response.status, last_response.location]).to eq [302, '/']
+    end
+
+  end
+
   describe 'forgot password action' do
 
     let(:email)         { '' }

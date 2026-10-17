@@ -13,19 +13,10 @@ module Locomotive::Steam
       include Concerns::AuthHelpers
 
       def _call
-        if params[:impersonating] == 'stop'
-
-          # notify sign out
+        if params[:impersonating] == 'stop' && authenticated? && is_impersonating?
           services.auth.notify(:signed_out, request.env['steam.authenticated_entry'], request)
-
-          # sign out the current user
           store_authenticated(nil)
-
-          # leave the impersonating mode
-          request.session[:authenticated_impersonation] = '0'
-
-          # redirect the user to the same page
-          redirect_to path, 302
+          redirect_to_local_path(local_request_path, 302)
         elsif authenticated? && is_impersonating?
           # useful if other middlewares need this information
           env['steam.impersonating_authenticated_entry'] = true
