@@ -12,9 +12,9 @@ module Locomotive::Steam
 
       def _call
         if redirect_to_root_path_with_lang
-          redirect_to(path_with_locale, 302)
+          redirect_to_local_path(path_with_locale, 302)
         elsif url = redirect_url
-          redirect_to(url, redirect_type)
+          redirect_to_local_path(url, redirect_type)
         end
       end
 

@@ -13,9 +13,11 @@ describe Locomotive::Steam::Middlewares::LocaleRedirection do
   let(:locale)          { 'de' }
   let(:locale_in_path)  { true }
   let(:mounted_on)      { nil }
+  let(:path_info)       { nil }
 
   subject do
     env = env_for(url, 'steam.site' => site, 'steam.locale' => locale, 'steam.locale_in_path' => locale_in_path)
+    env['PATH_INFO']        = path_info if path_info
     env['steam.mounted_on'] = mounted_on
     env['steam.request']    = Rack::Request.new(env)
     env['steam.path']       = env['steam.request'].path_info.gsub(/\A#{mounted_on}/, '').gsub(/\A\/#{locale}/, '')
@@ -55,6 +57,21 @@ describe Locomotive::Steam::Middlewares::LocaleRedirection do
         let(:url) { 'http://models.example.com/de/hello?name=John' }
         it { is_expected.to eq [301, '/hello?name=John'] }
 
+      end
+
+      ['/de//evil.example', '/de/\\evil.example'].each do |path|
+
+        context "from #{path.inspect}, which a browser would follow to another host without the locale" do
+          let(:path_info) { path }
+          it { is_expected.to eq [200, nil] }
+        end
+
+      end
+
+      context 'from such a path under a mount path, which keeps it on the site' do
+        let(:mounted_on) { '/mounted-on/somewhere' }
+        let(:url)        { 'http://models.example.com/mounted-on/somewhere/de//evil.example' }
+        it { is_expected.to eq [301, '/mounted-on/somewhere//evil.example'] }
       end
 
     end

@@ -13,8 +13,11 @@ module Locomotive::Steam
         subject = env['PATH_INFO'].to_s
         subject = "#{subject}?#{query}" unless query.empty?
 
-        if match = %r{^/(.*)/$}.match(subject)
-          [301, { 'location' => "/#{match[1]}", 'content-length' => '0' }, []]
+        match    = %r{^/(.*)/$}.match(subject)
+        location = "/#{match[1]}" if match
+
+        if location&.match?(Locomotive::Steam::IsLocalPath)
+          [301, { 'location' => location, 'content-length' => '0' }, []]
         else
           @app.call(env)
         end

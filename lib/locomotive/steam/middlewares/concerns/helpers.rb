@@ -36,7 +36,7 @@ module Locomotive::Steam
         end
 
         def redirect_to(location, type = 301)
-          _location = mounted_on && !location.starts_with?(mounted_on) && (location =~ Locomotive::Steam::IsHTTP).nil? ? "#{mounted_on}#{location}" : location
+          _location = mounted_location(location)
 
           self.debug_log "Redirected to #{_location}".blue
 
@@ -44,6 +44,15 @@ module Locomotive::Steam
           inject_cookies(headers)
 
           @next_response = [type, headers, []]
+        end
+
+        # Keep path-derived redirects local after mounting.
+        def redirect_to_local_path(path, type)
+          redirect_to(path, type) if local_path?(mounted_location(path))
+        end
+
+        def mounted_location(location)
+          mounted_on && !location.starts_with?(mounted_on) && (location =~ Locomotive::Steam::IsHTTP).nil? ? "#{mounted_on}#{location}" : location
         end
 
         def inject_cookies(headers)
@@ -91,7 +100,7 @@ module Locomotive::Steam
         end
 
         def local_path?(location)
-          location.match?(%r{\A/(?![/\\])[^\s\x00-\x1F\x7F]*\z})
+          location.match?(Locomotive::Steam::IsLocalPath)
         end
 
         # Reject URLs that redirect_to would treat as relative.

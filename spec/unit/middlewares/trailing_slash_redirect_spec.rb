@@ -38,6 +38,21 @@ describe Locomotive::Steam::Middlewares::TrailingSlashRedirect do
     expect(call('/bar/', script_name: '/mounted')).to eq [301, '/bar']
   end
 
+  ['//evil.example/', '/\\evil.example/', '///evil.example/'].each do |path|
+
+    it "leaves #{path.inspect}, which a browser would follow to another host without its slash, to the app" do
+      expect(call_with_path_info(path)).to eq [200, nil]
+      expect(call_with_path_info(path, method: 'POST')).to eq [200, nil]
+    end
+
+  end
+
+  def call_with_path_info(path_info, method: 'GET')
+    env = Rack::MockRequest.env_for('/', method: method).merge('PATH_INFO' => path_info)
+    status, headers, _ = middleware.call(env)
+    [status, headers['location']]
+  end
+
   it 'returns an empty 301 with a zero content length' do
     status, headers, body = middleware.call(Rack::MockRequest.env_for('/foo/'))
     expect(status).to eq 301

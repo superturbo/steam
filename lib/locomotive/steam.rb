@@ -32,6 +32,9 @@ module Locomotive
 
     IsHTTP    = /\Ahttps?:\/\//o.freeze
 
+    # A path on this host: browsers read //host and /\host as another one.
+    IsLocalPath = %r{\A/(?![/\\])[^\s\x00-\x1F\x7F]*\z}.freeze
+
     IsLAYOUT  = /\Alayouts(\/|\z)/o.freeze
 
     TRUTHY_VALUES = [1, '1', 'true', true]
