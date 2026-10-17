@@ -48,6 +48,10 @@ describe Locomotive::Steam::Middlewares::EntrySubmission do
       expect(session[:submission_receipt]).to eq('site' => '42', 'type' => 'contacts', 'slug' => 'john', 'id' => 'id-1')
     end
 
+    it 'answers 303 See Other, so the browser follows it with a GET' do
+      expect(middleware.call(rack_env).first).to eq 303
+    end
+
     it 'excludes g-recaptcha-response and recaptcha_sitekey from the redirect URL' do
       code, env = middleware.call(rack_env)
       location = env['location']

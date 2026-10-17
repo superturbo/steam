@@ -50,7 +50,7 @@ module Locomotive::Steam
       def navigation_success(entry)
         if html?
           remember_submission_receipt(entry)
-          redirect_to success_location(entry_to_query_string(entry))
+          redirect_to success_location(entry_to_query_string(entry)), 303
         elsif json?
           json_response(entry)
         end
@@ -68,7 +68,7 @@ module Locomotive::Steam
         location = error_location
 
         if location =~ HTTP_REGEXP
-          redirect_to location
+          redirect_to location, 303
         else
           env['PATH_INFO'] = make_local_path(location)
           store_in_liquid(entry)

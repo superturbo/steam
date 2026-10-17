@@ -87,7 +87,7 @@ describe 'ContactForm' do
 
       post '/events', { 'content_type_slug' => 'messages', 'entry' => entry, '_csrf' => token, 'note' => "a&b #c\nd" }
 
-      expect(last_response.status).to eq 301
+      expect(last_response.status).to eq 303
       expect(Rack::Utils.parse_nested_query(URI(last_response.location).query)).to include('note' => "a&b #c\nd")
     end
 
@@ -103,7 +103,7 @@ describe 'ContactForm' do
 
       post '/events', { 'content_type_slug' => 'messages', 'entry' => entry, '_csrf' => token }
 
-      expect(last_response.status).to eq 301
+      expect(last_response.status).to eq 303
       expect(last_response.location).to include 'submitted_entry_slug=john'
     end
 
@@ -137,7 +137,7 @@ describe 'ContactForm' do
 
       post '/events', { 'content_type_slug' => 'messages', 'entry' => entry }, { 'HTTP_X_CSRF_TOKEN' => token }
 
-      expect(last_response.status).to eq 301
+      expect(last_response.status).to eq 303
     end
 
     context 'protection disabled by the host' do
@@ -150,7 +150,7 @@ describe 'ContactForm' do
 
         post '/events', { 'content_type_slug' => 'messages', 'entry' => entry }
 
-        expect(last_response.status).to eq 301
+        expect(last_response.status).to eq 303
       end
 
     end
@@ -269,7 +269,7 @@ describe 'ContactForm' do
           let(:params) { { 'error_callback' => 'http://example.org/contact' } }
 
           it 'redirects to it' do
-            expect([response.status, response.location]).to eq [301, 'http://example.org/contact']
+            expect([response.status, response.location]).to eq [303, 'http://example.org/contact']
           end
 
           context 'whose scheme is written in upper case' do
