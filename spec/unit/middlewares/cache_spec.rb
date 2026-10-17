@@ -997,6 +997,18 @@ describe Locomotive::Steam::Middlewares::Cache do
 
     end
 
+    context 'a request Steam must not store, such as a password reset link' do
+
+      it 'neither reads nor writes the store' do
+        store([200, stored_headers_for('Stored'), ['Stored']])
+        expect(cache).not_to receive(:read)
+        expect(cache).not_to receive(:write)
+
+        expect(send_request('steam.no_store' => true)[:headers]).to eq('cache-control' => 'max-age=0, private, must-revalidate')
+      end
+
+    end
+
   end
 
   # What Steam's renderer answers with (render_response): the policy the cache set.

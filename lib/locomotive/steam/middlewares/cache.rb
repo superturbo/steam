@@ -133,6 +133,7 @@ module Locomotive::Steam
 
       def cacheable?
         CACHEABLE_REQUEST_METHODS.include?(env['REQUEST_METHOD']) &&
+        !env['steam.no_store'] &&
         session.blank? &&
         !sets_cookie? &&
         !live_editing? &&

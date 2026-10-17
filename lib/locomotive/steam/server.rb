@@ -18,7 +18,8 @@ module Locomotive::Steam
       def default_middlewares
         server, configuration = self, self.configuration
 
-        -> (stack) {          
+        -> (stack) {
+          use Middlewares::ResetTokenPrivacy
           use Middlewares::TrailingSlashRedirect
           use Middlewares::Favicon
 

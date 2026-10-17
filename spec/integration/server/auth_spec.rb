@@ -406,6 +406,31 @@ describe 'Authentication' do
       expect(last_response.body).to include 'The reset token is not valid anymore'
     end
 
+    describe 'the link of the email' do
+
+      def privacy_headers(path)
+        get path
+        [last_response.status, last_response.headers['cache-control'], last_response.headers['referrer-policy']]
+      end
+
+      it 'opens the page out of caches and referrers' do
+        expect(privacy_headers('/account/reset-password?auth_reset_token=42a')).to eq [200, 'no-store', 'no-referrer']
+      end
+
+      it 'keeps a missing page out of them too' do
+        expect(privacy_headers('/account/no-such-page?auth_reset_token=42a')).to eq [404, 'no-store', 'no-referrer']
+      end
+
+      it 'keeps a locale redirect out of them too' do
+        expect(privacy_headers('/en/account/reset-password?auth_reset_token=42a')).to eq [301, 'no-store', 'no-referrer']
+      end
+
+      it 'leaves the page without a token as it is' do
+        expect(privacy_headers('/account/reset-password')).to eq [200, 'max-age=0, private, must-revalidate', nil]
+      end
+
+    end
+
     context 'with an expired token' do
 
       let(:token) { '420000000000001' }
