@@ -14,6 +14,70 @@ describe 'ContactForm' do
     expect(last_response.body).to match(/name="_csrf" value="[^"]+"/)
   end
 
+  describe 'the submitted entry on the page after the submission' do
+
+    let(:entry) { { 'name' => 'Probe Owner', 'email' => 'owner@secret.example', 'message' => 'my private message' } }
+
+    def submit
+      get '/events'
+      token = last_response.body[/name="_csrf" value="([^"]+)"/, 1]
+      post '/events', { 'content_type_slug' => 'messages', 'entry' => entry, '_csrf' => token }
+      last_response.location
+    end
+
+    # The contact page writes the name, email and message of the entry into its form.
+    def contact_page_of(location)
+      "/contact?#{URI(location).query}"
+    end
+
+    def shows_the_entry?
+      ['Probe Owner', 'owner@secret.example', 'my private message'].any? { |value| last_response.body.include?(value) }
+    end
+
+    it 'shows it to the visitor who submitted it, on a reload too, and keeps it out of caches' do
+      location = submit
+
+      2.times do
+        get location
+        expect(last_response.body).to include 'Thank you Probe Owner !'
+        expect(last_response.headers['cache-control']).to eq 'no-store'
+      end
+
+      get contact_page_of(location)
+      expect(last_response.body).to include('owner@secret.example', 'my private message')
+    end
+
+    it 'does not show it to another visitor opening the same URLs' do
+      location = submit
+      clear_cookies
+
+      [location, contact_page_of(location)].each do |url|
+        get url
+        expect(shows_the_entry?).to eq false
+      end
+    end
+
+    it 'keeps showing it to the same session later' do
+      location = submit
+
+      Timecop.travel(Time.now + 15 * 60) { get location }
+
+      expect(last_response.body).to include 'Thank you Probe Owner !'
+    end
+
+    it 'stops showing it once the session submits another entry' do
+      location = submit
+      entry.merge!('name' => 'Second Sender', 'email' => 'second@secret.example', 'message' => 'another message')
+      submit
+
+      [location, contact_page_of(location)].each do |url|
+        get url
+        expect(shows_the_entry?).to eq false
+      end
+    end
+
+  end
+
   describe 'the redirect after a submission' do
 
     it 'carries the other submitted values to the next page as they were sent' do

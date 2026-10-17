@@ -43,10 +43,10 @@ module Locomotive::Steam
         else
           env['steam.cache_control']  = private_cache_control
 
-          # Keep responses that use a session or set a cookie private even if rendering overrides Cache-Control.
+          # A render may clear the session or replace Cache-Control.
           had_session = session.present?
           response    = self.next
-          keep_private(response) if had_session || session.present? || sets_cookie?(response)
+          keep_private(response) if env['steam.no_store'] || had_session || session.present? || sets_cookie?(response)
         end
       end
 
@@ -192,7 +192,7 @@ module Locomotive::Steam
       # Replace shared-cache directives, preserving no-store and no-transform.
       def private_cache_control(answered = nil)
         names  = directive_names(cache_control) + directive_names(answered)
-        policy = names.include?('no-store') ? NO_STORE_CACHE_CONTROL : NO_CACHE_CONTROL
+        policy = env['steam.no_store'] || names.include?('no-store') ? NO_STORE_CACHE_CONTROL : NO_CACHE_CONTROL
 
         names.include?('no-transform') ? "#{policy}, no-transform" : policy
       end

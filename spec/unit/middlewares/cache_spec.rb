@@ -999,12 +999,22 @@ describe Locomotive::Steam::Middlewares::Cache do
 
     context 'a request Steam must not store, such as a password reset link' do
 
-      it 'neither reads nor writes the store' do
+      it 'neither reads nor writes the store, and tells the browser and the CDN to store nothing' do
         store([200, stored_headers_for('Stored'), ['Stored']])
         expect(cache).not_to receive(:read)
         expect(cache).not_to receive(:write)
 
-        expect(send_request('steam.no_store' => true)[:headers]).to eq('cache-control' => 'max-age=0, private, must-revalidate')
+        expect(send_request('steam.no_store' => true)[:headers]).to eq('cache-control' => 'no-store')
+      end
+
+      context 'when the render answers a public Cache-Control' do
+
+        let(:app) { ->(env) { [200, { 'cache-control' => 'public, max-age=600', 'vary' => 'Accept-Language' }, ['page']] } }
+
+        it 'still answers no-store' do
+          expect(send_request('steam.no_store' => true)[:headers]['cache-control']).to eq 'no-store'
+        end
+
       end
 
     end

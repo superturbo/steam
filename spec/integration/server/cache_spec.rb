@@ -50,6 +50,29 @@ describe 'Page cache' do
     expect(last_response.status).to eq 200
   end
 
+  describe 'a page named after a submitted entry, kept before by the store' do
+
+    let(:old_copy) do
+      Marshal.dump([200, { 'content-type' => 'text/html', 'cache-control' => 'max-age=0, s-maxage=3600, public, must-revalidate' },
+                    ['an old copy with a visitor message'], Time.now.to_i])
+    end
+
+    before { allow(store).to receive(:read).and_return(old_copy) }
+
+    it 'is neither read nor shown to a session without the receipt, and stored nowhere' do
+      get '/events'
+      expect(last_response.body).to eq 'an old copy with a visitor message'
+
+      get '/events?submitted_type_slug=messages&submitted_entry_slug=john'
+
+      expect(store).to have_received(:read).once
+      expect(store).not_to have_received(:write)
+      expect(last_response.body).not_to include 'an old copy'
+      expect(last_response.headers['cache-control']).to eq 'no-store'
+    end
+
+  end
+
   it "serves a visitor the page their session calls for, not another visitor's copy" do
     get '/contest'
     expect(last_response.body).to include 'Your code is'

@@ -23,6 +23,7 @@ module Locomotive::Steam
           if slug = get_content_type_slug
             return refuse_unverified_form unless form_token_verified?
 
+            request.session.delete(:submission_receipt)
             entry = create_entry(slug)
             navigation_behavior(entry)
           else
@@ -48,6 +49,7 @@ module Locomotive::Steam
 
       def navigation_success(entry)
         if html?
+          remember_submission_receipt(entry)
           redirect_to success_location(entry_to_query_string(entry))
         elsif json?
           json_response(entry)
@@ -153,14 +155,29 @@ module Locomotive::Steam
         end
       end
 
-      # Get the content entry from the params.
-      #
+      def remember_submission_receipt(entry)
+        request.session[:submission_receipt] = {
+          'site'  => site._id.to_s,
+          'type'  => entry.content_type_slug,
+          'slug'  => entry._slug,
+          'id'    => entry._id.to_s
+        }
+      end
+
       def fetch_entry
-        if (type_slug = params[SUBMITTED_TYPE_PARAM]) && (slug = params[SUBMITTED_PARAM])
-          if entry = entry_submission.find(type_slug, slug)
-            store_in_liquid(entry)
-          end
-        end
+        type_slug, slug = params[SUBMITTED_TYPE_PARAM], params[SUBMITTED_PARAM]
+        return unless type_slug && slug
+
+        env['steam.no_store'] = true
+        return unless (receipt = submission_receipt(type_slug, slug))
+
+        entry = entry_submission.find(type_slug, slug)
+        store_in_liquid(entry) if entry && entry._id.to_s == receipt['id']
+      end
+
+      def submission_receipt(type_slug, slug)
+        receipt = request.session[:submission_receipt]
+        receipt if receipt.is_a?(Hash) && receipt.values_at('site', 'type', 'slug') == [site._id.to_s, type_slug, slug]
       end
 
       # Build the JSON response

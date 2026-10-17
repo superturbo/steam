@@ -9,7 +9,7 @@ require_relative '../../../lib/locomotive/steam/middlewares/entry_submission'
 describe Locomotive::Steam::Middlewares::EntrySubmission do
 
   let(:app)                 { ->(env) { [200, env, ['app']] } }
-  let(:site)                { instance_double('Site', default_locale: 'en', locales: ['en'], domains: ['example.com'], metafields: { google: {} }) }
+  let(:site)                { instance_double('Site', _id: 42, default_locale: 'en', locales: ['en'], domains: ['example.com'], metafields: { google: {} }) }
   let(:middleware)          { described_class.new(app) }
   let(:recaptcha_enabled)   { false }
   let(:recaptcha_response)  { {} }
@@ -40,7 +40,13 @@ describe Locomotive::Steam::Middlewares::EntrySubmission do
   context 'redirect URL after successful submission' do
 
     let(:errors)  { instance_double('Error', empty?: true) }
-    let(:entry)   { instance_double('Entry', errors: errors, content_type_slug: 'contacts', _slug: 'john') }
+    let(:entry)   { instance_double('Entry', errors: errors, content_type_slug: 'contacts', _slug: 'john', _id: 'id-1') }
+
+    it 'leaves a receipt of the submitted entry in the session, its ids only' do
+      middleware.call(rack_env)
+
+      expect(session[:submission_receipt]).to eq('site' => '42', 'type' => 'contacts', 'slug' => 'john', 'id' => 'id-1')
+    end
 
     it 'excludes g-recaptcha-response and recaptcha_sitekey from the redirect URL' do
       code, env = middleware.call(rack_env)
@@ -93,6 +99,56 @@ describe Locomotive::Steam::Middlewares::EntrySubmission do
         expect(headers['location']).to start_with '/?'
       end
 
+    end
+
+  end
+
+  describe 'the entry on the page after a submission' do
+
+    let(:method)    { 'GET' }
+    let(:url)       { 'http://example.com/contact-us?submitted_type_slug=contacts&submitted_entry_slug=john' }
+    let(:form)      { {} }
+    let(:submitted) { instance_double('Entry', _id: 'id-1', content_type_slug: 'contacts') }
+    let(:marker)    { { 'site' => '42', 'type' => 'contacts', 'slug' => 'john', 'id' => 'id-1' } }
+
+    before { allow(service).to receive(:find).with('contacts', 'john').and_return(submitted) }
+
+    def shown(changes = {})
+      session[:submission_receipt] = marker.merge(changes)
+      _, env = middleware.call(rack_env)
+      [env['steam.liquid_assigns']['contact'], env['steam.no_store']]
+    end
+
+    it 'shows the entry this session submitted, kept out of caches' do
+      expect(shown).to eq [submitted, true]
+    end
+
+    {
+      'another site'  => { 'site' => '43' },
+      'another type'  => { 'type' => 'other' },
+      'another entry' => { 'slug' => 'jane' },
+      'another id'    => { 'id' => 'id-2' }
+    }.each do |kind, changes|
+
+      it "shows nothing for a submission of #{kind}, kept out of caches all the same" do
+        expect(shown(changes)).to eq [nil, true]
+      end
+
+    end
+
+    it 'shows nothing to a session without a submission, kept out of caches all the same' do
+      _, env = middleware.call(rack_env)
+      expect([env['steam.liquid_assigns']['contact'], env['steam.no_store']]).to eq [nil, true]
+    end
+
+  end
+
+  context 'a submission with errors' do
+
+    it 'forgets the entry an earlier submission remembered' do
+      session[:submission_receipt] = { 'site' => '42', 'type' => 'contacts', 'slug' => 'john', 'id' => 'id-1' }
+      middleware.call(rack_env)
+      expect(session).not_to have_key(:submission_receipt)
     end
 
   end
@@ -173,6 +229,12 @@ describe Locomotive::Steam::Middlewares::EntrySubmission do
           expect(service).to receive(:submit).with('contacts', { email: 'john@doe.net' }).and_return(entry)
 
           expect(middleware.call(rack_env).first).to eq 200
+        end
+
+        it 'forgets the entry an earlier submission remembered, without remembering this one' do
+          session[:submission_receipt] = { 'site' => '42', 'type' => 'contacts', 'slug' => 'john', 'id' => 'id-1' }
+          middleware.call(rack_env)
+          expect(session).not_to have_key(:submission_receipt)
         end
 
         context 'sent with a JSON type with parameters to a page path' do
