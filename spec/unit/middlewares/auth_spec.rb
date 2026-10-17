@@ -173,6 +173,27 @@ describe Locomotive::Steam::Middlewares::Auth do
 
   end
 
+  describe 'an entry submission that renders its errors' do
+
+    let(:form)  { { auth_action: 'sign_out', auth_content_type: 'accounts', _csrf: 'token-1' } }
+    let(:entry) { instance_double('Account', _id: 42) }
+
+    before do
+      allow(auth_service).to receive(:find_authenticated_resource).and_return(entry)
+      session.merge!(authenticated_entry_type: 'accounts', authenticated_entry_id: '42')
+      rack_env['steam.rendering_entry_errors'] = true
+    end
+
+    it 'loads the signed in entry but runs no authentication action' do
+      expect(auth_service).not_to receive(:sign_out)
+
+      code, env = middleware.call(rack_env)
+
+      expect([code, env['steam.authenticated_entry'], session[:authenticated_entry_id]]).to eq [200, entry, '42']
+    end
+
+  end
+
   describe 'reset_password of a type whose password field has another name' do
 
     let(:form)         { { auth_action: 'reset_password', auth_content_type: 'accounts', auth_reset_token: '42', auth_callback: '/me', _csrf: 'token-1' } }

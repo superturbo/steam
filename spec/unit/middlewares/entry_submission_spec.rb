@@ -52,6 +52,11 @@ describe Locomotive::Steam::Middlewares::EntrySubmission do
       expect(middleware.call(rack_env).first).to eq 303
     end
 
+    it 'does not tell the next middlewares it renders errors' do
+      middleware.call(rack_env)
+      expect(rack_env).not_to have_key('steam.rendering_entry_errors')
+    end
+
     it 'excludes g-recaptcha-response and recaptcha_sitekey from the redirect URL' do
       code, env = middleware.call(rack_env)
       location = env['location']
@@ -143,6 +148,81 @@ describe Locomotive::Steam::Middlewares::EntrySubmission do
     it 'shows nothing to a session without a submission, kept out of caches all the same' do
       _, env = middleware.call(rack_env)
       expect([env['steam.liquid_assigns']['contact'], env['steam.no_store']]).to eq [nil, true]
+    end
+
+  end
+
+  describe 'a local error callback' do
+
+    let(:url) { 'http://example.com/contact-us?ref=mail' }
+
+    def routed_to(callback, mounted_on: nil)
+      form[:error_callback] = callback
+      rack_env['steam.mounted_on'] = mounted_on
+      rack_env['steam.request'].GET # Rack keeps the parsed query of the request
+
+      _, env = middleware.call(rack_env)
+      [env['PATH_INFO'], env['QUERY_STRING'], Rack::Request.new(env).GET]
+    end
+
+    it 'renders its page with its query as the parameters' do
+      expect(routed_to('/contact?x=1')).to eq ['/contact', 'x=1', { 'x' => '1' }]
+    end
+
+    it 'leaves out its fragment' do
+      expect(routed_to('/contact?x=1#form')).to eq ['/contact', 'x=1', { 'x' => '1' }]
+    end
+
+    it 'keeps the query of the request without one of its own' do
+      expect(routed_to('/contact#form')).to eq ['/contact', 'ref=mail', { 'ref' => 'mail' }]
+    end
+
+    it 'passes its whole query to the page, as Rack reads a request query' do
+      expect(routed_to('/contact?tag=one&tag=two&auth_action=sign_out')).to eq [
+        '/contact', 'tag=one&tag=two&auth_action=sign_out', { 'tag' => 'two', 'auth_action' => 'sign_out' }
+      ]
+    end
+
+    it 'tells the next middlewares that this POST renders the errors of its submission' do
+      form[:error_callback] = '/contact'
+      _, env = middleware.call(rack_env)
+      expect(env['steam.rendering_entry_errors']).to eq true
+    end
+
+    {
+      'malformed'                => 'a=%&x=1',
+      'of conflicting types'     => 'x=1&x[y]=2',
+      'over the limits of Rack'  => Array.new(5000) { |index| "x#{index}=1" }.join('&')
+    }.each do |kind, query|
+
+      it "ignores a query #{kind}, as if it had none" do
+        expect(routed_to("/contact?#{query}")).to eq ['/contact', 'ref=mail', { 'ref' => 'mail' }]
+      end
+
+    end
+
+    it 'removes the mount path' do
+      expect(routed_to('/mount.ed/contact?x=1', mounted_on: '/mount.ed').first).to eq '/contact'
+    end
+
+    it 'reads the mount path as text, not as a pattern' do
+      expect(routed_to('/mountXed/contact', mounted_on: '/mount.ed').first).to eq '/mountXed/contact'
+    end
+
+    it 'removes a mount path holding pattern characters' do
+      expect(routed_to('/mo+unt/contact', mounted_on: '/mo+unt').first).to eq '/contact'
+    end
+
+    it 'removes the mount path only as whole segments' do
+      expect(routed_to('/mountain/contact', mounted_on: '/mount').first).to eq '/mountain/contact'
+    end
+
+    it 'routes the mount path itself to the home page' do
+      expect(routed_to('/mount', mounted_on: '/mount').first).to eq '/'
+    end
+
+    it 'removes a mount path written with a trailing slash' do
+      expect(routed_to('/mount/contact', mounted_on: '/mount/').first).to eq '/contact'
     end
 
   end

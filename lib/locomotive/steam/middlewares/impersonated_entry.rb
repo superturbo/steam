@@ -13,7 +13,7 @@ module Locomotive::Steam
       include Concerns::AuthHelpers
 
       def _call
-        if params[:impersonating] == 'stop' && authenticated? && is_impersonating?
+        if stopping?
           services.auth.notify(:signed_out, request.env['steam.authenticated_entry'], request)
           store_authenticated(nil)
           redirect_to_local_path(local_request_path, 302)
@@ -43,6 +43,10 @@ module Locomotive::Steam
       end
 
       private
+
+      def stopping?
+        params[:impersonating] == 'stop' && authenticated? && is_impersonating? && !env['steam.rendering_entry_errors']
+      end
 
       def is_impersonating?
         request.session[:authenticated_impersonation] == '1'

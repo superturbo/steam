@@ -115,6 +115,21 @@ describe Locomotive::Steam::Middlewares::ImpersonatedEntry do
 
     end
 
+    describe 'an entry submission that renders its errors, with a link to stop impersonating' do
+
+      let(:entry)  { instance_double('Account', _label: 'John') }
+      let(:params) { { impersonating: 'stop' } }
+
+      it 'keeps the impersonation' do
+        expect(auth_service).not_to receive(:notify)
+
+        code, = call(entry_submission: true)
+
+        expect([code, session[:authenticated_impersonation]]).to eq [200, '1']
+      end
+
+    end
+
     describe 'the administrator wants to leave the impersonating mode' do
 
       let(:entry) { instance_double('Account', _label: 'John') }
@@ -159,10 +174,11 @@ describe Locomotive::Steam::Middlewares::ImpersonatedEntry do
 
   end
 
-  def call(path_info: nil, steam_path: '/', mounted_on: nil)
+  def call(path_info: nil, steam_path: '/', mounted_on: nil, entry_submission: nil)
     env = env_for(url, params: params)
     env['PATH_INFO']                  = path_info if path_info
     env['steam.mounted_on']           = mounted_on
+    env['steam.rendering_entry_errors'] = entry_submission
     env['rack.session']               = session
     env['steam.site']                 = site
     env['steam.path']                 = steam_path

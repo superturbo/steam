@@ -70,13 +70,41 @@ module Locomotive::Steam
         if location =~ HTTP_REGEXP
           redirect_to location, 303
         else
-          env['PATH_INFO'] = make_local_path(location)
+          route_to(location)
           store_in_liquid(entry)
+
+          # Auth and impersonation skip their actions while this POST renders its errors.
+          env['steam.rendering_entry_errors'] = true
           self.next
         end
       end
 
       private
+
+      def route_to(location)
+        path, query = location.split('#', 2).first.split('?', 2)
+
+        env['PATH_INFO'] = without_mount(path)
+        return unless query && readable_query?(query)
+
+        env['QUERY_STRING'] = query
+        env.delete(Rack::RACK_REQUEST_QUERY_HASH)
+      end
+
+      def without_mount(path)
+        mount = mounted_on.to_s.chomp('/')
+        return path unless mount.present? && (path == mount || path.start_with?("#{mount}/"))
+
+        path.delete_prefix(mount).presence || '/'
+      end
+
+      # A query Rack::Request#GET cannot read is ignored, as if there were none.
+      def readable_query?(query)
+        Rack::Request.new(Rack::QUERY_STRING => query).GET
+        true
+      rescue Rack::BadRequest
+        false
+      end
 
       def store_in_liquid(entry)
         liquid_assigns[entry.content_type_slug.singularize] = entry

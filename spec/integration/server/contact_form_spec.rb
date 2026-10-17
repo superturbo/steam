@@ -254,6 +254,72 @@ describe 'ContactForm' do
 
         end
 
+        {
+          'with a query'    => '/events?some_variable=from-the-callback',
+          'with a fragment' => '/events?some_variable=from-the-callback#form'
+        }.each do |kind, callback|
+
+          context "with a local error callback #{kind}" do
+
+            let(:params) { { 'error_callback' => callback } }
+
+            it 'renders its page with the errors and the parameters of its query' do
+              expect(response.status).to eq 200
+              expect(response.body.to_s).to include('Form with errors', 'Some variable: from-the-callback')
+            end
+
+          end
+
+        end
+
+        context 'with a local error callback whose query names an authentication action' do
+
+          it 'renders the errors and runs no action for a signed in member' do
+            session = { Rack::Csrf.key => form_token, 'authenticated_entry_type' => 'accounts', 'authenticated_entry_id' => 'john' }
+
+            post '/entry_submissions/messages',
+              { Rack::Csrf.field => form_token, 'error_callback' => '/events?auth_action=sign_out&auth_content_type=accounts' },
+              { 'rack.session' => session }
+
+            expect(last_response.status).to eq 200
+            expect(last_response.body).to include 'Form with errors'
+            expect(last_request.env['rack.session']['authenticated_entry_id']).to eq 'john'
+          end
+
+          it 'runs no authentication action the failed POST names itself' do
+            session = { Rack::Csrf.key => form_token, 'authenticated_entry_type' => 'accounts', 'authenticated_entry_id' => 'john' }
+
+            post '/entry_submissions/messages',
+              { Rack::Csrf.field => form_token, 'auth_action' => 'sign_out', 'auth_content_type' => 'accounts', 'error_callback' => '/events' },
+              { 'rack.session' => session }
+
+            expect(last_response.status).to eq 200
+            expect(last_request.env['rack.session']['authenticated_entry_id']).to eq 'john'
+          end
+
+        end
+
+        context 'with a local error callback whose query is over the limits of Rack' do
+
+          let(:params) { { 'error_callback' => '/events?' + Array.new(5000) { |index| "x#{index}=1" }.join('&') } }
+
+          it 'renders its page with the errors' do
+            expect(response.status).to eq 200
+            expect(response.body.to_s).to include 'Form with errors'
+          end
+
+        end
+
+        context 'with a local error callback whose query names a submitted field' do
+
+          let(:params) { { 'error_callback' => '/events?some_variable=from-the-callback', 'some_variable' => 'from-the-form' } }
+
+          it 'lets the submitted field win' do
+            expect(response.body.to_s).to include 'Some variable: from-the-form'
+          end
+
+        end
+
         context 'with an error callback leaving the site' do
 
           let(:params) { { 'error_callback' => 'http://www.locomotivecms.com' } }

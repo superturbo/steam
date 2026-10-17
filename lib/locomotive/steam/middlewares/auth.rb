@@ -21,7 +21,7 @@ module Locomotive::Steam
       def _call
         load_authenticated_entry
 
-        return unless originally_posted?
+        return unless originally_posted? && !env['steam.rendering_entry_errors']
 
         auth_options = AuthOptions.new(site, params)
 
