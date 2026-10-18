@@ -36,13 +36,15 @@ module Locomotive::Steam
         return false if site.url_redirections.nil? || site.url_redirections.size == 0
 
         redirections_hash = site.url_redirections.to_h
+        path              = request.env['locomotive.path'] || request.path_info
+        query             = request.query_string
 
-        redirections_hash[requested_url] || find_dynamic_url_redirection(redirections_hash)
+        (!query.empty? && redirections_hash["#{path}?#{query}"]) ||
+          redirections_hash[path] ||
+          find_dynamic_url_redirection(redirections_hash, path)
       end
 
-      def find_dynamic_url_redirection(redirections_hash)
-        path = request.env['locomotive.path'] || request.path_info
-
+      def find_dynamic_url_redirection(redirections_hash, path)
         redirections_hash.each do |source, target|
           next unless (values = dynamic_values(source, path)) && (location = target_location(target, values))
 

@@ -21,21 +21,53 @@ describe Locomotive::Steam::Middlewares::UrlRedirection do
     [code, env['location']]
   end
 
+  def redirected(rules, path, query = '', extra_env = {})
+    site = instance_double('Site', _id: 42, url_redirections: rules)
+    env  = env_for('http://models.example.com/', 'steam.site' => site).merge('PATH_INFO' => path, 'QUERY_STRING' => query, **extra_env)
+    env['steam.request'] = Rack::Request.new(env)
+    code, env = middleware.call(env)
+    [code, env['location']]
+  end
+
   describe 'no redirections' do
 
     it { is_expected.to eq [200, nil] }
 
   end
 
-  describe 'dynamic rules, read literally' do
+  describe 'exact rules' do
 
-    def redirected(rules, path, query = '', extra_env = {})
-      site = instance_double('Site', _id: 42, url_redirections: rules)
-      env  = env_for('http://models.example.com/', 'steam.site' => site).merge('PATH_INFO' => path, 'QUERY_STRING' => query, **extra_env)
-      env['steam.request'] = Rack::Request.new(env)
-      code, env = middleware.call(env)
-      [code, env['location']]
+    it 'matches a rule with a query against the path and the query as sent' do
+      rules = [['/contact?city=springfield', '/contact/springfield']]
+
+      expect(redirected(rules, '/contact', 'city=springfield')).to eq [301, '/contact/springfield']
+      expect(redirected(rules, '/other', 'city=springfield', 'locomotive.path' => '/contact')).to eq [301, '/contact/springfield']
+      expect(redirected(rules, '/contact', 'city=springfield&utm=1')).to eq [200, nil]
+      expect(redirected(rules, '/contact', 'city=springfiel%64')).to eq [200, nil]
+      expect(redirected([['/k?a=1&b=2', '/x']], '/k', 'b=2&a=1')).to eq [200, nil]
+      expect(redirected([['/k?q=a%20b', '/x']], '/k', 'q=a+b')).to eq [200, nil]
+      expect(redirected([['/k?q=a+b', '/x']], '/k', 'q=a%20b')).to eq [200, nil]
     end
+
+    it 'matches a rule without a query against the path, whatever the query' do
+      rules = [['/foo.php', '/bar']]
+
+      expect(redirected(rules, '/foo.php', 'a=1')).to eq [301, '/bar']
+      expect(redirected(rules, '/other', 'a=1', 'locomotive.path' => '/foo.php')).to eq [301, '/bar']
+      expect(redirected(rules, '/foo.php', '', 'SCRIPT_NAME' => '/site')).to eq [301, '/bar']
+    end
+
+    it 'takes the rule with the query first, then the rule of the path, then a dynamic rule' do
+      rules = [['/old/:id', '/dynamic/:id'], ['/old/5', '/path'], ['/old/5?x=1', '/query']]
+
+      expect(redirected(rules, '/old/5', 'x=1')).to eq [301, '/query']
+      expect(redirected(rules, '/old/5', 'x=2')).to eq [301, '/path']
+      expect(redirected(rules, '/old/6', 'x=1')).to eq [301, '/dynamic/6']
+    end
+
+  end
+
+  describe 'dynamic rules, read literally' do
 
     ['/a(b/:id', '/a[b/:id', '/files/:1'].each do |source|
 
@@ -80,7 +112,7 @@ describe Locomotive::Steam::Middlewares::UrlRedirection do
     end
 
     it 'takes no rule with a query as dynamic' do
-      expect(redirected([['/k?c=:city', '/k/:city']], '/k', 'c=vilnius')).to eq [200, nil]
+      expect(redirected([['/k?c=:city', '/k/:city']], '/k', 'c=springfield')).to eq [200, nil]
     end
 
     it 'puts each value in the target once, by its whole name' do
@@ -262,7 +294,7 @@ describe Locomotive::Steam::Middlewares::UrlRedirection do
 
         let(:url) { 'http://models.example.com/foo.php?a=1' }
 
-        it { is_expected.to eq [200, nil] }
+        it { is_expected.to eq [301, '/bar'] }
 
         describe 'exact matching' do
 
