@@ -1,15 +1,15 @@
 module Locomotive::Steam
   module Middlewares
 
-    # If an old URL has been found among the site url_redirections hash,
-    # perform a 310 redirection to the new URL.
-    # It is highly useful when the site existed before but was ran by another system.
-    #
-    # See the specs (spec/unit/middlewares/url_redirection_spec.rb) for more details.
-    #
+    # Redirects (301) a request matching a rule among the site's url_redirections to its new URL.
     class UrlRedirection < ThreadSafe
 
       include Concerns::Helpers
+
+      PARAM               = /:([a-z][a-z0-9_]*)/
+      TARGET_PARTS        = %r{\A((?:[a-z][a-z0-9+.-]*:)?//[^/?#]+)?([^?#]*)(\?[^#]*)?(.*)\z}im
+      WITHOUT_ORIGIN      = %r{\A(?![a-z][a-z0-9+.-]*:)(?![/\\]{2})}i
+      NO_SPACE_OR_CONTROL = /\A[^\s\x00-\x1F\x7F]*\z/
 
       def _call
         if url = redirect_url
@@ -41,23 +41,43 @@ module Locomotive::Steam
       end
 
       def find_dynamic_url_redirection(redirections_hash)
-        number_of_segments = requested_url.split('/').size
+        path = request.env['locomotive.path'] || request.path_info
 
-        # attempt to find the first dynamic route which matches
-        redirections_hash.each do |route, redirection|
-          # a little bit of optimization
-          next unless route.include?(':') && route.split('/').size == number_of_segments
+        redirections_hash.each do |source, target|
+          next unless (values = dynamic_values(source, path)) && (location = target_location(target, values))
 
-          _regexp = route.gsub(/:([^\/]+)/, "(?<\\1>[^\/]+)").gsub('/', '\/')
-
-          if matches = Regexp.new(_regexp).match(requested_url)
-            return matches.names.reduce(redirection) do |url, name|
-              url.gsub(":#{name}") { matches[name] }
-            end
-          end
+          return location
         end
 
         false
+      end
+
+      def dynamic_values(source, path)
+        # A rule with a query is never dynamic.
+        return if source.include?('?') || !source.match?(PARAM)
+
+        parts = source.split(PARAM).each_slice(2).to_a
+        names = parts.filter_map { |_, name| name }
+        return if names.uniq.size < names.size || parts.drop(1).any? { |text, name| name && text.empty? }
+
+        pattern = parts.map { |text, name| Regexp.escape(text) + (name ? '([^/]+)' : '') }.join
+        (match = /\A#{pattern}\z/.match(path)) && names.zip(match.captures).to_h
+      end
+
+      # Captures cannot set the destination authority.
+      def target_location(target, values)
+        authority_prefix, path, query, fragment = target.match(TARGET_PARTS).captures
+        # Decode path escapes once before encoding query substitutions.
+        query_values = values.transform_values { |value| Rack::Utils.escape(Rack::Utils.unescape_path(value)) }
+        location     = [authority_prefix, put_values(path, values), put_values(query.to_s, query_values), put_values(fragment, values)].join
+
+        return unless location.match?(NO_SPACE_OR_CONTROL)
+
+        location if authority_prefix || location == target || location.match?(WITHOUT_ORIGIN)
+      end
+
+      def put_values(text, values)
+        text.gsub(PARAM) { values.fetch($1, $&) }
       end
 
     end
