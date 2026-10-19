@@ -12,46 +12,48 @@ module Locomotive::Steam
       NO_SPACE_OR_CONTROL = /\A[^\s\x00-\x1F\x7F]*\z/
 
       def _call
-        if url = redirect_url
-          emit_event
+        source, location = matching_rule
+        return unless location
 
-          redirect_to url
-        end
+        emit_event(source)
+        redirect_to location
       end
 
       protected
 
-      def requested_url
-        request.env['locomotive.path'] || request.fullpath
+      def requested_path
+        request.env['locomotive.path'] || request.path_info
       end
 
-      def emit_event
+      def requested_path_with_query
+        request.query_string.empty? ? requested_path : "#{requested_path}?#{request.query_string}"
+      end
+
+      def emit_event(source)
         ActiveSupport::Notifications.instrument('steam.serve.url_redirection', {
           site_id:  site._id,
-          url:      requested_url
+          source:   source,
+          url:      requested_path
         })
       end
 
-      def redirect_url
-        return false if site.url_redirections.nil? || site.url_redirections.size == 0
+      def matching_rule
+        return if site.url_redirections.nil? || site.url_redirections.size == 0
 
-        redirections_hash = site.url_redirections.to_h
-        path              = request.env['locomotive.path'] || request.path_info
-        query             = request.query_string
+        rules = site.url_redirections.to_h
+        [requested_path_with_query, requested_path].uniq.each { |source| return [source, rules[source]] if rules[source] }
 
-        (!query.empty? && redirections_hash["#{path}?#{query}"]) ||
-          redirections_hash[path] ||
-          find_dynamic_url_redirection(redirections_hash, path)
+        find_dynamic_url_redirection(rules)
       end
 
-      def find_dynamic_url_redirection(redirections_hash, path)
-        redirections_hash.each do |source, target|
-          next unless (values = dynamic_values(source, path)) && (location = target_location(target, values))
+      def find_dynamic_url_redirection(rules)
+        rules.each do |source, target|
+          next unless (values = dynamic_values(source, requested_path)) && (location = target_location(target, values))
 
-          return location
+          return [source, location]
         end
 
-        false
+        nil
       end
 
       def dynamic_values(source, path)

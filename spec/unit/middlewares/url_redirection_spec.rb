@@ -67,6 +67,43 @@ describe Locomotive::Steam::Middlewares::UrlRedirection do
 
   end
 
+  describe 'the redirection event' do
+
+    let(:events) { [] }
+
+    before do
+      @subscriber = ActiveSupport::Notifications.subscribe('steam.serve.url_redirection') do |_name, _start, _finish, _id, payload|
+        events << payload
+      end
+    end
+
+    after { ActiveSupport::Notifications.unsubscribe(@subscriber) }
+
+    it 'names the rule that matched and the requested path, without its query' do
+      rules = [['/contact?city=springfield', '/contact/springfield'], ['/foo.php', '/bar'], ['/old/:id', '/new/:id']]
+
+      redirected(rules, '/other', 'city=springfield', 'locomotive.path' => '/contact')
+      redirected(rules, '/foo.php', 'a=1')
+      redirected(rules, '/old/5')
+      redirected(rules, '/old/5', 'x=1')
+
+      expect(events).to eq [
+        { site_id: 42, source: '/contact?city=springfield', url: '/contact' },
+        { site_id: 42, source: '/foo.php',                  url: '/foo.php' },
+        { site_id: 42, source: '/old/:id',                  url: '/old/5' },
+        { site_id: 42, source: '/old/:id',                  url: '/old/5' }
+      ]
+    end
+
+    it 'tells nothing when no rule redirects' do
+      redirected([['/go/:to', '/:to']], '/go/\\evil.example')
+      redirected([['/foo.php', '/bar']], '/other')
+
+      expect(events).to be_empty
+    end
+
+  end
+
   describe 'dynamic rules, read literally' do
 
     ['/a(b/:id', '/a[b/:id', '/files/:1'].each do |source|
