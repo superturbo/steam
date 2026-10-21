@@ -33,10 +33,6 @@ module Locomotive::Steam
 
       private
 
-      def originally_posted?
-        request.post? || env[Rack::RACK_METHODOVERRIDE_ORIGINAL_METHOD] == 'POST'
-      end
-
       def sign_up(options)
         return if authenticated? 
 

@@ -6,6 +6,10 @@ module Locomotive::Steam
 
         UNVERIFIED_FORM = 'The form could not be verified. Reload the page and submit it again.'.freeze
 
+        def originally_posted?
+          request.post? || env[Rack::RACK_METHODOVERRIDE_ORIGINAL_METHOD] == 'POST'
+        end
+
         def form_token_verified?
           submitted_form_tokens.any? { |token| services.csrf_protection.verified?(token) }
         end

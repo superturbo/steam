@@ -352,7 +352,7 @@ describe 'Authentication' do
 
   end
 
-  describe 'a link to stop impersonating' do
+  describe 'stopping an impersonation' do
 
     let(:member) { { 'authenticated_entry_type' => 'accounts', 'authenticated_entry_id' => 'john' } }
 
@@ -385,9 +385,47 @@ describe 'Authentication' do
       expect(last_response.body).to include "My name is John and I'm logged in!"
     end
 
-    it 'signs an impersonated member out, back to a page on the site' do
-      get '/?impersonating=stop', {}, { 'rack.session' => member.merge('authenticated_impersonation' => '1'), 'PATH_INFO' => '//evil.example' }
-      expect([last_response.status, last_response.location]).to eq [302, '/']
+    it 'keeps an impersonated member signed in on a link, as the stop is a posted form' do
+      get '/account/me?impersonating=stop', {}, { 'rack.session' => member.merge('authenticated_impersonation' => '1') }
+
+      expect(last_response.status).to eq 200
+      expect(last_response.body).to include "My name is John and I'm logged in!"
+      expect(last_response.body).to include 'locomotive-impersonating-banner'
+    end
+
+    def submit_the_banner(path)
+      session = member.merge('authenticated_impersonation' => '1')
+
+      get path, {}, { 'rack.session' => session }
+      form   = Nokogiri::HTML5(last_response.body).at_css('.locomotive-impersonating-banner form')
+      fields = form.css('input[type="hidden"]').to_h { |input| [input['name'], input['value']] }
+
+      post form['action'], fields, { 'rack.session' => session }
+      form['action']
+    end
+
+    it 'signs an impersonated member out from the form of the banner, on a page whose query names other actions' do
+      action = submit_the_banner('/account/me?content_type_slug=messages&auth_action=sign_out')
+
+      expect(action).to eq '/account/me'
+      expect([last_response.status, last_response.location]).to eq [303, '/account/me']
+    end
+
+    context 'without CSRF protection' do
+
+      before { allow(Locomotive::Steam.configuration).to receive(:csrf_protection).and_return(false) }
+
+      it 'signs an impersonated member out from the form of the banner' do
+        submit_the_banner('/account/me')
+
+        expect([last_response.status, last_response.location]).to eq [303, '/account/me']
+      end
+
+    end
+
+    it 'refuses a posted stop without the form token' do
+      post '/account/me', { impersonating: 'stop' }, { 'rack.session' => member.merge('authenticated_impersonation' => '1') }
+      expect(last_response.status).to eq 422
     end
 
   end
