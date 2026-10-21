@@ -1,0 +1,14 @@
+# A patron stored before email fields held one address: a list in its backup email.
+- Legacy Patron:
+    _slug: legacy-patron
+    email: legacy@example.com
+    backup_email: "legacy@example.com, other@example.org"
+
+# Two patrons a unique email names alike, as an older store or a race could leave them.
+- Twin One:
+    _slug: twin-one
+    email: twin@example.com
+
+- Twin Two:
+    _slug: twin-two
+    email: twin@example.com

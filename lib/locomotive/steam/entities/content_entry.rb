@@ -33,9 +33,16 @@ module Locomotive::Steam
 
     # Positional locale preserves calls such as change(title: 'x').
     def change(new_attributes, locale = nil)
+      @changed_names = changed_names | (new_attributes || {}).keys.map(&:to_sym)
+
       super((new_attributes || {}).each_with_object({}) do |(name, value), changed|
         changed[name] = localized?(name) ? localized_change(name, value, locale) : value
       end)
+    end
+
+    def []=(name, value)
+      @changed_names = changed_names | [name.to_sym]
+      super
     end
 
     def _id; self[:_id] || self[:id]; end
@@ -82,7 +89,9 @@ module Locomotive::Steam
       invalid = validate_select_fields + validate_link_fields
 
       validate_password_fields
-      validate_required_fields(invalid + normalize_fields)
+      invalid += normalize_fields
+      validate_email_fields(invalid)
+      validate_required_fields(invalid)
 
       errors.empty?
     end
@@ -287,6 +296,24 @@ module Locomotive::Steam
         errors.add(field.name.to_sym, :invalid)
         invalid << field.name.to_sym
       end
+    end
+
+    # Existing entries revalidate only email fields being changed.
+    def validate_email_fields(invalid)
+      content_type.fields_by_name.each_value do |field|
+        name = field.name.to_sym
+        next unless field.type == :email && !invalid.include?(name) && (_id.nil? || changed_names.include?(name))
+
+        value     = attributes[name]
+        addresses = value.respond_to?(:translations) ? value.translations.values : [value]
+        next if addresses.all? { |address| address.blank? || Locomotive::Steam.email_address?(address) }
+
+        errors.add(name, :invalid)
+      end
+    end
+
+    def changed_names
+      @changed_names || []
     end
 
     def validate_required_fields(invalid)

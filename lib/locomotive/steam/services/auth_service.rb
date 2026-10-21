@@ -5,6 +5,7 @@ module Locomotive
 
       RESET_TOKEN_LIFETIME  = 1 * 3600 # 1 hour in seconds
       RESET_PASSWORD_HANDLE = 'reset_password'
+      LOOKUP_TYPES          = %i(string email).freeze
 
       attr_accessor_initialize :site, :entries, :email_service, [:page_finder, :url_builder, :public_origin]
 
@@ -30,7 +31,7 @@ module Locomotive
         if entry.errors.empty?
           notify(:signed_up, entry, request)
           context[options.type.singularize] = entry
-          send_welcome_email(options, context)
+          send_welcome_email(options, context, entry)
         end
 
         [entry.errors.empty? ? :entry_created : :invalid_entry, entry]
@@ -38,7 +39,7 @@ module Locomotive
 
       def sign_in(options, request)
         field = password_field(options)
-        entry = field && entries.all(options.type, options.id_field => options.id).first
+        entry = field && find_account(options, lookup_field(options))
 
         if entry&.password_matches?(field, options.password)
           notify(:signed_in, entry, request)
@@ -58,11 +59,13 @@ module Locomotive
       def forgot_password(options, context)
         return :reset_password_unavailable unless (url = reset_password_url)
 
-        field = password_field(options)
-        entry = field && entries.all(options.type, options.id_field => options.id).first
+        field   = password_field(options)
+        lookup  = reset_field(options)
+        entry   = field && find_account(options, lookup)
+        address = entry && address_of(entry, lookup)
 
-        if entry.nil?
-          :"wrong_#{options.id_field}"
+        if address.nil?
+          :"wrong_#{lookup ? lookup.name : 'email'}"
         else
           entries.update_decorated_entry(entry, {
             '_auth_reset_token'   => SecureRandom.hex,
@@ -72,7 +75,7 @@ module Locomotive
           context['reset_password_url'] = "#{url}?auth_reset_token=#{entry['_auth_reset_token']}"
           context[options.type.singularize] = entry
 
-          send_reset_password_instructions(options, context)
+          send_reset_password_instructions(options, context, address)
 
           :"reset_#{field}_instructions_sent"
         end
@@ -165,6 +168,34 @@ module Locomotive
         name if options.password_field.nil? || options.password_field.to_sym == name
       end
 
+      def lookup_field(options, types = LOOKUP_TYPES)
+        field = entries.get_type(options.type)&.fields_by_name&.[](options.id_field)
+        field if field && types.include?(field.type) && !field.localized?
+      end
+
+      def reset_field(options)
+        field = lookup_field(options, %i(email))
+        field if field&.unique?
+      end
+
+      # A value naming more than one account names none.
+      def find_account(options, lookup)
+        return unless lookup && nonempty_string?(options.id)
+
+        accounts = entries.all(options.type, lookup.name => options.id)
+        accounts.first if accounts.one?
+      end
+
+      def nonempty_string?(value)
+        value.is_a?(String) && !value.empty?
+      end
+
+      # Mail goes to the stored address, not the submitted lookup value.
+      def address_of(entry, field)
+        address = field && entry[field.name]
+        address if Locomotive::Steam.email_address?(address)
+      end
+
       def sign_up_password(options, field)
         options.entry.with_indifferent_access[field] if options.entry.is_a?(Hash)
       end
@@ -184,26 +215,27 @@ module Locomotive
         entry
       end
 
-      def send_welcome_email(options, context)
+      def send_welcome_email(options, context, entry)
         return if options.disable_email
+        return unless (address = address_of(entry, lookup_field(options, %i(email))))
 
-        send_email options, context, <<-EMAIL
+        send_email options, context, address, <<-EMAIL
 Hi,
 You've been successfully registered.
 Thanks!
 EMAIL
       end
 
-      def send_reset_password_instructions(options, context)
-        send_email options, context, <<-EMAIL
+      def send_reset_password_instructions(options, context, address)
+        send_email options, context, address, <<-EMAIL
 Hi,
 To reset your password please follow the link below: #{context['reset_password_url']}.
 Thanks!
 EMAIL
       end
 
-      def send_email(options, context, default_body)
-        email_options = { from: options.from, to: options.id, subject: options.subject, smtp: options.smtp }
+      def send_email(options, context, address, default_body)
+        email_options = { from: options.from, to: address, subject: options.subject, smtp: options.smtp }
 
         if options.email_handle
           email_options[:page_handle] = options.email_handle

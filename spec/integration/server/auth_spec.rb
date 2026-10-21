@@ -8,6 +8,11 @@ describe 'Authentication' do
     run_server
   end
 
+  def post_json(url, params)
+    post url, JSON.generate(params.merge(Rack::Csrf.field => form_token)),
+         'CONTENT_TYPE' => 'application/json', 'rack.session' => { Rack::Csrf.key => form_token }
+  end
+
   describe 'sign up action' do
 
     it 'renders the form' do
@@ -245,6 +250,36 @@ describe 'Authentication' do
 
       end
 
+      { auth_content_type: { 'x' => 'accounts' }, auth_id: ['john@doe.net'], auth_id_field: 'password_hash' }.each do |name, value|
+
+        it "signs nobody in, and renders the page, with #{name} #{value.inspect}" do
+          sign_in(params.merge(name => value))
+          expect(last_response.status).to eq 200
+          expect(last_response.body).to include '/account/sign-in'
+          expect(last_request.env['rack.session'][:authenticated_entry_id]).to be_nil
+        end
+
+      end
+
+      it 'signs in from a JSON body' do
+        post_json '/account/sign-in', params
+        expect(last_response.status).to eq 303
+      end
+
+      { auth_content_type: [42, true], auth_password_field: [42, true] }.each do |name, values|
+
+        values.each do |value|
+
+          it "signs nobody in from a JSON body, and renders the page, with #{name} #{value.inspect}" do
+            post_json '/account/sign-in', params.merge(name => value)
+            expect(last_response.status).to eq 200
+            expect(last_request.env['rack.session'][:authenticated_entry_id]).to be_nil
+          end
+
+        end
+
+      end
+
       context 'a password holding a NUL byte' do
 
         let(:params) { super().merge(auth_password: "easy\0one") }
@@ -398,6 +433,36 @@ describe 'Authentication' do
 
         token = last_request.env['steam.services'].content_entry.all('accounts', 'email' => email, '_visible' => nil).first['_auth_reset_token']
         expect(link).to eq "http://example.org/account/reset-password?auth_reset_token=#{token}"
+      end
+
+    end
+
+    { auth_content_type: { 'x' => 'accounts' }, auth_id: ['john@doe.net', 'someone@example.org'] }.each do |name, value|
+
+      it "sends no email, and renders the page, with #{name} #{value.inspect}" do
+        expect_any_instance_of(Locomotive::Steam::EmailService).not_to receive(:send_email)
+
+        post_form '/account/forgot-password', params.merge(auth_id: 'john@doe.net', name => value)
+
+        expect(last_response.status).to eq 200
+        expect(last_response.body).to include 'Forgot your password'
+        account = last_request.env['steam.services'].content_entry.all('accounts', 'email' => 'john@doe.net', '_visible' => nil).first
+        expect(account['_auth_reset_token']).to be_nil
+      end
+
+    end
+
+    { 'name' => 'John', 'password_hash' => 'x', 'nope' => 'john@doe.net' }.each do |id_field, id|
+
+      it "answers a reset by #{id_field}, a field other than an email one, as one for an unknown address" do
+        expect_any_instance_of(Locomotive::Steam::EmailService).not_to receive(:send_email)
+
+        post_form '/account/forgot-password', params.merge(auth_id_field: id_field, auth_id: id)
+
+        expect(last_response.status).to eq 200
+        expect(last_response.body).to include 'Your email is unknown'
+        account = last_request.env['steam.services'].content_entry.all('accounts', 'email' => 'john@doe.net', '_visible' => nil).first
+        expect(account['_auth_reset_token']).to be_nil
       end
 
     end

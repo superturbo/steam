@@ -1,0 +1,15 @@
+name: Patrons
+slug: patrons
+label_field_name: name
+order_by: created_at
+fields:
+- name:
+    type: string
+- email:
+    type: email
+    required: true
+    unique: true
+- secret:
+    type: password
+- backup_email:
+    type: email

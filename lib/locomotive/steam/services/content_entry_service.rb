@@ -211,8 +211,11 @@ module Locomotive
 
         fields       = _repository.content_type.fields
         links        = fields.associations.select { |field| field.type == :belongs_to }
-        passwords    = _repository.content_type.fields_by_name.each_value.select(&:write_only?)
+        declared     = _repository.content_type.fields_by_name.each_value
+        passwords    = declared.select(&:write_only?)
+        # An email address is data, not HTML: cleaning would turn a&b into a&amp;b.
         skipped_keys = SEO_NAMES +
+                       declared.select { |field| field.type == :email }.map { |field| field.name.to_s } +
                        fields.json.map { |field| field.name.to_s } +
                        fields.selects.map { |field| field.persisted_name.to_s } +
                        links.map(&:persisted_name) +

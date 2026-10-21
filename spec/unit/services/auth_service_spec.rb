@@ -4,7 +4,17 @@ describe Locomotive::Steam::AuthService do
 
   let(:site)            { instance_double('CurrentSite', _id: 'site-1', domains: ['acme.org', 'localhost'], redirect_to_https: false) }
   let(:password_field)  { instance_double('Field', name: 'password') }
-  let(:account_type)    { instance_double('ContentType', password_fields: [password_field]) }
+  let(:account_fields)  { {
+    email:      instance_double('Field', name: 'email', type: :email, localized?: false, unique?: true),
+    username:   instance_double('Field', name: 'username', type: :string, localized?: false, unique?: true),
+    password:   instance_double('Field', name: 'password', type: :password, localized?: false, unique?: false),
+    category:   instance_double('Field', name: 'category', type: :select, localized?: false, unique?: false),
+    contact:    instance_double('Field', name: 'contact', type: :email, localized?: false, unique?: true),
+    backup:     instance_double('Field', name: 'backup', type: :email, localized?: false, unique?: false),
+    translated: instance_double('Field', name: 'translated', type: :email, localized?: true, unique?: true),
+    nickname:   instance_double('Field', name: 'nickname', type: :string, localized?: true, unique?: true)
+  }.with_indifferent_access }
+  let(:account_type)    { instance_double('ContentType', password_fields: [password_field], fields_by_name: account_fields) }
   let(:entries)         { instance_double('ContentService', locale: 'en', get_type: account_type) }
   let(:emails)          { instance_double('EmailService') }
   let(:reset_page)      { instance_double('Page', published?: true, redirect?: false, templatized?: false) }
@@ -33,7 +43,8 @@ describe Locomotive::Steam::AuthService do
 
     let(:errors)                { [] }
     let(:entry_attributes)      { { fullname: 'Chris Cornell', band: 'Soundgarden', email: 'chris@soundgarden.band', password: 'easyone', password_confirmation:  'easyone' } }
-    let(:entry)                 { instance_double('Account', errors: errors) }
+    let(:stored_email)          { 'chris@soundgarden.band' }
+    let(:entry)                 { instance_double('Account', errors: errors).tap { |e| allow(e).to receive(:[]).with('email').and_return(stored_email) } }
     let(:email_disabled)        { false }
     let(:default_auth_options)  { {
       type:                   'accounts',
@@ -89,6 +100,35 @@ describe Locomotive::Steam::AuthService do
       let(:email_disabled) { true }
 
       it "doesn't send a notification email" do
+        allow(entries).to receive(:create).and_return(entry)
+        expect(emails).to_not receive(:send_email)
+        is_expected.to eq [:entry_created, entry]
+      end
+
+    end
+
+    ['chris@soundgarden.band, someone@example.org', 'someone,chris@soundgarden.band', 'Chris <chris@soundgarden.band>', 'chris', nil,
+     "chris\0@soundgarden.band", "chris@soundgarden.band\x7F"].each do |stored|
+
+      context "an account storing the address #{stored.inspect}" do
+
+        let(:stored_email) { stored }
+
+        it 'sends no email' do
+          allow(entries).to receive(:create).and_return(entry)
+          expect(emails).to_not receive(:send_email)
+          is_expected.to eq [:entry_created, entry]
+        end
+
+      end
+
+    end
+
+    context 'a form naming a text field of the account' do
+
+      let(:auth_options) { instance_double('AuthOptions', default_auth_options.merge(id_field: 'username')) }
+
+      it 'sends no email' do
         allow(entries).to receive(:create).and_return(entry)
         expect(emails).to_not receive(:send_email)
         is_expected.to eq [:entry_created, entry]
@@ -219,13 +259,21 @@ describe Locomotive::Steam::AuthService do
     end
 
     context 'a type with no password field' do
-      let(:account_type) { instance_double('ContentType', password_fields: []) }
+      let(:account_type) { instance_double('ContentType', password_fields: [], fields_by_name: account_fields) }
+      include_examples 'refusing every action'
+    end
+
+    context 'a type with no password field, the form naming a field it lacks' do
+      let(:account_type) { instance_double('ContentType', password_fields: [], fields_by_name: account_fields) }
+      let(:auth_options) do
+        instance_double('AuthOptions', default_auth_options.merge(entry: nil, disable_email: true, id_field: 'nope'))
+      end
       include_examples 'refusing every action'
     end
 
     context 'a type with two password fields' do
       let(:account_type) do
-        instance_double('ContentType', password_fields: [password_field, instance_double('Field', name: 'recovery')])
+        instance_double('ContentType', password_fields: [password_field, instance_double('Field', name: 'recovery')], fields_by_name: account_fields)
       end
       include_examples 'refusing every action'
     end
@@ -235,6 +283,145 @@ describe Locomotive::Steam::AuthService do
         instance_double('AuthOptions', default_auth_options.merge(entry: nil, disable_email: true, password_field: 'email'))
       end
       include_examples 'refusing every action'
+    end
+
+  end
+
+  describe 'the account a visitor names' do
+
+    let(:auth_options) { instance_double('AuthOptions', default_auth_options.merge(id_field: id_field, id: id)) }
+    let(:id_field)     { 'email' }
+    let(:id)           { 'john@doe.net' }
+
+    shared_examples 'finding no account' do |forgot_status|
+      it 'looks no account up, writes and sends nothing' do
+        expect(entries).not_to receive(:all)
+        expect(entries).not_to receive(:update_decorated_entry)
+        expect(emails).not_to receive(:send_email)
+
+        expect(service.sign_in(auth_options, nil)).to eq :wrong_credentials
+        expect(service.forgot_password(auth_options, liquid_context)).to eq forgot_status
+      end
+    end
+
+    {
+      'a field the type lacks'      => 'nope',
+      'an attribute of every entry' => '_auth_reset_token',
+      'a password field'            => 'password',
+      'the hash of a password'      => 'password_hash',
+      'a field of another type'     => 'category',
+      'a translated email field'     => 'translated',
+      'a translated text field'      => 'nickname'
+    }.each do |kind, name|
+
+      context "by #{kind} (#{name})" do
+        let(:id_field) { name }
+        include_examples 'finding no account', :wrong_email
+      end
+
+    end
+
+    [nil, '', ['john@doe.net'], { 'a' => 'john@doe.net' }].each do |value|
+
+      context "with the value #{value.inspect}" do
+        let(:id) { value }
+        include_examples 'finding no account', :wrong_email
+      end
+
+    end
+
+    context 'by another text field of the type' do
+
+      let(:id_field) { 'username' }
+      let(:id)       { 'johnny' }
+
+      it 'signs in by that field' do
+        expect(entries).to receive(:all).with('accounts', { 'username' => 'johnny' }).and_return([])
+        expect(service.sign_in(auth_options, nil)).to eq :wrong_credentials
+      end
+
+      it 'resets no password by it, answering as for an unknown address and logging nothing' do
+        expect(entries).not_to receive(:all)
+        expect(entries).not_to receive(:update_decorated_entry)
+        expect(emails).not_to receive(:send_email)
+        expect(Locomotive::Common::Logger).not_to receive(:warn)
+        expect(Locomotive::Common::Logger).not_to receive(:error)
+
+        expect(service.forgot_password(auth_options, liquid_context)).to eq :wrong_email
+      end
+
+    end
+
+    context 'by an email field more than one account may hold' do
+
+      let(:id_field) { 'backup' }
+      let(:id)       { 'john@doe.net' }
+
+      it 'signs in by it' do
+        expect(entries).to receive(:all).with('accounts', { 'backup' => 'john@doe.net' }).and_return([])
+        expect(service.sign_in(auth_options, nil)).to eq :wrong_credentials
+      end
+
+      it 'resets no password by it' do
+        expect(entries).not_to receive(:all)
+        expect(entries).not_to receive(:update_decorated_entry)
+        expect(emails).not_to receive(:send_email)
+        expect(service.forgot_password(auth_options, liquid_context)).to eq :wrong_email
+      end
+
+    end
+
+    it 'signs nobody in when the value names more than one account, even with the right password' do
+      matching = Locomotive::Steam::ContentEntry.new(email: 'john@doe.net', password_hash: BCrypt::Password.create('easyone', cost: 4).to_s)
+      matching.content_type = instance_double('ContentType', fields_by_name: { password: instance_double('Field', name: :password, type: :password, write_only?: true) }.with_indifferent_access)
+      allow(entries).to receive(:all).and_return([matching, matching.dup])
+
+      expect(service.sign_in(auth_options, nil)).to eq :wrong_credentials
+    end
+
+    it 'resets no password when the address names more than one account' do
+      allow(entries).to receive(:all).and_return([build_account('42a'), build_account('42b')])
+      expect(entries).not_to receive(:update_decorated_entry)
+      expect(emails).not_to receive(:send_email)
+
+      expect(service.forgot_password(auth_options, liquid_context)).to eq :wrong_email
+    end
+
+    context 'by another email field of the type' do
+
+      let(:id_field) { 'contact' }
+      let(:id)       { 'John@Work.example' }
+
+      it 'sends the instructions to the address the account stores in it' do
+        entry = build_account('42a', 'contact' => 'john@work.example')
+        expect(entries).to receive(:all).with('accounts', { 'contact' => 'John@Work.example' }).and_return([entry])
+        expect(entries).to receive(:update_decorated_entry)
+        expect(emails).to receive(:send_email).with(hash_including(to: 'john@work.example'), liquid_context)
+
+        expect(service.forgot_password(auth_options, liquid_context)).to eq :reset_password_instructions_sent
+      end
+
+      it 'names the field when no account has the value' do
+        allow(entries).to receive(:all).and_return([])
+        expect(service.forgot_password(auth_options, liquid_context)).to eq :wrong_contact
+      end
+
+    end
+
+    ['john@doe.net, someone@example.org', 'someone,john@doe.net', 'John <john@doe.net>', 'john', 'jūratė@doe.net', nil,
+     "john\0@doe.net", "john@doe.net\x7F", "jo\xFFhn@doe.net".dup.force_encoding('UTF-8')].each do |stored|
+
+      context "an account storing the address #{stored.inspect}" do
+
+        it 'writes no token and sends no instructions' do
+          allow(entries).to receive(:all).and_return([build_account('42a', 'email' => stored)])
+          expect(entries).not_to receive(:update_decorated_entry)
+          expect(emails).not_to receive(:send_email)
+          expect(service.forgot_password(auth_options, liquid_context)).to eq :wrong_email
+        end
+
+      end
+
     end
 
   end
@@ -595,9 +782,10 @@ EMAIL
 
   end
 
-  def build_account(reset_token)
+  def build_account(reset_token, stored = { 'email' => 'john@doe.net' })
     instance_double('Account').tap do |entry|
       allow(entry).to receive(:[]).with('_auth_reset_token').and_return(reset_token)
+      stored.each { |name, value| allow(entry).to receive(:[]).with(name).and_return(value) }
     end
   end
 

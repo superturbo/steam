@@ -131,7 +131,10 @@ module Locomotive::Steam
 
       class AuthOptions
 
-        ACTIONS = %w(sign_up sign_in sign_out forgot_password reset_password)
+        ACTIONS       = %w(sign_up sign_in sign_out forgot_password reset_password)
+        STRING_PARAMS = %w(auth_content_type auth_id_field auth_password_field auth_callback auth_email_subject
+                           auth_email_handle auth_email_smtp_namespace).freeze
+        SCALAR_PARAMS = %w(auth_id auth_password auth_reset_token auth_disable_email g-recaptcha-response).freeze
 
         attr_reader :site, :params
 
@@ -140,7 +143,10 @@ module Locomotive::Steam
         end
 
         def valid?
-          ACTIONS.include?(action)
+          ACTIONS.include?(action) &&
+            STRING_PARAMS.all? { |name| params[name].nil? || params[name].is_a?(String) } &&
+            SCALAR_PARAMS.none? { |name| params[name].is_a?(Array) || params[name].is_a?(Hash) } &&
+            (entry.nil? || entry.is_a?(Hash))
         end
 
         def action

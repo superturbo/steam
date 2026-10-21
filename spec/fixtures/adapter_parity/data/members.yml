@@ -1,1 +1,4 @@
-[]
+# A member stored before email fields held one address: a list in the email field.
+- "legacy@example.com, other@example.org":
+    _slug: legacy-member
+    passcode: kept

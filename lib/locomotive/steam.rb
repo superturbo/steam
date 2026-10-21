@@ -1,3 +1,4 @@
+require 'uri'
 require 'locomotive/common'
 
 require_relative      'steam/version'
@@ -46,6 +47,11 @@ module Locomotive
 
     def self.configuration
       @configuration ||= Configuration.new
+    end
+
+    # Email-input syntax only; delivery is not guaranteed.
+    def self.email_address?(value)
+      value.is_a?(String) && value.valid_encoding? && value.match?(URI::MailTo::EMAIL_REGEXP)
     end
 
     def self.reset

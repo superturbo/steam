@@ -436,6 +436,31 @@ describe 'Adapter parity' do
             expect(html.at_css('meta[name="description"]')['content']).to eq text
           end
 
+          ['grace@example.com', 'Grace@Example.COM', 'grace@intranet', 'g&h@example.com'].each do |address|
+
+            it "stores the email #{address.inspect}" do
+              entry = service.create('submissions', valid.merge(email: address), true)
+
+              expect(entry['errors']).to be_blank
+              expect(service.all('submissions', email: address, _visible: nil).size).to eq 1
+            end
+
+          end
+
+          ['grace', 'grace@example.com, ada@example.org', 'ada,grace@example.com', 'Grace <grace@example.com>',
+           'grace@-example.com', 'jūratė@example.lt'].each do |address|
+
+            it "refuses the email #{address.inspect} and writes nothing" do
+              entry = nil
+
+              expect { entry = service.create('submissions', valid.merge(email: address), true) }
+                .not_to change { stored_count('submissions') }
+
+              expect(entry['errors']['email']).to eq ['is invalid']
+            end
+
+          end
+
           it 'still cleans the HTML of a declared text field' do
             service.create('specimens', writable.merge(_slug: 'cleaned', name: 'Ada <script>x</script> & co'))
 

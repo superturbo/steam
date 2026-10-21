@@ -69,6 +69,7 @@ module Locomotive::Steam
 
     def required?; self[:required]; end
     def localized?; self[:localized]; end
+    def unique?; self[:unique]; end
 
     CAPABILITIES = {
       string:       %i(localization required),

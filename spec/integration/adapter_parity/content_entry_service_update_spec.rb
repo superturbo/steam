@@ -31,6 +31,32 @@ describe 'Adapter parity' do
           expect(service.find('submissions', created._id).name).to eq 'Grace'
         end
 
+        it 'stores an email as written, never as HTML' do
+          created = service.create('submissions', valid)
+
+          updated = service.update('submissions', created._id, { email: 'g&h@example.com' }, true)
+
+          expect(updated['errors']).to be_blank
+          expect(service.find('submissions', created._id).email).to eq 'g&h@example.com'
+        end
+
+        it 'refuses an email that is no single address without touching the entry' do
+          created = service.create('submissions', valid)
+
+          updated = service.update('submissions', created._id, { email: 'ada@example.com, grace@example.org' }, true)
+
+          expect(updated['errors']['email']).to eq ['is invalid']
+          expect(service.find('submissions', created._id).email).to eq 'ada@example.com'
+        end
+
+        it 'changes another field of an entry still storing an email that is no single address, keeping that email' do
+          updated = service.update('members', 'legacy-member', { passcode: 'changed' }, true)
+
+          expect(updated['errors']).to be_blank
+          expect(service.find('members', 'legacy-member').passcode).to eq 'changed'
+          expect(service.find('members', 'legacy-member').email).to eq 'legacy@example.com, other@example.org'
+        end
+
         it 'refuses system input without touching the entry' do
           created = service.create('submissions', valid)
 

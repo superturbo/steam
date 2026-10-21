@@ -99,6 +99,82 @@ describe Locomotive::Steam::ContentEntry do
 
     end
 
+    context 'an email field' do
+
+      let(:field)           { instance_double('Field', name: :email, type: :email, write_only?: false, persisted_name: :email) }
+      let(:required_fields) { [] }
+
+      ['ada@example.com', 'Ada.Lovelace+steam@Example.CO.UK', "o'brien@example.org", 'simonas@veiks', 'a..b@example.com',
+       '', nil].each do |address|
+
+        it "takes #{address.inspect}" do
+          content_entry[:email] = address
+          is_expected.to eq true
+        end
+
+      end
+
+      ['ada', 'ada@@example.com', 'ada lovelace@example.com', "ada@example.com\n", "ada\r\n@example.com",
+       'ada@example.com, grace@example.org', 'grace,ada@example.org', 'Ada <ada@example.com>', "ada\0@example.com",
+       "ada@example.com\x7F", "ad\xFFa@example.com".dup.force_encoding('UTF-8'), 'ada@-example.com', 'ada@example-.com',
+       'jūratė@example.lt', 'ada@bücher.example'].each do |address|
+
+        it "refuses #{address.inspect}" do
+          content_entry[:email] = address
+          subject
+          expect(content_entry.errors[:email]).to eq ['is invalid']
+        end
+
+      end
+
+      it 'reports a value that is no text once' do
+        content_entry[:email] = ['ada@example.com']
+        subject
+        expect(content_entry.errors[:email]).to eq ['is invalid']
+      end
+
+      context 'built new with an address the rule refuses' do
+
+        let(:attributes) { { title: 'Hello', email: 'Ada <ada@example.com>' } }
+
+        it 'is invalid' do
+          subject
+          expect(content_entry.errors[:email]).to eq ['is invalid']
+        end
+
+      end
+
+      context 'stored with an address the rule refuses' do
+
+        let(:attributes) { { _id: 'stored-1', title: 'Hello', email: 'ada@example.com, grace@example.org' } }
+
+        it 'takes a change that leaves the address alone' do
+          content_entry.change(title: 'Changed')
+          is_expected.to eq true
+        end
+
+        it 'refuses a change that writes another address the rule refuses' do
+          content_entry.change(email: 'Ada <ada@example.com>')
+          subject
+          expect(content_entry.errors[:email]).to eq ['is invalid']
+        end
+
+        it 'refuses an address the rule refuses, written field by field' do
+          content_entry[:email] = 'Ada <ada@example.com>'
+          subject
+          expect(content_entry.errors[:email]).to eq ['is invalid']
+        end
+
+      end
+
+      it 'refuses a translation that holds no plain address' do
+        content_entry[:email] = build_i18n_field(en: 'ada@example.com', fr: 'Ada <ada@example.com>')
+        subject
+        expect(content_entry.errors[:email]).to eq ['is invalid']
+      end
+
+    end
+
     context 'a required belongs_to' do
 
       let(:field) { instance_double('Field', name: :maker, type: :belongs_to, write_only?: false, persisted_name: 'maker_id') }

@@ -54,6 +54,50 @@ describe Locomotive::Steam::Middlewares::Auth::AuthOptions do
 
   end
 
+  describe '#valid?' do
+
+    let(:params) { { auth_action: 'sign_in', auth_content_type: 'accounts', auth_id: 'john@doe.net', auth_password: 'easyone' } }
+
+    def options_with(extra)
+      described_class.new(site, params.merge(extra).with_indifferent_access)
+    end
+
+    it 'takes a known action whose values are strings and whose entry is a hash' do
+      expect(options_with({})).to be_valid
+      expect(options_with(auth_entry: { 'email' => 'john@doe.net' })).to be_valid
+    end
+
+    it 'takes the numbers and booleans a JSON client sends as values' do
+      expect(options_with(auth_id: 42, auth_password: 123456, auth_reset_token: 7, auth_disable_email: true)).to be_valid
+    end
+
+    it 'refuses an unknown action' do
+      [nil, 'sign_off', ['sign_in']].each { |action| expect(options_with(auth_action: action)).not_to be_valid }
+    end
+
+    %w(auth_content_type auth_id_field auth_password_field auth_callback auth_email_subject auth_email_handle
+       auth_email_smtp_namespace).each do |name|
+
+      it "refuses #{name} other than a string" do
+        [42, true, ['x'], { 'x' => 'y' }].each { |value| expect(options_with(name => value)).not_to be_valid }
+      end
+
+    end
+
+    %w(auth_id auth_password auth_reset_token auth_disable_email g-recaptcha-response).each do |name|
+
+      it "refuses #{name} as an array or a hash" do
+        [['x'], { 'x' => 'y' }].each { |value| expect(options_with(name => value)).not_to be_valid }
+      end
+
+    end
+
+    it 'refuses an entry other than a hash' do
+      ['john@doe.net', ['john@doe.net']].each { |value| expect(options_with(auth_entry: value)).not_to be_valid }
+    end
+
+  end
+
 end
 
 describe Locomotive::Steam::Middlewares::Auth do
