@@ -7,6 +7,21 @@ describe Locomotive::Steam::Middlewares::Concerns::Helpers do
   let(:middleware)  { Class.new { include Locomotive::Steam::Middlewares::Concerns::Helpers } }
   let(:instance)    { middleware.new }
 
+  describe '#inject_cookies' do
+
+    it 'writes each cookie, leaving the ones kept for the request as they are' do
+      cookies = { 'cart' => { 'value' => '1' } }
+      allow(instance).to receive(:env).and_return('steam.cookies' => cookies)
+      headers = {}
+
+      instance.inject_cookies(headers)
+
+      expect(headers['set-cookie']).to include 'cart=1'
+      expect(cookies).to eq('cart' => { 'value' => '1' })
+    end
+
+  end
+
   describe '#redirect_to' do
 
     subject { instance.redirect_to(location)[1]['location'] }

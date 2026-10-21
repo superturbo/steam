@@ -4,33 +4,53 @@ describe Locomotive::Steam::CookieService do
 
   let(:steam_cookies)   { {} }
   let(:request_cookies) { {} }
-  let(:request)         { instance_double('Request', env: { 'steam.cookies' => steam_cookies }, cookies: request_cookies) }
-  let(:cookie)          { {'value' => 'bar2'} }
+  let(:ssl)             { false }
+  let(:request)         { instance_double('Request', env: { 'steam.cookies' => steam_cookies }, cookies: request_cookies, ssl?: ssl) }
   let(:service)         { described_class.new(request) }
 
-  describe '#get cookies from request' do
+  describe '#get' do
 
-    let(:request_cookies) { {'foo' => 'bar'} }
-    subject { service.get('foo') }
+    let(:request_cookies) { { 'foo' => 'bar' } }
 
-    context 'from request' do
-      it { is_expected.to eq 'bar' }
+    it 'reads a cookie of the request' do
+      expect(service.get('foo')).to eq 'bar'
     end
 
-    context 'from response' do
-      let(:steam_cookies) { {'foo' => {'value' => 'bar2'}} }
-      it { is_expected.to eq 'bar2' }
+    it 'reads a cookie set this request, whatever its keys' do
+      service.set('foo', { 'value' => 'bar2' })
+      expect(service.get('foo')).to eq 'bar2'
+
+      service.set('foo', { value: 'bar3' })
+      expect(service.get('foo')).to eq 'bar3'
     end
 
   end
 
-  describe '#set cookies from response' do
+  describe '#set' do
 
-    subject { service.set('foo', cookie) }
+    it 'keeps the values under symbols, leaving the given ones as they are' do
+      given = { 'value' => 'bar2', 'path' => '/' }
 
-    it 'set the cookies into steam' do
-      is_expected.to eq cookie
-      expect(steam_cookies).to eq({'foo' => cookie})
+      service.set('foo', given)
+
+      expect(steam_cookies).to eq('foo' => { value: 'bar2', path: '/', secure: false })
+      expect(given).to eq('value' => 'bar2', 'path' => '/')
+    end
+
+    context 'over HTTPS' do
+
+      let(:ssl) { true }
+
+      it 'marks the cookie secure unless told otherwise' do
+        service.set('kept', { 'value' => '1' })
+        service.set('unsaid', { 'value' => '2', 'secure' => nil })
+        service.set('plain', { 'value' => '3', 'secure' => false })
+
+        expect(steam_cookies['kept'][:secure]).to eq true
+        expect(steam_cookies['unsaid'][:secure]).to eq true
+        expect(steam_cookies['plain'][:secure]).to eq false
+      end
+
     end
 
   end

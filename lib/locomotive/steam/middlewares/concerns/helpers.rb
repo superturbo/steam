@@ -58,7 +58,7 @@ module Locomotive::Steam
         def inject_cookies(headers)
           _cookies = env['steam.cookies'] || {}
           _cookies.each do |key, vals|
-            Rack::Utils.set_cookie_header!(headers, key, vals.symbolize_keys!)
+            Rack::Utils.set_cookie_header!(headers, key, vals.symbolize_keys)
           end
         end
 

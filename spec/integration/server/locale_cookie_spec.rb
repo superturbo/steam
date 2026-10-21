@@ -14,6 +14,29 @@ describe Locomotive::Steam::Server do
       .find { |cookie| cookie.start_with?('steam-locale=') }
   end
 
+  describe 'a cookie an action sets' do
+
+    def visitor_cookie
+      Array(last_response.headers['set-cookie'])
+        .flat_map { |header| header.split("\n") }
+        .find { |cookie| cookie.start_with?('visitor=') }
+    end
+
+    it 'is not marked Secure over HTTP' do
+      get '/tags/cookie-action'
+
+      expect(visitor_cookie).to start_with('visitor=first')
+      expect(visitor_cookie).not_to match(/;\s*secure/i)
+    end
+
+    it 'is marked Secure over HTTPS' do
+      get 'https://example.org/tags/cookie-action'
+
+      expect(visitor_cookie).to match(/;\s*secure/i)
+    end
+
+  end
+
   describe 'the locale cookie' do
 
     it 'is not marked Secure over HTTP' do

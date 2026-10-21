@@ -10,12 +10,15 @@ module Locomotive
       end
 
       def set(key, vals)
-        @cookies[key] = vals
+        values = vals.symbolize_keys
+        values[:secure] = @request.ssl? if values[:secure].nil?
+
+        @cookies[key] = values
       end
 
       def get(key)
         if @cookies.include?(key)
-          @cookies[key]['value']
+          @cookies[key][:value]
         else
           @request.cookies[key]
         end
