@@ -68,7 +68,7 @@ module Locomotive
 
       def update(type_slug, id_or_slug, attributes, as_json = false)
         with_repository(type_slug) do |_repository|
-          entry             = _repository.by_slug(id_or_slug) || _repository.find(id_or_slug)
+          entry             = find_write_target!(_repository, id_or_slug)
           accepted, refused = split_public_input(_repository.content_type, attributes)
           _attributes       = prepare_attributes(_repository, accepted)
 
@@ -106,8 +106,7 @@ module Locomotive
 
       def delete(type_slug, id_or_slug)
         with_repository(type_slug) do |_repository|
-          entry = _repository.by_slug(id_or_slug) || _repository.find(id_or_slug)
-          _repository.delete(entry)
+          _repository.delete(find_write_target!(_repository, id_or_slug))
         end
       end
 
@@ -159,6 +158,16 @@ module Locomotive
         return if type.nil?
 
         yield(repository.with(type))
+      end
+
+      # Write targets include hidden entries.
+      def find_write_target!(_repository, id_or_slug)
+        entry = if id_or_slug.present?
+                  _repository.first(_slug: id_or_slug, _visible: nil) ||
+                    _repository.first(_id: id_or_slug, _visible: nil)
+                end
+
+        entry || raise(Models::Repository::RecordNotFound, 'could not find the content entry')
       end
 
       def _decorate(entry, as_json)

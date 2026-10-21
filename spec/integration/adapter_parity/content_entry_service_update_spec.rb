@@ -81,6 +81,94 @@ describe 'Adapter parity' do
           expect(service.find('submissions', created._id).name).to eq 'Ada'
         end
 
+        describe 'the entry a write names' do
+
+          let(:not_found) { [Locomotive::Steam::Models::Repository::RecordNotFound, 'could not find the content entry'] }
+
+          def submission_storing(values, attributes = {})
+            created    = service.create('submissions', valid.merge(attributes))
+            repository = entries_of('submissions')
+
+            repository.find(created._id).tap do |entry|
+              values.each { |name, value| entry[name] = value }
+              repository.update(entry)
+            end
+          end
+
+          def stored_submission(id)
+            entries_of('submissions').all(_id: id, _visible: nil).first
+          end
+
+          def run_action(script)
+            context = ::Liquid::Context.new({}, {}, { session: {}, cookies: {} })
+
+            Locomotive::Steam::ActionService.new(instance_double('Site', as_json: {}), nil, content_entry: service)
+              .run(script, {}, context)
+          end
+
+          it 'updates a hidden entry, which stays hidden' do
+            hidden = submission_storing(_visible: false)
+
+            updated = service.update('submissions', hidden._id, { name: 'Grace' }, true)
+
+            expect(updated['errors']).to be_blank
+            expect(stored_submission(hidden._id).attributes.values_at(:name, :_visible)).to eq ['Grace', false]
+          end
+
+          it 'finds a hidden entry by its slug' do
+            hidden = submission_storing({ _visible: false }, _slug: 'quiet-one')
+
+            service.update('submissions', 'quiet-one', { name: 'Grace' })
+
+            expect(stored_submission(hidden._id).name).to eq 'Grace'
+          end
+
+          it 'deletes a hidden entry' do
+            hidden = submission_storing(_visible: false)
+
+            service.delete('submissions', hidden._id)
+
+            expect(stored_submission(hidden._id)).to be_nil
+          end
+
+          it 'updates through updateEntry a hidden entry the template lists' do
+            hidden = submission_storing(_visible: false)
+
+            name = run_action("var listed = allEntries('submissions', { _visible: false }); " \
+                              "return updateEntry('submissions', listed[0]._id, { name: 'Grace' }).name;")
+
+            expect(name).to eq 'Grace'
+            expect(stored_submission(hidden._id).attributes.values_at(:name, :_visible)).to eq ['Grace', false]
+          end
+
+          ['no-such-entry', '0123456789abcdef01234567'].each do |unknown|
+
+            it "reports #{unknown.inspect} as not found to an update and a delete" do
+              expect { service.update('submissions', unknown, { name: 'Grace' }) }.to raise_error(*not_found)
+              expect { service.delete('submissions', unknown) }.to raise_error(*not_found)
+            end
+
+          end
+
+          [nil, ''].each do |blank|
+
+            it "reports #{blank.inspect} as not found, leaving an entry without a slug as it was" do
+              slugless = submission_storing(_slug: nil)
+
+              expect { service.update('submissions', blank, { name: 'Grace' }) }.to raise_error(*not_found)
+              expect { service.delete('submissions', blank) }.to raise_error(*not_found)
+              expect(stored_submission(slugless._id).name).to eq 'Ada'
+            end
+
+          end
+
+          it 'hands an unknown entry to updateEntry as an action error' do
+            expect { run_action("updateEntry('submissions', 'no-such-entry', { name: 'Grace' });") }
+              .to raise_error(Locomotive::Steam::ActionError, /could not find the content entry/)
+          end
+
+        end
+
         it 'treats nil as empty attributes' do
           created = service.create('submissions', valid)
 
