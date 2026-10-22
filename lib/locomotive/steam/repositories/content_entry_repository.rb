@@ -192,6 +192,10 @@ module Locomotive
           end
 
           value
+        elsif content_type.fields_by_persisted_name.key?(name.to_s)
+          # Ids read as text, as the entry's own _id does.
+          ids = entry.__stored_id__(name)
+          ids.is_a?(Array) ? ids.map(&:to_s) : ids&.to_s
         end
       end
 

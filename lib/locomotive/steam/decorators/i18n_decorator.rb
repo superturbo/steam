@@ -71,6 +71,11 @@ module Locomotive
           __localized_attributes__.include?(name.to_sym)
         end
 
+        # A stored id reads in the locale the decorator renders.
+        def __stored_id__(name)
+          __getobj__.__stored_id__(name, __locale__, __default_locale__)
+        end
+
         def __get_localized_value__(name)
           # A field the store never held reads as nil without materializing.
           return nil unless __getobj__.respond_to?(name.to_sym)

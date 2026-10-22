@@ -8,3 +8,15 @@ fields:
 - code:
     type: integer
     unique: true
+# Stored as object_id, a name Ruby objects answer for themselves.
+- object:
+    type: belongs_to
+    class_name: makers
+- grade:
+    type: select
+    localized: true
+    select_options:
+      en: [Gold, Silver]
+      fr: [Or, Argent]
+- stored_id:
+    type: string

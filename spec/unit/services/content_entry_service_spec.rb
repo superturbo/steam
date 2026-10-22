@@ -19,7 +19,7 @@ describe Locomotive::Steam::ContentEntryService do
     let(:email_field)  { instance_double('Field', name: :email, type: :email, is_relationship?: false, write_only?: false) }
     let(:fields)       { instance_double('Fields', json: [], selects: [], associations: []) }
     let(:content_type) do
-      instance_double('ContentType', invalid_entry_names: [], slug: 'articles', fields: fields, label_field_name: :title,
+      instance_double('ContentType', invalid_entry_names: [], fields_by_persisted_name: {}, slug: 'articles', fields: fields, label_field_name: :title,
                                      fields_by_name: { title: title_field, email: email_field }.with_indifferent_access,
                                      persisted_field_names: [:title, :email])
     end
@@ -124,7 +124,7 @@ describe Locomotive::Steam::ContentEntryService do
     let(:secret_field) { instance_double('Field', name: :secret, type: :password, write_only?: true, is_relationship?: false) }
     let(:fields)       { instance_double('Fields', json: [], selects: [], associations: []) }
     let(:content_type) do
-      instance_double('ContentType', invalid_entry_names: [], slug: 'accounts', fields: fields, label_field_name: :secret,
+      instance_double('ContentType', invalid_entry_names: [], fields_by_persisted_name: {}, slug: 'accounts', fields: fields, label_field_name: :secret,
                                      fields_by_name: { secret: secret_field }.with_indifferent_access,
                                      persisted_field_names: [])
     end
@@ -182,7 +182,7 @@ describe Locomotive::Steam::ContentEntryService do
     let(:adapter)         { Locomotive::Steam::MemoryAdapter.new(nil) }
     let(:fields)          { Locomotive::Steam::ContentTypeFieldRepository.new(adapter) }
     let(:content_type) do
-      instance_double('ContentType', invalid_entry_names: [], slug: 'accounts', fields: fields, label_field_name: :email,
+      instance_double('ContentType', invalid_entry_names: [], fields_by_persisted_name: {}, slug: 'accounts', fields: fields, label_field_name: :email,
                                      fields_by_name: fields.all.index_by(&:name).with_indifferent_access,
                                      persisted_field_names: ['email'])
     end
@@ -277,7 +277,7 @@ describe Locomotive::Steam::ContentEntryService do
     let(:tint_field)   { instance_double('Field', name: :tint, type: :color, persisted_name: 'tint', write_only?: false, is_relationship?: false) }
     let(:fields)       { instance_double('Fields', json: [], selects: [], associations: [], required: []) }
     let(:content_type) do
-      instance_double('ContentType', invalid_entry_names: [], slug: 'songs', fields: fields, label_field_name: :title,
+      instance_double('ContentType', invalid_entry_names: [], fields_by_persisted_name: {}, slug: 'songs', fields: fields, label_field_name: :title,
                                      fields_by_name: { title: title_field, cover: cover_field, secret: secret_field,
                                                        price: price_field, tint: tint_field }.with_indifferent_access,
                                      persisted_field_names: ['title'])

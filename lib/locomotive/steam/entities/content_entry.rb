@@ -68,7 +68,7 @@ module Locomotive::Steam
         end
 
         cast_value(name)
-      elsif attributes.include?(name)
+      elsif stored_id_name?(name) || attributes.include?(name)
         unresolved_input?(self[name]) ? nil : self[name]
       else
         super
@@ -150,9 +150,18 @@ module Locomotive::Steam
       super
     end
 
-    # A select answers for the option id it holds, as its reader does.
+    # A select answers for the option it holds, and a stored id name for itself.
     def respond_to_missing?(name, include_private = false)
-      (attributes.include?("#{name}_id") && select_field?(name)) || super
+      (attributes.include?("#{name}_id") && select_field?(name)) || stored_id_name?(name) || super
+    end
+
+    # Read as an attribute: a stored name such as object_id is also a Ruby method.
+    def __stored_id__(name, locale = nil, default_locale = nil)
+      value = self[name.to_sym]
+      return if unresolved_input?(value)
+      return value unless value.respond_to?(:translations)
+
+      value[locale] || (default_locale && value[default_locale])
     end
 
     def _label
@@ -360,6 +369,10 @@ module Locomotive::Steam
       value.is_a?(Hash) ? field.translations = value : field[locale || site.default_locale] = value
 
       field
+    end
+
+    def stored_id_name?(name)
+      !content_type.nil? && content_type.fields_by_persisted_name.key?(name.to_s)
     end
 
     def is_dynamic_attribute?(name)

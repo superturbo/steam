@@ -72,11 +72,74 @@ describe 'Liquid adapter parity' do
       render_template(source, context)
     end
 
+    def render_liquid_in(locale, source)
+      services.locale = locale
+      render_template(source, ::Liquid::Context.new(assigns, {}, { services: services, locale: locale, site: site,
+                                                                    file_system: file_system }))
+    ensure
+      services.locale = AdapterParityFixture::LOCALE
+    end
+
+    def stored_entry(type_slug, slug)
+      repositories = services.repositories
+      repositories.content_entry.with(repositories.content_type.by_slug(type_slug)).all(_slug: slug, _visible: nil).first
+    end
+
     it 'reaches a content type named by a variable' do
       source = "{% assign type = 'specimens' %}" \
                '{% for entry in contents[type] %}[{{ entry.name }}]{% endfor %}'
 
       expect(render_liquid(source)).to eq '[All missing][Arrays][Embedded][Explicit nils][Scalars][Zero]'
+    end
+
+    describe 'the ids an entry stores' do
+
+      def scalars_render(locale, body)
+        render_liquid_in(locale, "{% with_scope _slug: 'scalars' %}{% for entry in contents.specimens %}#{body}" \
+                                 '{% endfor %}{% endwith_scope %}')
+      end
+
+      it 'renders the ids of a select and of links' do
+        scalars = stored_entry('specimens', 'scalars')
+
+        expect(scalars_render(AdapterParityFixture::LOCALE, '[{{ entry.category_id }}|{{ entry.maker_id }}]'))
+          .to eq "[#{scalars[:category_id]}|#{scalars[:maker_id]}]"
+      end
+
+      it 'renders each id of a list of links' do
+        scalars = stored_entry('specimens', 'scalars')
+
+        expect(scalars_render(AdapterParityFixture::LOCALE, '{% for id in entry.topic_ids %}{{ id }},{% endfor %}'))
+          .to eq scalars[:topic_ids].map { |id| "#{id}," }.join
+      end
+
+      def voucher_render(locale, body)
+        render_liquid_in(locale, "{% with_scope _slug: 'linked-voucher' %}{% for voucher in contents.vouchers %}#{body}" \
+                                 '{% endfor %}{% endwith_scope %}')
+      end
+
+      it 'renders the id of a localized select in the locale that reads' do
+        grade = stored_entry('vouchers', 'linked-voucher')[:grade_id]
+
+        expect(%w(en fr).map { |locale| grade[locale] }.uniq.size).to eq 2
+        %w(en fr).each do |locale|
+          expect(voucher_render(locale, '{{ voucher.grade_id }}')).to eq grade[locale].to_s
+        end
+      end
+
+      it 'reads a field named stored_id as any other field' do
+        voucher = stored_entry('vouchers', 'linked-voucher')
+
+        expect([voucher.stored_id, voucher.to_hash['stored_id']]).to eq %w(kept kept)
+        expect(voucher_render(AdapterParityFixture::LOCALE, '{{ voucher.stored_id }}')).to eq 'kept'
+      end
+
+      it 'renders a stored id whose name a Ruby object answers for itself' do
+        maker = stored_entry('makers', 'maker-one')
+
+        expect(voucher_render(AdapterParityFixture::LOCALE, '{{ voucher.object_id }}')).to eq maker._id.to_s
+      end
+
     end
 
     it 'renders the label of the option an entry holds' do

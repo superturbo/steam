@@ -172,6 +172,30 @@ describe 'Adapter parity' do
 
       end
 
+      describe 'reading the ids an entry stores' do
+
+        it 'reads the ids of a select and of links by their stored names' do
+          scalars = specimens.by_slug('scalars')
+
+          expect([scalars.category_id, scalars.maker_id, scalars.topic_ids])
+            .to eq [scalars[:category_id], scalars[:maker_id], scalars[:topic_ids]]
+          expect([scalars.category_id, scalars.maker_id]).to all(be_present)
+        end
+
+        it 'reads nil where it stores none' do
+          missing = specimens.by_slug('all-missing')
+
+          expect([missing.category_id, missing.maker_id, missing.topic_ids]).to eq [nil, nil, nil]
+          expect(%i(category_id maker_id topic_ids).map { |name| missing.respond_to?(name) }).to all(be true)
+        end
+
+        it 'knows no id the type does not store' do
+          expect { specimens.by_slug('scalars').foo_id }.to raise_error(NoMethodError)
+          expect(specimens.by_slug('scalars').respond_to?(:foo_id)).to be false
+        end
+
+      end
+
       describe 'reading the system timestamps' do
 
         it 'reads missing timestamps as nil' do

@@ -4,7 +4,7 @@ describe Locomotive::Steam::ContentEntry do
 
   let(:fields)      { nil }
   let(:repository)  { instance_double('FieldRepository', all: fields, selects: []) }
-  let(:type)        { instance_double('ContentType', slug: 'articles', label_field_name: :title, fields: repository) }
+  let(:type)        { instance_double('ContentType', slug: 'articles', label_field_name: :title, fields: repository, fields_by_persisted_name: {}) }
   let(:attributes)  { { title: 'Hello world', _slug: 'hello-world' } }
   let(:content_entry) { described_class.new(attributes) }
 
@@ -1238,6 +1238,29 @@ describe Locomotive::Steam::ContentEntry do
     Locomotive::Steam::Models::I18nField.new(:my_field, translations)
   end
 
+  describe '#__stored_id__' do
+
+    it 'reads the id a localized select stores in a locale, else in the default locale' do
+      entry = described_class.new(tier_id: Locomotive::Steam::Models::I18nField.new(:tier_id, 'en' => 1, 'fr' => 2))
+
+      expect([entry.__stored_id__(:tier_id, 'fr', 'en'), entry.__stored_id__(:tier_id, 'de', 'en')]).to eq [2, 1]
+    end
+
+    it 'reads a refused link as no id' do
+      entry = described_class.new(maker_id: Locomotive::Steam::ContentEntry::INVALID_LINK_VALUE)
+
+      expect(entry.__stored_id__(:maker_id, 'en')).to be_nil
+    end
+
+    it 'reads a select refused in any locale as no id, in every locale' do
+      refused = Locomotive::Steam::ContentEntry::INVALID_SELECT_VALUE
+      entry   = described_class.new(tier_id: Locomotive::Steam::Models::I18nField.new(:tier_id, 'en' => 1, 'fr' => refused))
+
+      expect([entry.__stored_id__(:tier_id, 'en'), entry.__stored_id__(:tier_id, 'fr')]).to eq [nil, nil]
+    end
+
+  end
+
   describe '#respond_to?' do
 
     it 'answers for an attribute before the entry has a content type' do
@@ -1421,7 +1444,7 @@ describe Locomotive::Steam::ContentEntry do
   describe 'a password field chosen as the label' do
 
     let(:secret_field) { instance_double('Field', name: :secret, type: :password, write_only?: true, is_relationship?: false) }
-    let(:type)         { instance_double('ContentType', slug: 'accounts', label_field_name: :secret, fields: repository) }
+    let(:type)         { instance_double('ContentType', slug: 'accounts', label_field_name: :secret, fields: repository, fields_by_persisted_name: {}) }
     let(:attributes)   { { secret: 'plain-secret-1', _slug: 'someone' } }
 
     before do

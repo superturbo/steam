@@ -1,1 +1,7 @@
-[]
+- Linked voucher:
+    _slug: linked-voucher
+    object: maker-one
+    grade:
+      en: Gold
+      fr: Argent
+    stored_id: kept
