@@ -138,7 +138,8 @@ describe Locomotive::Steam::AuthService do
 
     { nil => 'is too short (minimum is 6 characters)', '' => 'is too short (minimum is 6 characters)',
       '   ' => 'is too short (minimum is 6 characters)', '      ' => 'is invalid',
-      ['easyone'] => 'is invalid', "easy\0one" => 'is invalid', 'ą' * 37 => 'is invalid' }.each do |password, message|
+      ['easyone'] => 'is invalid', "easy\0one" => 'is invalid', "#{'a' * 80}\0" => 'is invalid',
+      'a' * 73 => 'is too long', 'ą' * 37 => 'is too long' }.each do |password, message|
       context "without a usable password: #{password.inspect}" do
 
         let(:entry_attributes) { { email: 'chris@soundgarden.band', password: password } }

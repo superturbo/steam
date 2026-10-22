@@ -18,6 +18,7 @@ ru:
     messages:
       blank: не может быть пустым
       invalid: имеет неверное значение
+      password_too_long: "слишком большой длины"
       taken: уже существует
       confirmation: не совпадает со значением поля %{attribute}
       too_short:

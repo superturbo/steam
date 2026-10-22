@@ -18,6 +18,7 @@ de:
     messages:
       blank: "leer"
       invalid: ist nicht gültig
+      password_too_long: "ist zu lang"
       taken: ist bereits vergeben
       confirmation: stimmt nicht mit %{attribute} überein
       too_short:

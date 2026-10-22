@@ -9,6 +9,14 @@ describe "#locales" do
       end
     end
 
+    it "#{locale_file} names every error message en.yml names" do
+      english  = YAML.load_file('config/locales/en.yml')['en'].dig('errors', 'messages')
+      messages = YAML.load_file(locale_file).values.first.dig('errors', 'messages')
+
+      expect(english.keys - messages.keys).to be_empty
+      expect(messages.values_at(*english.keys)).to all(be_present)
+    end
+
     # unless locale_file == 'config/locales/en.yml'
     #   describe "#{locale_file}" do
     #     it_behaves_like 'complete translation of' do

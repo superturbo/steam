@@ -208,6 +208,8 @@ module Locomotive
 
         if field && ContentEntry.blank_password?(password) && password.to_s.size < ContentEntry::MIN_PASSWORD_LENGTH
           entry.errors.add(name, :too_short, count: ContentEntry::MIN_PASSWORD_LENGTH)
+        elsif field && ContentEntry.password_too_long?(password)
+          entry.errors.add(name, :password_too_long)
         else
           entry.errors.add(name, :invalid)
         end

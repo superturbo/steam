@@ -18,6 +18,7 @@ it:
     messages:
       blank: "non può essere lasciato in bianco"
       invalid: non è valido
+      password_too_long: "è troppo lunga"
       taken: è già presente
       confirmation: non coincide con %{attribute}
       too_short:

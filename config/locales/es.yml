@@ -18,6 +18,7 @@ es:
     messages:
       blank: "no puede estar en blanco"
       invalid: no es válido
+      password_too_long: "es demasiado largo"
       taken: ya está en uso
       confirmation: no coincide
       too_short:

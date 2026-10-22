@@ -18,6 +18,7 @@ et:
     messages:
       blank: "tühi"
       invalid: ei ole korrektne
+      password_too_long: "on liiga pikk"
       taken: on juba võetud
       confirmation: ei vasta kinnitusele
       too_short: on liiga lühike (miinimum on %{count} tähemärki)

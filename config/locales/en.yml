@@ -29,6 +29,7 @@ en:
     messages:
       blank: "can't be blank"
       invalid: "is invalid"
+      password_too_long: "is too long"
       taken: "must be unique"
       confirmation: doesn't match %{attribute}
       too_short:

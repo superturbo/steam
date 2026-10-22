@@ -91,16 +91,22 @@ describe 'Adapter parity' do
           refuses({ secret: 'easy' }, 'secret', 'is too short (minimum is 6 characters)')
         end
 
-        [false, [], {}, 123456, "\xFFeasyone".dup.force_encoding('UTF-8'), "easy\0one"].each do |bad|
+        [false, [], {}, 123456, "\xFFeasyone".dup.force_encoding('UTF-8'), "easy\0one", "#{'a' * 80}\0"].each do |bad|
           it "refuses #{bad.inspect} as a password" do
             refuses({ secret: bad }, 'secret')
           end
         end
 
-        it 'refuses a password longer than bcrypt reads, counted in bytes' do
-          refuses({ secret: 'ą' * 37 }, 'secret')
+        it 'reports a password longer than bcrypt reads as too long, counted in bytes' do
+          refuses({ secret: 'a' * 73 }, 'secret', 'is too long')
+          refuses({ secret: 'ą' * 37 }, 'secret', 'is too long')
 
-          expect(create_with(secret: 'ą' * 36)['errors']).to be_blank
+          ['a' * 72, 'ą' * 36].each do |longest|
+            created = create_with(secret: longest)
+
+            expect(created['errors']).to be_blank
+            expect(stored_password?(created['_id'], longest)).to be true
+          end
         end
 
         [['a mismatch', 'oneeasy'], ['no text', false]].each do |label, confirmation|

@@ -18,6 +18,7 @@ nl:
     messages:
       blank: "mag niet leeg zijn"
       invalid: is ongeldig
+      password_too_long: "is te lang"
       taken: is al in gebruik
       confirmation: komt niet overeen met %{attribute}
       too_short:

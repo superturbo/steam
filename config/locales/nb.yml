@@ -22,6 +22,7 @@ nb:
     messages:
       blank: "kan ikke være blank"
       invalid: er ugyldig
+      password_too_long: "er for lang"
       taken: er allerede i bruk
       confirmation: er ikke lik %{attribute}
       too_short: er for kort (minimum %{count} tegn)

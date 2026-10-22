@@ -18,6 +18,7 @@ pt-BR:
     messages:
       blank: "não pode ficar em branco"
       invalid: não é válido
+      password_too_long: "é muito longo"
       taken: já está em uso
       confirmation: não é igual a %{attribute}
       too_short:

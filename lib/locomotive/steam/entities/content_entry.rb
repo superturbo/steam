@@ -26,6 +26,10 @@ module Locomotive::Steam
       usable_password?(value) && value.bytesize <= MAX_PASSWORD_BYTES
     end
 
+    def self.password_too_long?(value)
+      usable_password?(value) && value.bytesize > MAX_PASSWORD_BYTES
+    end
+
     # No password given: a write leaves the stored one as it is.
     def self.blank_password?(value)
       value.nil? || (value.is_a?(String) && value.valid_encoding? && value.blank?)
@@ -228,8 +232,10 @@ module Locomotive::Steam
 
         next if self.class.blank_password?(password)
 
-        if !self.class.storable_password?(password)
+        if !self.class.usable_password?(password)
           errors.add(name, :invalid)
+        elsif self.class.password_too_long?(password)
+          errors.add(name, :password_too_long)
         elsif password.size < MIN_PASSWORD_LENGTH
           errors.add(name, :too_short, count: MIN_PASSWORD_LENGTH)
         else

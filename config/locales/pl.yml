@@ -18,6 +18,7 @@ pl:
     messages:
       blank: "nie może być puste"
       invalid: jest nieprawidłowe
+      password_too_long: "jest za długie"
       taken: zostało już zajęte
       confirmation: nie zgadza się z polem %{attribute}
       too_short:

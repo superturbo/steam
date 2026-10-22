@@ -19,6 +19,7 @@ fr:
     messages:
       blank: "doit être rempli(e)"
       invalid: n'est pas valide
+      password_too_long: "est trop long"
       taken: n'est pas disponible
       confirmation: "ne concorde pas avec %{attribute}"
       too_short:

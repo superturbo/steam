@@ -18,6 +18,12 @@ el:
     messages:
       blank: "Δεν μπορεί να είναι κενό"
       invalid: δεν είναι έγκυρο
+      password_too_long: "είναι πολύ μεγάλο"
+      taken: "το έχουν ήδη χρησιμοποιήσει"
+      confirmation: "δεν ταιριάζει με %{attribute}"
+      too_short:
+        one: "είναι πολύ μικρό (το ελάχιστο μήκος είναι %{count} χαρακτήρας)"
+        other: "είναι πολύ μικρό (το ελάχιστο μήκος είναι %{count} χαρακτήρες)"
 
   pagination:
     previous: "&laquo; Προηγούμενο"
