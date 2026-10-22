@@ -81,10 +81,12 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::Page do
     let(:site_path) { Dir.mktmpdir }
     let(:scope)     { instance_double('Scope', locale: :en, default_locale: :en, locales: [:en]) }
     let(:path)      { File.join(site_path, 'app', 'views', 'pages', 'index.liquid') }
+    let(:header)    { "---\ntitle: Pradžia\n---\n" }
+    let(:body)      { '<p>Labas</p>' }
 
     before do
       FileUtils.mkdir_p(File.dirname(path))
-      File.binwrite(path, "---\ntitle: Pradžia\n---\n".b + body.b)
+      File.binwrite(path, header.b + body.b)
     end
 
     after { FileUtils.remove_entry(site_path) }
@@ -95,6 +97,58 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::Page do
 
       it 'loads its attributes' do
         expect(loader.load(scope).first[:title]).to eq(en: 'Pradžia')
+      end
+
+    end
+
+    { 'no header' => '', 'an empty header' => "---\n---\n" }.each do |description, empty|
+
+      context "with #{description}" do
+
+        let(:header) { empty }
+
+        it 'loads the page with the attributes of its path' do
+          expect(loader.load(scope).first[:title]).to eq(en: 'Index')
+        end
+
+      end
+
+    end
+
+    { 'a text' => 'Home page', 'a list' => '- Home', 'an explicit null' => '~', 'only a comment' => '# soon' }.each do |description, value|
+
+      context "whose header holds #{description}" do
+
+        let(:header) { "---\n#{value}\n---\n" }
+
+        it 'is refused with its path' do
+          expect { loader.load(scope) }.to raise_error(Locomotive::Steam::TemplateError) { |error|
+            expect(error.message).to eq 'The header must hold attributes'
+            expect(error.template_name).to eq path
+            expect(error.backtrace).not_to be_empty
+          }
+        end
+
+      end
+
+    end
+
+    context 'whose header names an attribute by a number' do
+
+      let(:header) { "---\n1: value\n---\n" }
+
+      it 'is refused with its path' do
+        expect { loader.load(scope) }.to raise_error("Malformed YAML in this file #{path}, error: every key must be text")
+      end
+
+    end
+
+    context 'whose header cannot be parsed' do
+
+      let(:header) { "---\ntitle: [unclosed\n---\n" }
+
+      it 'is refused with its path and the parser message' do
+        expect { loader.load(scope) }.to raise_error(/\AMalformed YAML in this file #{Regexp.escape(path)}, error: .*flow sequence/)
       end
 
     end

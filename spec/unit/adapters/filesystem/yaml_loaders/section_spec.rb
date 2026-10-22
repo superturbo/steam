@@ -28,6 +28,21 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::Section do
 
     subject { loader.send(:load_file, filepath) }
 
+    describe 'a YAML header that holds no attributes' do
+
+      let(:dir)      { Dir.mktmpdir }
+      let(:filepath) { File.join(dir, 'banner.liquid').tap { |file| File.write(file, "---\nBanner\n---\n<div></div>\n") } }
+
+      after { FileUtils.remove_entry(dir) }
+
+      it 'is refused with its path' do
+        expect { subject }.to raise_error(Locomotive::Steam::TemplateError, 'The header must hold attributes') { |error|
+          expect(error.template_name).to eq filepath
+        }
+      end
+
+    end
+
     describe 'error in the json header' do
 
       let(:filepath) { File.join(default_fixture_site_path, '..', 'errors', 'section_bad_json_header.liquid') }

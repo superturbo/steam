@@ -8,6 +8,38 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoader do
   let(:host)   { Class.new { include Locomotive::Steam::Adapters::Filesystem::YAMLLoader } }
   let(:loader) { host.new('/site') }
 
+  describe '#safe_yaml_load' do
+
+    def load(yaml, &block)
+      loader.safe_yaml_load(yaml, nil, 'data/topics.yml', &block)
+    end
+
+    it 'reads a list of entries as a data file holds it' do
+      expect(load("- name: A\n- name: B\n")).to eq [{ name: 'A' }, { name: 'B' }]
+    end
+
+    it 'reads a value a data file holds on its own' do
+      expect([load("42\n"), load("plain text\n")]).to eq [42, 'plain text']
+    end
+
+    it 'reads a key written as a symbol' do
+      expect(load(":name: A\n")).to eq(name: 'A')
+    end
+
+    ["1: value\n", "topic:\n  true: value\n", "- name: A\n- 2.5: B\n"].each do |yaml|
+      it "refuses #{yaml.inspect}, whose keys are not all text, with its path" do
+        expect { load(yaml) }.to raise_error('Malformed YAML in this file data/topics.yml, error: every key must be text')
+      end
+    end
+
+    it 'leaves what the block raises as it is' do
+      [StandardError.new('from the caller'), Interrupt.new].each do |raised|
+        expect { load("name: A\n") { raise raised } }.to raise_error { |error| expect(error).to equal raised }
+      end
+    end
+
+  end
+
   describe '#safe_json_load' do
 
     subject { loader.safe_json_load(json, nil, 'page.json') }

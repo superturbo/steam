@@ -37,7 +37,10 @@ module Locomotive::Steam
             # YAML header?
             elsif frontmatter && match = yaml.match(strict ? YAML_FRONTMATTER_REGEXP : FRONTMATTER_REGEXP)
               yaml, template = match[:yaml], match[:template]
-              safe_yaml_load(yaml, template, path, &block)
+              safe_yaml_load(yaml, template, path) do |attributes, header_template|
+                check_header(attributes, path)
+                block&.call(attributes, header_template)
+              end
 
             elsif frontmatter
               message = 'Your file requires a valid YAML or JSON header'
@@ -56,13 +59,37 @@ module Locomotive::Steam
         def safe_yaml_load(yaml, template, path, &block)
           return {} if yaml.blank?
 
-          begin
-            HashConverter.to_sym(YAML.load(yaml)).tap do |attributes|
-              block.call(attributes, template) if block_given?
-            end
-          rescue Exception => e
+          HashConverter.to_sym(parse_yaml(yaml, path)).tap do |attributes|
+            block.call(attributes, template) if block_given?
+          end
+        end
+
+        # Keep the file path on YAML parsing and key errors.
+        def parse_yaml(yaml, path)
+          document = begin
+            YAML.load(yaml)
+          rescue Psych::Exception => e
             raise "Malformed YAML in this file #{path}, error: #{e.message}"
           end
+
+          return document if text_keys?(document)
+
+          raise "Malformed YAML in this file #{path}, error: every key must be text"
+        end
+
+        def text_keys?(value)
+          case value
+          when Hash  then value.all? { |key, nested| (key.is_a?(String) || key.is_a?(Symbol)) && text_keys?(nested) }
+          when Array then value.all? { |nested| text_keys?(nested) }
+          else true
+          end
+        end
+
+        # A header holds the attributes of its template.
+        def check_header(attributes, path)
+          return if attributes.is_a?(Hash)
+
+          raise Locomotive::Steam::TemplateError.new('The header must hold attributes', path, nil, nil, nil)
         end
 
         def safe_json_load(json, template, path, &block)
