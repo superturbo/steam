@@ -340,12 +340,24 @@ describe 'Adapter parity' do
               expect(stored_topic_ids(create_with(topic_ids: ids.map(&:to_s)))).to eq ids
             end
 
-            [[], nil].each do |none|
+            [[], nil, ['']].each do |none|
 
               it "links nothing with #{none.inspect}" do
                 expect(links_of(create_with(topic_ids: none)['_id']).last).to eq []
               end
 
+            end
+
+            it 'skips the empty text a form sends with its choices' do
+              expect(stored_topic_ids(create_with(topic_ids: ['', topic('topic-a').to_s]))).to eq [topic('topic-a')]
+            end
+
+            it 'clears the stored links with the empty text alone' do
+              created = create_with(topic_ids: [topic('topic-a').to_s])
+
+              service.update('specimens', created['_id'], { topic_ids: [''] })
+
+              expect(links_of(created['_id']).last).to eq []
             end
 
             it 'refuses the same list given as a symbol and as a text key' do
@@ -362,7 +374,8 @@ describe 'Adapter parity' do
               'a text instead of a list'    => -> { topic('topic-a').to_s },
               'a nested list'               => -> { [[topic('topic-a').to_s]] },
               'a hash in the list'          => -> { [{ 'a' => 1 }] },
-              'a null in the list'          => -> { [nil] }
+              'a null in the list'          => -> { [nil] },
+              'a blank text in the list'    => -> { [' '] }
             }.each do |description, ids|
 
               it "refuses #{description}" do

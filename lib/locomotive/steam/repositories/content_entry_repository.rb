@@ -291,8 +291,13 @@ module Locomotive
       end
 
       def link_values_to_ids(field, values)
-        return values if values.nil? || values == []
+        return if values.nil?
         return ContentEntry::INVALID_LINK_VALUE unless values.is_a?(Array)
+
+        # An empty hidden input lets a form clear every selection.
+        values = values.reject { |value| value == '' }
+
+        return values if values.empty?
 
         # A stored schema may name a target type that no longer exists.
         target_type = content_type_repository.find(field.target_id)
