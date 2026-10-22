@@ -27,8 +27,7 @@ module Locomotive
 
       def find(type_slug, id_or_slug, as_json = false)
         with_repository(type_slug) do |_repository|
-          entry = _repository.by_slug(id_or_slug) || _repository.find(id_or_slug)
-          _decorate(entry, as_json)
+          _decorate(find_entry(_repository, id_or_slug), as_json)
         end
       end
 
@@ -162,12 +161,15 @@ module Locomotive
 
       # Write targets include hidden entries.
       def find_write_target!(_repository, id_or_slug)
-        entry = if id_or_slug.present?
-                  _repository.first(_slug: id_or_slug, _visible: nil) ||
-                    _repository.first(_id: id_or_slug, _visible: nil)
-                end
+        find_entry(_repository, id_or_slug, _visible: nil) ||
+          raise(Models::Repository::RecordNotFound, 'could not find the content entry')
+      end
 
-        entry || raise(Models::Repository::RecordNotFound, 'could not find the content entry')
+      # A blank identifier names no entry.
+      def find_entry(_repository, id_or_slug, **visibility)
+        return if id_or_slug.blank?
+
+        _repository.first(_slug: id_or_slug, **visibility) || _repository.first(_id: id_or_slug, **visibility)
       end
 
       def _decorate(entry, as_json)
