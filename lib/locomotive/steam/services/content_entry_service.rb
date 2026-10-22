@@ -217,6 +217,7 @@ module Locomotive
       def prepare_attributes(_repository, attributes)
         # Option names and link references are data to look up, not text to render.
         attributes = _repository.resolve_belongs_to(_repository.resolve_selects(attributes))
+        attributes = _repository.resolve_many_to_many(attributes)
 
         fields       = _repository.content_type.fields
         links        = fields.associations.select { |field| field.type == :belongs_to }

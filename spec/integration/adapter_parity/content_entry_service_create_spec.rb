@@ -19,7 +19,7 @@ describe 'Adapter parity' do
 
         include_context 'adapter parity service writing'
 
-        describe 'linking a belongs_to by its name' do
+        describe 'linking entries' do
 
           let(:base) { { category: 'alpha' } }
 
@@ -51,18 +51,23 @@ describe 'Adapter parity' do
           # The shared cleanup misses a maker another site holds; drop what was inserted.
           after { raw_entries.delete_many('_id' => { '$in' => inserted_ids }) if inserted_ids.any? }
 
-          def store_maker(id: nil, slug:, site_id: nil, visible: true)
+          def store_maker(**options)
+            store_entry('makers', 'maker-two', **options)
+          end
+
+          def store_entry(type_slug, model_slug, id: nil, slug:, site_id: nil, visible: true)
             if filesystem?
-              makers = entries_of('makers')
-              makers.create(makers.build({ name: "Maker #{slug}", _slug: slug, _visible: visible }
-                                           .merge(id ? { _id: id } : {})))
+              entries = entries_of(type_slug)
+              entries.create(entries.build({ name: "#{type_slug.classify} #{slug}", _slug: slug, _visible: visible }
+                                             .merge(id ? { _id: id } : {})))._id
             else
-              document = raw_entries.find(_id: id_of('makers', 'maker-two')).first
+              document = raw_entries.find(_id: id_of(type_slug, model_slug)).first
               slugs    = slug.is_a?(Hash) ? slug : { 'en' => slug }
               id ||= BSON::ObjectId.new
               raw_entries.insert_one(document.merge('_id' => id, '_slug' => slugs, '_visible' => visible)
                                              .merge(site_id ? { 'site_id' => site_id } : {}))
               inserted_ids << id
+              id
             end
           end
 
@@ -313,6 +318,137 @@ describe 'Adapter parity' do
               else
                 refuses({ maker_id: 'maker-two' }, 'maker')
               end
+            end
+
+          end
+
+          describe 'a many_to_many' do
+
+            let(:writable_types) { %w(specimens submissions makers topics) }
+
+            def stored_topic_ids(created)
+              stored_specimen(created['_id']).attributes[:topic_ids]
+            end
+
+            def topic(slug)
+              id_of('topics', slug)
+            end
+
+            it 'links the entries its ids name, in their order, hidden ones too' do
+              ids = [topic('topic-b'), topic('topic-hidden'), topic('topic-a')]
+
+              expect(stored_topic_ids(create_with(topic_ids: ids.map(&:to_s)))).to eq ids
+            end
+
+            [[], nil].each do |none|
+
+              it "links nothing with #{none.inspect}" do
+                expect(links_of(create_with(topic_ids: none)['_id']).last).to eq []
+              end
+
+            end
+
+            it 'refuses the same list given as a symbol and as a text key' do
+              ids = [topic('topic-a').to_s]
+
+              refuses({ topic_ids: ids, 'topic_ids' => ids }, 'topics')
+            end
+
+            {
+              'an id no entry holds'        => -> { [topic('topic-a').to_s, 'no-such-topic'] },
+              'an id of that shape no entry holds' => -> { [topic('topic-a').to_s, '0123456789abcdef01234567'] },
+              'the id of another type'      => -> { [id_of('makers', 'maker-one').to_s] },
+              'the same id twice'           => -> { [topic('topic-a').to_s] * 2 },
+              'a text instead of a list'    => -> { topic('topic-a').to_s },
+              'a nested list'               => -> { [[topic('topic-a').to_s]] },
+              'a hash in the list'          => -> { [{ 'a' => 1 }] },
+              'a null in the list'          => -> { [nil] }
+            }.each do |description, ids|
+
+              it "refuses #{description}" do
+                refuses({ topic_ids: instance_exec(&ids) }, 'topics')
+              end
+
+            end
+
+            # Wagon pull can give a Filesystem entry a composite identity.
+            if store == :filesystem
+              it 'links a pulled entry by either part of its identity and stores its slug' do
+                store_entry('topics', 'topic-a', id: ['5f2222222222222222222222', 'pulled-topic'], slug: 'pulled-topic')
+
+                ['pulled-topic', '5f2222222222222222222222'].each do |reference|
+                  expect(stored_topic_ids(create_with(topic_ids: [reference]))).to eq ['pulled-topic']
+                end
+              end
+
+              it 'refuses both parts of one pulled identity in one list' do
+                store_entry('topics', 'topic-a', id: ['5f2222222222222222222222', 'pulled-topic'], slug: 'pulled-topic')
+
+                refuses({ topic_ids: ['pulled-topic', '5f2222222222222222222222'] }, 'topics')
+              end
+
+              it 'links once a pulled entry whose slug spells its id' do
+                hex = '5f4444444444444444444444'
+                store_entry('topics', 'topic-a', id: [hex, hex], slug: hex)
+
+                expect(stored_topic_ids(create_with(topic_ids: [hex]))).to eq [hex]
+              end
+
+              it 'refuses an id two entries answer, and an update with it keeps the stored links' do
+                hex = '5f3333333333333333333333'
+                store_entry('topics', 'topic-a', id: [hex, 'pulled-twin'], slug: 'pulled-twin')
+                store_entry('topics', 'topic-a', slug: hex)
+                created = create_with(topic_ids: [topic('topic-a').to_s])
+
+                refuses({ topic_ids: [hex] }, 'topics')
+
+                updated = service.update('specimens', created['_id'], { topic_ids: [hex] }, true)
+
+                expect(updated['errors']['topics']).to eq ['is invalid']
+                expect(stored_topic_ids(created)).to eq [topic('topic-a')]
+              end
+            end
+
+            # Only MongoDB reads one id in either case, and keeps several sites in one store.
+            if store == :mongodb
+              it 'links an id written in capitals' do
+                expect(stored_topic_ids(create_with(topic_ids: [topic('topic-a').to_s.upcase]))).to eq [topic('topic-a')]
+              end
+
+              it 'refuses one id written in two cases as the same entry twice' do
+                id = topic('topic-a').to_s
+
+                refuses({ topic_ids: [id, id.upcase] }, 'topics')
+              end
+
+              it 'refuses a target another site holds' do
+                foreign = store_entry('topics', 'topic-a', slug: 'foreign-topic', site_id: BSON::ObjectId.new)
+
+                refuses({ topic_ids: [topic('topic-a').to_s, foreign.to_s] }, 'topics')
+              end
+            end
+
+            it 'keeps the stored links when an update is refused' do
+              created = create_with(topic_ids: [topic('topic-a').to_s])
+
+              updated = service.update('specimens', created['_id'], { topic_ids: ['no-such-topic'] }, true)
+
+              expect(updated['errors']['topics']).to eq ['is invalid']
+              expect(stored_topic_ids(created)).to eq [topic('topic-a')]
+            end
+
+            it 'asks the store as often for two links as for one' do
+              one, two = [topic('topic-a')], [topic('topic-a'), topic('topic-b')]
+              queries  = 0
+              allow(adapter).to receive(:query).and_wrap_original do |original, *args, &block|
+                queries += 1
+                original.call(*args, &block)
+              end
+
+              count = ->(ids) { queries.tap { create_with(topic_ids: ids.map(&:to_s)) }.then { |before| queries - before } }
+              count.(one)
+
+              expect(count.(two)).to eq count.(one)
             end
 
           end

@@ -290,7 +290,7 @@ module Locomotive::Steam
     # An unresolved link is invalid, not missing as well.
     def validate_link_fields
       content_type.fields_by_name.each_value.with_object([]) do |field, invalid|
-        next unless field.type == :belongs_to
+        next unless %i(belongs_to many_to_many).include?(field.type)
         next unless attributes[field.persisted_name.to_sym].equal?(INVALID_LINK_VALUE)
 
         errors.add(field.name.to_sym, :invalid)

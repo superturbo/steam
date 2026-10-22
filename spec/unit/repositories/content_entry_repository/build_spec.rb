@@ -27,6 +27,27 @@ describe Locomotive::Steam::ContentEntryRepository do
 
   end
 
+  describe '#resolve_many_to_many against a stored schema whose target type is gone' do
+
+    let(:topics) { instance_double('Field', name: :topics, type: :many_to_many, persisted_name: 'topic_ids', target_id: 'gone') }
+    let(:type)   { build_content_type('Articles', association_fields: [topics]) }
+
+    before do
+      allow(content_type_repository).to receive(:find).with('gone').and_return(nil)
+      repository.with(type)
+    end
+
+    it 'reports the links as invalid instead of raising' do
+      expect(repository.resolve_many_to_many(topic_ids: ['a-topic'])[:topic_ids])
+        .to equal Locomotive::Steam::ContentEntry::INVALID_LINK_VALUE
+    end
+
+    it 'still clears the links' do
+      expect(repository.resolve_many_to_many(topic_ids: [])).to eq(topic_ids: [])
+    end
+
+  end
+
   describe '#build system fields' do
 
     before { repository.with(type) }

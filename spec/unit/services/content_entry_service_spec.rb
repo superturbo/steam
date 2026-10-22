@@ -35,6 +35,7 @@ describe Locomotive::Steam::ContentEntryService do
       allow(entry_repository).to receive(:content_type).and_return(content_type)
       allow(entry_repository).to receive(:resolve_selects) { |attributes| attributes }
       allow(entry_repository).to receive(:resolve_belongs_to) { |attributes| attributes }
+      allow(entry_repository).to receive(:resolve_many_to_many) { |attributes| attributes }
     end
 
     it 'keeps the decorator attached to the written entity' do
@@ -133,6 +134,7 @@ describe Locomotive::Steam::ContentEntryService do
       allow(entry_repository).to receive(:content_type).and_return(content_type)
       allow(entry_repository).to receive(:resolve_selects) { |attributes| attributes }
       allow(entry_repository).to receive(:resolve_belongs_to) { |attributes| attributes }
+      allow(entry_repository).to receive(:resolve_many_to_many) { |attributes| attributes }
       allow(entry_repository).to receive(:build) do |attributes|
         Locomotive::Steam::ContentEntry.new(attributes).tap do |entry|
           entry.content_type         = content_type
@@ -192,6 +194,7 @@ describe Locomotive::Steam::ContentEntryService do
       allow(entry_repository).to receive(:content_type).and_return(content_type)
       allow(entry_repository).to receive(:resolve_selects) { |attributes| attributes }
       allow(entry_repository).to receive(:resolve_belongs_to) { |attributes| attributes }
+      allow(entry_repository).to receive(:resolve_many_to_many) { |attributes| attributes }
       allow(entry_repository).to receive(:build) do |attributes|
         Locomotive::Steam::ContentEntry.new(attributes).tap do |entry|
           entry.content_type         = content_type
@@ -227,6 +230,7 @@ describe Locomotive::Steam::ContentEntryService do
       allow(entry_repository).to receive(:content_type).and_return(content_type)
       allow(entry_repository).to receive(:resolve_selects) { |attributes| attributes }
       allow(entry_repository).to receive(:resolve_belongs_to) { |attributes| attributes }
+      allow(entry_repository).to receive(:resolve_many_to_many) { |attributes| attributes }
       allow(entry_repository).to receive(:build) do |attributes|
         Locomotive::Steam::ContentEntry.new(attributes).tap do |entry|
           entry.content_type         = content_type
@@ -285,6 +289,7 @@ describe Locomotive::Steam::ContentEntryService do
       allow(entry_repository).to receive(:content_type).and_return(content_type)
       allow(entry_repository).to receive(:resolve_selects) { |attributes| attributes }
       allow(entry_repository).to receive(:resolve_belongs_to) { |attributes| attributes }
+      allow(entry_repository).to receive(:resolve_many_to_many) { |attributes| attributes }
       allow(entry_repository).to receive(:build) do |attributes|
         Locomotive::Steam::ContentEntry.new(attributes).tap do |entry|
           entry.content_type         = content_type

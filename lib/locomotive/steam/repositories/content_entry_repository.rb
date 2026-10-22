@@ -118,6 +118,22 @@ module Locomotive
         end
       end
 
+      # Resolve IDs in order. Missing or duplicate targets fail validation.
+      def resolve_many_to_many(attributes)
+        content_type.association_fields.each_with_object(attributes.dup) do |field, memo|
+          next unless field.type == :many_to_many
+
+          keys = memo.keys.select { |key| key.to_s == field.persisted_name }
+
+          next if keys.empty?
+
+          values = keys.map { |key| memo.delete(key) }
+
+          memo[field.persisted_name.to_sym] =
+            values.size > 1 ? ContentEntry::INVALID_LINK_VALUE : link_values_to_ids(field, values.first)
+        end
+      end
+
       def count(conditions = {})
         clauses, _ = query_parts(conditions)
         super() { clauses.each { |clause| where(clause) } }
@@ -272,6 +288,42 @@ module Locomotive
         id = find_link_target(target_type, reference, spells_slug: spells_slug)
 
         id || ContentEntry::INVALID_LINK_VALUE
+      end
+
+      def link_values_to_ids(field, values)
+        return values if values.nil? || values == []
+        return ContentEntry::INVALID_LINK_VALUE unless values.is_a?(Array)
+
+        # A stored schema may name a target type that no longer exists.
+        target_type = content_type_repository.find(field.target_id)
+        references  = target_type && values.map { |value| link_reference(value, target_type) }
+
+        return ContentEntry::INVALID_LINK_VALUE unless references
+
+        ids = find_link_targets(target_type, references)
+
+        ids.all? && ids.uniq.size == ids.size ? ids : ContentEntry::INVALID_LINK_VALUE
+      end
+
+      # Resolve each reference to one target, including either component of a pulled ID.
+      def find_link_targets(target_type, references)
+        entries = simple_clone.with(target_type).all(k(:_id, :in) => references.uniq, _visible: nil)
+        found   = Hash.new { |hash, key| hash[key] = [] }
+
+        entries.each do |entry|
+          Array(entry._id).map { |id| link_key(id) }.uniq.each { |key| found[key] << entry }
+        end
+
+        references.map do |reference|
+          matches = found.fetch(link_key(reference), [])
+
+          stored_link_id(matches.first._id) if matches.size == 1
+        end
+      end
+
+      # BSON IDs compare independently of hexadecimal letter case.
+      def link_key(id)
+        (adapter.make_id(id) || id).to_s
       end
 
       def link_reference(value, target_type)
