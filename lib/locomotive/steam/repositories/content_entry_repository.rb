@@ -134,6 +134,10 @@ module Locomotive
         end
       end
 
+      def in_locale(other)
+        self.class.new(adapter, site, other, content_type_repository).with(content_type)
+      end
+
       def count(conditions = {})
         clauses, _ = query_parts(conditions)
         super() { clauses.each { |clause| where(clause) } }
@@ -192,6 +196,7 @@ module Locomotive
       end
 
       def create(entity)
+        refuse_unsupported_unique
         raise InvalidEntry.new(entity) unless entity.valid?
 
         entity.hash_passwords
@@ -211,6 +216,7 @@ module Locomotive
       end
 
       def update(entity)
+        refuse_unsupported_unique
         raise InvalidEntry.new(entity) unless entity.valid?
 
         entity.hash_passwords
@@ -264,6 +270,14 @@ module Locomotive
       end
 
       private
+
+      def refuse_unsupported_unique
+        field = content_type.fields.unsupported_unique.first
+        return unless field
+
+        raise UnsupportedSchemaError.new(:unsupported_unique,
+          "#{content_type.slug}, field #{field.name}: uniqueness is not supported for a #{field.type} field")
+      end
 
       # Only field types with the same ordering in both adapters are allowed.
       ORDERABLE_FIELD_TYPES = %i(string text integer float boolean date date_time).freeze

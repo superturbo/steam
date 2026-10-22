@@ -72,20 +72,20 @@ module Locomotive::Steam
     def unique?; self[:unique]; end
 
     CAPABILITIES = {
-      string:       %i(localization required),
-      text:         %i(localization required),
-      email:        %i(localization required),
-      color:        %i(localization required),
-      integer:      %i(localization required),
-      float:        %i(localization required),
-      date:         %i(localization required),
-      date_time:    %i(localization required),
-      boolean:      %i(localization required),
-      select:       %i(localization required),
+      string:       %i(localization required unique),
+      text:         %i(localization required unique),
+      email:        %i(localization required unique),
+      color:        %i(localization required unique),
+      integer:      %i(localization required unique),
+      float:        %i(localization required unique),
+      date:         %i(localization required unique),
+      date_time:    %i(localization required unique),
+      boolean:      %i(localization required unique),
+      select:       %i(localization required unique),
       file:         %i(localization required),
       tags:         %i(localization),
       json:         %i(localization required),
-      belongs_to:   %i(required),
+      belongs_to:   %i(required unique),
       many_to_many: %i(required),
       has_many:     %i(required),
       password:     []
@@ -105,6 +105,10 @@ module Locomotive::Steam
 
     def supports_required?
       capabilities.include?(:required)
+    end
+
+    def supports_unique?
+      capabilities.include?(:unique)
     end
 
     private def capabilities

@@ -253,20 +253,33 @@ module Locomotive
       end
 
       def validate(_repository, entry)
-        # simple validations (existence of values) first
         entry.valid?
 
-        # check if the entry has unique values for its
-        # fields marked as unique
-        content_type_repository.look_for_unique_fields(entry.content_type).each do |name, _|
+        content_type_repository.look_for_unique_fields(entry.content_type).each do |name, field|
           next if entry.errors[name].present?
 
-          if _repository.exists?(name => entry.send(name), :"_id.ne" => entry._id)
-            entry.errors.add(name, :taken)
-          end
+          entry.errors.add(name, :taken) if taken?(_repository, entry, field)
         end
 
         entry.errors.empty?
+      end
+
+      # Check each site locale, including scalar fallbacks.
+      def taken?(_repository, entry, field)
+        key    = field.persisted_name
+        stored = entry[key.to_sym]
+        values = if stored.respond_to?(:translations)
+                   _repository.site.locales.to_h { |site_locale| [site_locale, stored[site_locale]] }
+                 else
+                   { locale => stored }
+                 end
+
+        values.any? do |value_locale, value|
+          next false if value.nil? || value == ''
+
+          # A hidden entry holds its value too.
+          _repository.in_locale(value_locale).exists?(key => value, :"_id.ne" => entry._id, _visible: nil)
+        end
       end
 
     end

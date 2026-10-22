@@ -1,0 +1,10 @@
+name: Vouchers
+slug: vouchers
+label_field_name: title
+order_by: created_at
+fields:
+- title:
+    type: string
+- code:
+    type: integer
+    unique: true

@@ -203,7 +203,7 @@ describe Locomotive::Steam::ContentEntryService do
       end
     end
 
-    it 'reaches create without reading the password' do
+    it 'checks no password for uniqueness, leaving the refusal to the repository' do
       expect(entry_repository).to receive(:create)
 
       entry = service.create('accounts', { email: 'john@doe.net', secret: 'easyone' })
@@ -385,11 +385,13 @@ describe Locomotive::Steam::ContentEntryService do
 
       context 'with unique fields' do
 
-        let(:unique_fields) { { title: instance_double('Field', name: 'title') } }
+        let(:unique_fields) { { title: instance_double('Field', name: 'title', persisted_name: 'title') } }
 
         before do
+          allow(entry).to receive(:[]).with(:title).and_return('Hello world')
+          allow(entry_repository).to receive(:in_locale).with(locale).and_return(entry_repository)
           allow(entry_repository).to receive(:exists?)
-            .with(title: 'Hello world', :'_id.ne' => entry_id).and_return(true)
+            .with('title' => 'Hello world', :'_id.ne' => entry_id, _visible: nil).and_return(true)
         end
 
         context 'the entry has never been persisted before' do

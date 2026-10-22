@@ -46,14 +46,30 @@ describe Locomotive::Steam::ContentTypeFieldRepository do
 
     it { expect(subject.keys).to eq ['email'] }
 
-    context 'stored metadata declaring a password unique' do
+    context 'stored metadata declaring unique fields that cannot be unique' do
 
-      let(:collection) { [{ name: 'email', type: 'email', unique: true }, { name: 'secret', type: 'password', unique: true }] }
+      let(:collection) do
+        [{ name: 'email', type: 'email', unique: true }, { name: 'secret', type: 'password', unique: true },
+         { name: 'labels', type: 'tags', unique: true }]
+      end
 
-      it 'leaves out the write-only field' do
+      it 'leaves them out' do
         expect(subject.keys).to eq ['email']
       end
 
+    end
+
+  end
+
+  describe '#unsupported_unique' do
+
+    let(:collection) do
+      [{ name: 'email', type: 'email', unique: true }, { name: 'secret', type: 'password', unique: true },
+       { name: 'labels', type: 'tags', unique: true }, { name: 'notes', type: 'json' }]
+    end
+
+    it 'names the unique fields the store cannot honor' do
+      expect(repository.unsupported_unique.map(&:name)).to eq %w(secret labels)
     end
 
   end

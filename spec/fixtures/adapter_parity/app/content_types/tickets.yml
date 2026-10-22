@@ -1,0 +1,35 @@
+name: Tickets
+slug: tickets
+label_field_name: title
+order_by: created_at
+fields:
+- title:
+    type: string
+- serial:
+    type: string
+    required: true
+    unique: true
+- code:
+    type: integer
+    unique: true
+- heading:
+    type: string
+    localized: true
+    unique: true
+- reference:
+    type: string
+    unique: true
+- active:
+    type: boolean
+    unique: true
+- day:
+    type: date
+    unique: true
+- category:
+    type: select
+    unique: true
+    select_options: ['alpha', 'beta']
+- maker:
+    type: belongs_to
+    class_name: makers
+    unique: true

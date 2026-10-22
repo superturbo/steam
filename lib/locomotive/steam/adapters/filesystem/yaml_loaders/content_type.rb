@@ -102,9 +102,9 @@ module Locomotive
                   "#{filepath}, field #{attributes[:name]}: a #{attributes[:type]} field cannot be required")
               end
 
-              if attributes[:unique] && field.write_only?
+              if attributes[:unique] && !field.supports_unique?
                 raise Locomotive::Steam::UnsupportedSchemaError.new(:unsupported_unique,
-                  "#{filepath}, field #{attributes[:name]}: a #{attributes[:type]} field cannot be unique")
+                  "#{filepath}, field #{attributes[:name]}: uniqueness is not supported for a #{attributes[:type]} field")
               end
             end
 

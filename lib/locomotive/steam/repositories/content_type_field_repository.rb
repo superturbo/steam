@@ -63,10 +63,12 @@ module Locomotive
       end
 
       def unique
-        query { where(unique: true) }.all.reject(&:write_only?).inject({}) do |memo, field|
-          memo[field.name] = field
-          memo
-        end
+        query { where(unique: true) }.all.select(&:supports_unique?).index_by(&:name)
+      end
+
+      # A stored schema can declare what the loader refuses.
+      def unsupported_unique
+        query { where(unique: true) }.all.reject(&:supports_unique?)
       end
 
       def required

@@ -76,31 +76,32 @@ describe Locomotive::Steam::ContentTypeField do
 
   describe 'the capability model' do
 
-    { string:       [true,  true],
-      text:         [true,  true],
-      email:        [true,  true],
-      color:        [true,  true],
-      integer:      [true,  true],
-      float:        [true,  true],
-      date:         [true,  true],
-      date_time:    [true,  true],
-      boolean:      [true,  true],
-      select:       [true,  true],
-      file:         [true,  true],
-      tags:         [true,  false],
-      json:         [true,  true],
-      belongs_to:   [false, true],
-      many_to_many: [false, true],
-      has_many:     [false, true],
-      password:     [false, false] }.each do |type, (localizable, required_supported)|
+    { string:       [true,  true,  true],
+      text:         [true,  true,  true],
+      email:        [true,  true,  true],
+      color:        [true,  true,  true],
+      integer:      [true,  true,  true],
+      float:        [true,  true,  true],
+      date:         [true,  true,  true],
+      date_time:    [true,  true,  true],
+      boolean:      [true,  true,  true],
+      select:       [true,  true,  true],
+      file:         [true,  true,  false],
+      tags:         [true,  false, false],
+      json:         [true,  true,  false],
+      belongs_to:   [false, true,  true],
+      many_to_many: [false, true,  false],
+      has_many:     [false, true,  false],
+      password:     [false, false, false] }.each do |type, (localizable, required_supported, unique_supported)|
 
       it "#{type} is supported: localization #{localizable ? 'yes' : 'no'}, " \
-         "required #{required_supported ? 'yes' : 'no'}" do
+         "required #{required_supported ? 'yes' : 'no'}, unique #{unique_supported ? 'yes' : 'no'}" do
         field = described_class.new(type: type)
 
         expect(field.supported?).to be true
         expect(field.supports_localization?).to be localizable
         expect(field.supports_required?).to be required_supported
+        expect(field.supports_unique?).to be unique_supported
       end
 
     end
@@ -111,6 +112,7 @@ describe Locomotive::Steam::ContentTypeField do
       expect(field.supported?).to be false
       expect(field.supports_localization?).to be false
       expect(field.supports_required?).to be false
+      expect(field.supports_unique?).to be false
     end
 
   end

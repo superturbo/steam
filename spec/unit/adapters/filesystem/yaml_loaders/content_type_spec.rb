@@ -69,17 +69,32 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentType do
       end
     end
 
-    it 'refuses a unique password field' do
-      expect do
-        load_fields(<<~YAML)
-          fields:
-          - secret:
-              type: password
-              unique: true
-        YAML
-      end.to raise_error(Locomotive::Steam::UnsupportedSchemaError,
-                         /articles\.yml, field secret: a password field cannot be unique/) do |error|
-        expect(error.reason).to eq :unsupported_unique
+    it 'refuses a unique field of a type that cannot be unique' do
+      %w(password tags json file many_to_many has_many).each do |type|
+        expect do
+          load_fields(<<~YAML)
+            fields:
+            - author:
+                type: #{type}
+                unique: true
+          YAML
+        end.to raise_error(Locomotive::Steam::UnsupportedSchemaError,
+                           /articles\.yml, field author: uniqueness is not supported for a #{type} field/) do |error|
+          expect(error.reason).to eq :unsupported_unique
+        end
+      end
+    end
+
+    it 'takes a unique field of a type that can be unique' do
+      %w(string text email color integer float date date_time boolean select belongs_to).each do |type|
+        expect do
+          load_fields(<<~YAML)
+            fields:
+            - author:
+                type: #{type}
+                unique: true
+          YAML
+        end.not_to raise_error
       end
     end
 
