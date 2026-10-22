@@ -121,6 +121,34 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentType do
       end
     end
 
+    it 'refuses a label naming no field of the type' do
+      expect do
+        load_fields(<<~YAML)
+          label_field_name: headline
+          fields:
+          - title:
+              type: string
+        YAML
+      end.to raise_error(Locomotive::Steam::UnsupportedSchemaError,
+                         /articles\.yml, label_field_name: headline is not a field of this type/) do |error|
+        expect(error.reason).to eq :unknown_label
+      end
+    end
+
+    it 'takes a type without fields, which names no label' do
+      expect(load_fields("fields: []\n")).to eq []
+    end
+
+    it 'takes the first field as the label when the type names none' do
+      expect do
+        load_fields(<<~YAML)
+          fields:
+          - title:
+              type: string
+        YAML
+      end.not_to raise_error
+    end
+
     it 'loads a password field that is not the label' do
       fields = load_fields(<<~YAML)
         fields:

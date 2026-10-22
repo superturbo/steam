@@ -20,7 +20,7 @@ module Locomotive
                 each_file do |filepath, slug|
                   attributes = _load(filepath)
                   attributes[:entries_custom_fields] = build_fields(attributes.delete(:fields), filepath)
-                  reject_write_only_label!(attributes, filepath)
+                  validate_label!(attributes, filepath)
                   array << { _id: slug.to_s, slug: slug }.merge(attributes)
                 end
               end
@@ -108,10 +108,16 @@ module Locomotive
               end
             end
 
-            def reject_write_only_label!(attributes, filepath)
+            def validate_label!(attributes, filepath)
               fields = attributes[:entries_custom_fields]
               name   = (attributes[:label_field_name] || fields.first&.fetch(:name)).to_s
               label  = fields.find { |field| field[:name] == name }
+
+              if label.nil? && attributes[:label_field_name]
+                raise Locomotive::Steam::UnsupportedSchemaError.new(:unknown_label,
+                  "#{filepath}, label_field_name: #{name} is not a field of this type")
+              end
+
               return unless label
 
               field = Locomotive::Steam::ContentTypeField.new(type: label[:type])

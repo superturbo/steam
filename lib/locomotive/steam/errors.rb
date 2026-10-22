@@ -59,7 +59,7 @@ module Locomotive::Steam
   class UnsupportedSchemaError < ::StandardError
 
     REASONS = %i(unknown_field_type unsupported_localization unsupported_required
-                 unsupported_unique unsupported_label reserved_field_name
+                 unsupported_unique unsupported_label unknown_label reserved_field_name
                  colliding_field_name).freeze
 
     attr_reader :reason
