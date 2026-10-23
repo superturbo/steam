@@ -15,8 +15,10 @@ module Locomotive
         HEIGHT = /\Ax([1-9]\d*)>?\z/
 
         def call(content, geometry, opts = {})
+          Geometry.check!(geometry)
+
           decode = opts['decode']
-          raise ArgumentError, "unknown decode option #{decode.inspect}" unless decode.nil? || decode == DECODE
+          raise Shell::RefusedJob, 'Steam does not run this decode option' unless decode.nil? || decode == DECODE
           return super if decode.nil?
 
           validate!(opts['format'], &is_word)

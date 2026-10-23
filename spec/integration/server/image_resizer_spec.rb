@@ -292,6 +292,37 @@ describe 'Resize jobs' do
 
   end
 
+  context 'a job Steam does not run' do
+
+    let(:mode) { :production }
+    let(:key)  { 'a deployment key' }
+
+    before { allow(Dragonfly).to receive(:warn) }
+
+    %w(0@ 0x30! 0x0% 40x30#xx 20x20+5+5nw 50%).each do |geometry|
+      it "answers 404, kept by no cache, for a new and an earlier URL resizing to #{geometry}" do
+        [job.thumb(geometry, 'decode' => 'jpeg-1x-v1').url, job.thumb(geometry).url].each do |url|
+          %i(get head).each do |verb|
+            send(verb, url)
+
+            expect(last_response.status).to eq(404), "#{verb} #{url}"
+            expect(last_response.headers['cache-control']).to eq 'no-store'
+          end
+        end
+        expect(Dragonfly).to have_received(:warn).with('Steam does not run this geometry').exactly(4).times
+      end
+    end
+
+    it 'answers 404, kept by no cache, for an unknown decode option' do
+      get job.thumb('4x4', 'decode' => 'jpeg-2x-v1').url
+
+      expect(last_response.status).to eq 404
+      expect(last_response.headers['cache-control']).to eq 'no-store'
+      expect(Dragonfly).to have_received(:warn).with('Steam does not run this decode option')
+    end
+
+  end
+
   context 'an ImageMagick command that does not exist' do
 
     let(:mode) { :production }

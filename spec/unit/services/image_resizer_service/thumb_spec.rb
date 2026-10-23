@@ -25,7 +25,22 @@ describe Locomotive::Steam::ImageResizerService::Thumb do
     it 'is refused before anything runs' do
       expect(::Dragonfly::ImageMagick::Commands).not_to receive(:convert)
 
-      expect { processor.call(content, '900x>', 'decode' => 'jpeg-2x') }.to raise_error(ArgumentError, /decode/)
+      expect { processor.call(content, '900x>', 'decode' => 'jpeg-2x') }
+        .to raise_error(Locomotive::Steam::ImageResizerService::Shell::RefusedJob, 'Steam does not run this decode option')
+    end
+
+  end
+
+  describe 'a job with a geometry Steam does not run' do
+
+    [{}, { 'decode' => 'jpeg-1x-v1' }].each do |opts|
+      it "is refused before anything runs, #{opts.empty? ? 'without' : 'with'} the decode option" do
+        expect(content).not_to receive(:analyse)
+        expect(::Dragonfly::ImageMagick::Commands).not_to receive(:convert)
+
+        expect { processor.call(content, '40x30#xx', opts) }
+          .to raise_error(Locomotive::Steam::ImageResizerService::Shell::RefusedJob, 'Steam does not run this geometry')
+      end
     end
 
   end
@@ -119,6 +134,22 @@ describe Locomotive::Steam::ImageResizerService::Thumb do
       jpeg = image('photo.jpg', '4000x3000')
 
       expect(read(processed(processor, jpeg, '900x>'), '%wx%h %#')).to eq read(processed(upstream, jpeg, '900x>'), '%wx%h %#')
+    end
+
+    # Preserve Dragonfly behavior, including accepted degenerate sizes.
+    %w(
+      40x30 40x x30 40x30> 40x> x30> 40x30< 40x< x100< 100x100< 0x30> 0x30<
+      40x30^ 40x^ x30^ 0x30^ 40x0^ 40x30! 40x! x30! x! 50x50% 50x% x50% 150x% x%
+      1200@ 1@ 2400@ x 0x0 0x30 40x0
+      40x30# 40x30#nw 40x30#n 40x30#ne 40x30#w 40x30#c 40x30#e 40x30#sw 40x30#s 40x30#se 0x0# 0x30#
+      20x20+5+5 20x20-5-5 20x20+5 20x20nw 20x20c 20x20xx 0x0+0+0 0x20+0+0
+    ).each do |geometry|
+      it "runs #{geometry} as Dragonfly does, with the decode option and without" do
+        png      = image('source.png', '60x40')
+        expected = read(processed(upstream, png, geometry), '%wx%h %#')
+
+        expect([{}, decode].map { |opts| read(processed(processor, png, geometry, opts), '%wx%h %#') }).to eq [expected] * 2
+      end
     end
 
     # The decoder rounds the reduced size up, so the side the geometry derives

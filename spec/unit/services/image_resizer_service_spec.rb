@@ -172,6 +172,19 @@ describe Locomotive::Steam::ImageResizerService do
         end
       end
 
+      describe 'a geometry Steam does not run' do
+        let(:input) { '/images/nav_on.png' }
+
+        it 'signs no job, and logs why' do
+          logged = []
+          allow(Locomotive::Common::Logger).to receive(:error) { |message| logged << message }
+          expect(resizer).not_to receive(:fetch_file)
+
+          expect(service.resize(input, '40x30#xx')).to be_nil
+          expect(logged).to eq ['Unable to resize on the fly: Steam does not run this geometry']
+        end
+      end
+
     end
 
   end

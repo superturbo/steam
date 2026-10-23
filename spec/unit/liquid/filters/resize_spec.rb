@@ -35,6 +35,10 @@ describe Locomotive::Steam::Liquid::Filters::Resize do
         expect(resize(input, geometry, { 'filters' => '-sepia-tone 80%' })).to be_nil
       end
 
+      it 'gives no URL for a geometry Steam does not run' do
+        expect(resize(input, '30x40#xx')).to be_nil
+      end
+
       it 'resizes with a filter the resize options produce' do
         expect(resize(input, geometry, { 'filters' => '-strip' })).to match(/\/steam\/dynamic\//)
       end

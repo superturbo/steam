@@ -157,6 +157,16 @@ describe Locomotive::Steam::Liquid::Tags::Editable::File do
 
       end
 
+      context 'with a geometry Steam does not run' do
+
+        let(:source) { "{% block header %}{% editable_file banner, hint: 'some text', resize: '500x100#xx' %}http://www.placehold.it/500x500{% endeditable_file %}{% endblock %}" }
+
+        it 'keeps the original image' do
+          is_expected.to eq 'http://www.placehold.it/500x500'
+        end
+
+      end
+
       context 'with a filter the resize options produce' do
 
         let(:source) { "{% block header %}{% editable_file banner, hint: 'some text', resize: '500x100#', filters: '-strip' %}http://www.placehold.it/500x500{% endeditable_file %}{% endblock %}" }
