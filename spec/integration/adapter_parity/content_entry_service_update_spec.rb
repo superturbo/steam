@@ -323,6 +323,31 @@ describe 'Adapter parity' do
           expect(links_of(entry._id)).to eq [nil, []]
         end
 
+        describe 'an entry whose type has a has_many field' do
+
+          let(:writable_types) { %w(specimens submissions makers) }
+
+          it 'creates and updates it, keeping the entries its has_many reads' do
+            created = service.create('makers', { name: 'Fresh maker' }, true)
+            readable_specimen(maker_id: created['_id'])
+            updated = service.update('makers', created['_id'], { name: 'Renamed maker' }, true)
+            stored  = entries_of('makers').find(created['_id'])
+
+            expect([updated['errors'].blank?, stored.name, stored.specimens.all.map(&:name)])
+              .to eq [true, 'Renamed maker', ['Readable']]
+          end
+
+          it 'writes a decorated update of it' do
+            created   = service.create('makers', name: 'Fresh maker')
+            decorated = service.find('makers', created._id)
+
+            service.update_decorated_entry(decorated, 'name' => 'Renamed maker')
+
+            expect(entries_of('makers').find(created._id).name).to eq 'Renamed maker'
+          end
+
+        end
+
       end
 
     end

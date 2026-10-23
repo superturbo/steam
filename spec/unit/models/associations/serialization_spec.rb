@@ -44,6 +44,15 @@ describe 'referenced association serialization' do
 
   end
 
+  describe Locomotive::Steam::Models::HasManyAssociation do
+
+    it 'keeps the association out of the store' do
+      expect(serialized(described_class, :specimens, 'specimens' => target, 'name' => 'Maker'))
+        .to eq('name' => 'Maker')
+    end
+
+  end
+
   describe Locomotive::Steam::Models::ManyToManyAssociation do
 
     it 'leaves the stored ids when the entry carries no association attribute' do

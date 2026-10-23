@@ -55,7 +55,9 @@ module Locomotive::Steam
       def __load__
       end
 
-      def __serialize__(entity)
+      # Keep association objects out of stored attributes.
+      def __serialize__(attributes)
+        attributes.delete(__name__)
       end
 
       def __assigned__(name, value)

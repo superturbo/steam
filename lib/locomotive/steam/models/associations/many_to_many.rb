@@ -25,11 +25,6 @@ module Locomotive::Steam
         Array(@entity[__target_key__])
       end
 
-      # Preserve stored IDs regardless of cached targets.
-      def __serialize__(attributes)
-        attributes.delete(__name__)
-      end
-
       def __assigned__(name, value)
         if name == __name__
           return if value.is_a?(ReferencedAssociation)

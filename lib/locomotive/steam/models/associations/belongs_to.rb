@@ -16,11 +16,6 @@ module Locomotive::Steam
           @preloader ? @preloader.target_for(self, target_id) : __configured_repository__.find(target_id)
       end
 
-      # Preserve stored IDs regardless of cached targets.
-      def __serialize__(attributes)
-        attributes.delete(__name__)
-      end
-
       def __assigned__(name, value)
         if name == __name__
           return if value.is_a?(ReferencedAssociation)
