@@ -9,19 +9,27 @@ module Locomotive::Steam
 
         target_id = @entity[__target_key__]
 
-        return @entity[__name__] = nil if target_id.nil?
+        # A read is no assignment: the stored id stays as it is.
+        return @entity.attributes[__name__] = nil if target_id.nil?
 
-        @entity[__name__] =
+        @entity.attributes[__name__] =
           @preloader ? @preloader.target_for(self, target_id) : __configured_repository__.find(target_id)
       end
 
-      # Keep the existing id until the association is materialized or reassigned.
+      # Preserve stored IDs regardless of cached targets.
       def __serialize__(attributes)
-        return unless attributes.key?(__name__)
+        attributes.delete(__name__)
+      end
 
-        target = attributes.delete(__name__)
+      def __assigned__(name, value)
+        if name == __name__
+          return if value.is_a?(ReferencedAssociation)
 
-        attributes[__target_key__] = target.try(:_id) unless target.is_a?(ReferencedAssociation)
+          @entity.attributes[__target_key__] = ReferencedAssociation.stored_id(value.try(:_id))
+        elsif name == __target_key__
+          # Assigning an ID invalidates the cached target.
+          @entity.attributes[__name__] = self
+        end
       end
 
       def __target_key__

@@ -44,6 +44,9 @@ module Locomotive::Steam
         # TODO: not implemented yet
       end
 
+      def __assigned__(name, value)
+      end
+
       def method_missing(name, *args, **kwargs, &block)
         @repository.send(name, *args, **kwargs, &block)
       end

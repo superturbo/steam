@@ -63,14 +63,19 @@ module Locomotive::Steam
 
       def []=(name, value)
         attributes[name] = value
+
+        (associations || {}).each_value { |association| association.__assigned__(name.to_sym, value) }
+
+        value
       end
 
       def [](name)
         attributes[name]
       end
 
+      # The last association or ID assignment wins.
       def change(new_attributes)
-        attributes.merge!((new_attributes || {}).with_indifferent_access)
+        (new_attributes || {}).with_indifferent_access.each { |name, value| self[name] = value }
         self
       end
 

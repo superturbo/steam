@@ -23,14 +23,14 @@ describe 'referenced association serialization' do
       expect(serialized(described_class, :maker, 'maker_id' => 7)).to eq('maker_id' => 7)
     end
 
-    it 'reads the id of a target the entry materialized' do
+    it 'stores the id the entry holds, whatever target it carries' do
       expect(serialized(described_class, :maker, 'maker' => target, 'maker_id' => 7))
-        .to eq('maker_id' => 42)
+        .to eq('maker_id' => 7)
     end
 
-    it 'clears the id the entry spells out as null' do
+    it 'stores the id the entry holds when it carries no target' do
       expect(serialized(described_class, :maker, 'maker' => nil, 'maker_id' => 7))
-        .to eq('maker_id' => nil)
+        .to eq('maker_id' => 7)
     end
 
     it 'does not configure the repository during serialization' do
@@ -50,14 +50,14 @@ describe 'referenced association serialization' do
       expect(serialized(described_class, :topics, 'topic_ids' => [7])).to eq('topic_ids' => [7])
     end
 
-    it 'reads the ids of targets the entry materialized' do
+    it 'stores the ids the entry holds, whatever targets it carries' do
       expect(serialized(described_class, :topics, 'topics' => [target], 'topic_ids' => [7]))
-        .to eq('topic_ids' => [42])
+        .to eq('topic_ids' => [7])
     end
 
-    it 'clears the ids the entry spells out as empty' do
+    it 'stores the ids the entry holds when it carries no targets' do
       expect(serialized(described_class, :topics, 'topics' => [], 'topic_ids' => [7]))
-        .to eq('topic_ids' => [])
+        .to eq('topic_ids' => [7])
     end
 
     it 'does not configure the repository during serialization' do

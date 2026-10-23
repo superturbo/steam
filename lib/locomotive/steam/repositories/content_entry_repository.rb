@@ -389,7 +389,7 @@ module Locomotive
 
       # Store a pulled entry by its portable slug.
       def stored_link_id(id)
-        id.is_a?(Array) ? id.last : id
+        Models::ReferencedAssociation.stored_id(id)
       end
 
       # A default fills a field the attributes leave out. An explicit null is a

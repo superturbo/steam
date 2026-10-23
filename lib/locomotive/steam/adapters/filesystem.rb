@@ -42,13 +42,13 @@ module Locomotive::Steam
       sanitizers[mapper.name].with(scope) do |sanitizer|
         dataset = memoized_dataset(mapper, scope)
         sanitizer.apply_to_entity_with_dataset(entity, dataset)
-        dataset.insert(entity)
+        dataset.insert(stored_copy(entity))
       end
       entity
     end
 
     def update(mapper, scope, entity)
-      memoized_dataset(mapper, scope).update(entity)
+      memoized_dataset(mapper, scope).update(stored_copy(entity))
       entity
     end
 
@@ -102,6 +102,13 @@ module Locomotive::Steam
     end
 
     private
+
+    # Store association proxies instead of assigned targets.
+    def stored_copy(entity)
+      entity.dup.tap do |copy|
+        (copy.associations || {}).each { |name, association| copy.attributes[name] = association }
+      end
+    end
 
     # Missing fields start at zero; stored values must keep the amount's type.
     def increment_base(record, attribute, amount)

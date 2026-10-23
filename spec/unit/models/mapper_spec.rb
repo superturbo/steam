@@ -124,6 +124,16 @@ describe Locomotive::Steam::Models::Mapper do
 
         end
 
+        context 'the association assigned back' do
+
+          let(:attributes) { { author_id: 1 } }
+
+          before { entity.author = entity[:author] }
+
+          it { expect(subject).to eq('author_id' => 1) }
+
+        end
+
       end
 
       describe 'many_to_many' do
@@ -143,6 +153,16 @@ describe Locomotive::Steam::Models::Mapper do
           before { entity.authors = [instance_double('Author', _id: 1), instance_double('Author', _id: 2)] }
 
           it { expect(subject).to eq('title' => 'Hello world', 'author_ids' => [1, 2], 'body' => 'Lorem ipsum', 'published_at' => DateTime.parse('2007/06/29 00:00:00')) }
+
+        end
+
+        context 'the association assigned back' do
+
+          let(:attributes) { { author_ids: [1] } }
+
+          before { entity.authors = entity[:authors] }
+
+          it { expect(subject).to eq('author_ids' => [1]) }
 
         end
 

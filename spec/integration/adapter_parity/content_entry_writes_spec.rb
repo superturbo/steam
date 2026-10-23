@@ -102,6 +102,255 @@ describe 'Adapter parity' do
           expect(another_specimens_repository.find(created._id).maker.name).to eq 'Maker one'
         end
 
+        describe 'an association a write names by its target' do
+
+          def topics_repository
+            Locomotive::Steam::ContentEntryRepository.new(adapter, site, AdapterParityFixture::LOCALE, type_repository)
+              .with(type_repository.by_slug('topics'))
+          end
+
+          def stored(created)
+            another_specimens_repository.find(created._id)
+          end
+
+          it 'stores an assigned belongs_to target as its id' do
+            created = create_specimen(maker_id: makers.by_slug('maker-one')._id)
+            entry   = another_specimens_repository.find(created._id)
+
+            entry[:maker] = makers.by_slug('maker-two')
+            specimens.update(entry)
+
+            expect([stored(created)[:maker_id], stored(created).maker.name]).to eq [makers.by_slug('maker-two')._id, 'Maker two']
+          end
+
+          it 'keeps an id set after the association was read' do
+            created = create_specimen(maker_id: makers.by_slug('maker-two')._id)
+            entry   = another_specimens_repository.find(created._id)
+
+            entry.maker.name
+            entry[:maker_id] = makers.by_slug('maker-one')._id
+            specimens.update(entry)
+
+            expect([stored(created)[:maker_id], stored(created).maker.name]).to eq [makers.by_slug('maker-one')._id, 'Maker one']
+          end
+
+          it 'reads the target a new id names after reading the old one' do
+            entry = another_specimens_repository.find(create_specimen(maker_id: makers.by_slug('maker-two')._id)._id)
+
+            entry.maker.name
+            entry[:maker_id] = makers.by_slug('maker-one')._id
+
+            expect(entry.maker.name).to eq 'Maker one'
+          end
+
+          it 'keeps an id set after the association read no target' do
+            created = create_specimen(maker_id: nil)
+            entry   = another_specimens_repository.find(created._id)
+
+            expect(entry.maker.name).to be_nil
+            entry[:maker_id] = makers.by_slug('maker-one')._id
+            specimens.update(entry)
+
+            expect(stored(created).maker.name).to eq 'Maker one'
+          end
+
+          it 'keeps the id of a target it could not read through a write of another field' do
+            missing = filesystem? ? 'no-such-maker' : BSON::ObjectId.new
+            created = create_specimen(maker_id: missing)
+            entry   = another_specimens_repository.find(created._id)
+
+            expect(entry.maker.name).to be_nil
+            entry[:score] = 12
+            specimens.update(entry)
+
+            expect(stored(created)[:maker_id]).to eq missing
+          end
+
+          it 'stores the id assigned after a target' do
+            created = create_specimen(maker_id: nil)
+            entry   = another_specimens_repository.find(created._id)
+
+            entry[:maker]    = makers.by_slug('maker-one')
+            entry[:maker_id] = makers.by_slug('maker-two')._id
+            specimens.update(entry)
+
+            expect(stored(created)[:maker_id]).to eq makers.by_slug('maker-two')._id
+          end
+
+          it 'stores the target assigned after an id' do
+            created = create_specimen(maker_id: nil)
+            entry   = another_specimens_repository.find(created._id)
+
+            entry[:maker_id] = makers.by_slug('maker-two')._id
+            entry[:maker]    = makers.by_slug('maker-one')
+            specimens.update(entry)
+
+            expect(stored(created)[:maker_id]).to eq makers.by_slug('maker-one')._id
+          end
+
+          it 'stores the id a change gives after a target' do
+            created = create_specimen(maker_id: nil)
+            entry   = another_specimens_repository.find(created._id)
+
+            entry.change(maker: makers.by_slug('maker-one'), maker_id: makers.by_slug('maker-two')._id)
+            specimens.update(entry)
+
+            expect(stored(created)[:maker_id]).to eq makers.by_slug('maker-two')._id
+          end
+
+          it 'stores the target a change gives after an id' do
+            created = create_specimen(maker_id: nil)
+            entry   = another_specimens_repository.find(created._id)
+
+            entry.change(maker_id: makers.by_slug('maker-two')._id, maker: makers.by_slug('maker-one'))
+            specimens.update(entry)
+
+            expect(stored(created)[:maker_id]).to eq makers.by_slug('maker-one')._id
+          end
+
+          it 'clears the link when no target is assigned last' do
+            created = create_specimen(maker_id: nil)
+            entry   = another_specimens_repository.find(created._id)
+
+            entry.maker.name
+            entry[:maker_id] = makers.by_slug('maker-one')._id
+            entry[:maker]    = nil
+            specimens.update(entry)
+
+            expect(stored(created)[:maker_id]).to be_nil
+          end
+
+          it 'stores the target it read, assigned again after another id' do
+            created = create_specimen(maker_id: makers.by_slug('maker-two')._id)
+            entry   = another_specimens_repository.find(created._id)
+            entry.maker.name
+            read = entry[:maker]
+
+            entry[:maker_id] = makers.by_slug('maker-one')._id
+            entry[:maker]    = read
+            specimens.update(entry)
+
+            expect(stored(created)[:maker_id]).to eq makers.by_slug('maker-two')._id
+          end
+
+          it 'keeps an assigned target through a second write' do
+            created = create_specimen(maker_id: makers.by_slug('maker-one')._id)
+            entry   = another_specimens_repository.find(created._id)
+
+            entry[:maker] = makers.by_slug('maker-two')
+            specimens.update(entry)
+            entry[:score] = 12
+            specimens.update(entry)
+
+            expect(stored(created)[:maker_id]).to eq makers.by_slug('maker-two')._id
+          end
+
+          it 'reads an assigned target by its id before the write' do
+            entry = another_specimens_repository.find(create_specimen(maker_id: nil)._id)
+
+            entry[:maker] = makers.by_slug('maker-two')
+
+            expect(entry[:maker_id]).to eq makers.by_slug('maker-two')._id
+          end
+
+          it 'reads assigned many_to_many targets by their ids before the write' do
+            entry   = another_specimens_repository.find(create_specimen(topic_ids: [])._id)
+            topic_b = topics_repository.by_slug('topic-b')
+
+            entry[:topics] = [topic_b]
+
+            expect(entry[:topic_ids]).to eq [topic_b._id]
+          end
+
+          it 'reads a renamed target through a link assigned before the entry is created' do
+            topics = topics_repository
+            fresh  = topics.create(topics.build(name: 'Fresh topic', _slug: 'fresh-topic'))
+            entity = build_specimen(name: 'Linked to fresh')
+            entity[:topics] = [fresh]
+            created = specimens.create(entity).tap { |entry| written << entry }
+
+            renamed = topics.find(fresh._id)
+            renamed[:name] = 'Renamed topic'
+            topics.update(renamed)
+
+            expect(stored(created).topics.all.map(&:name)).to eq ['Renamed topic']
+          ensure
+            topics.delete(topics.find(fresh._id)) if fresh&._id && topics.find(fresh._id)
+          end
+
+          it 'leaves the target the caller assigned in place' do
+            created = create_specimen(maker_id: makers.by_slug('maker-one')._id)
+            entry   = another_specimens_repository.find(created._id)
+            two     = makers.by_slug('maker-two')
+
+            entry[:maker] = two
+            specimens.update(entry)
+
+            expect(entry[:maker].equal?(two)).to be true
+          end
+
+          it 'stores assigned many_to_many targets as their ids' do
+            created = create_specimen(topic_ids: [])
+            entry   = another_specimens_repository.find(created._id)
+            topic_b = topics_repository.by_slug('topic-b')
+
+            entry[:topics] = [topic_b]
+            specimens.update(entry)
+
+            expect([stored(created)[:topic_ids], stored(created).topics.all.map(&:name)]).to eq [[topic_b._id], ['Topic b']]
+          end
+
+          it 'reads the targets new ids name after other targets were assigned' do
+            entry  = another_specimens_repository.find(create_specimen(topic_ids: [])._id)
+            topics = topics_repository
+
+            entry[:topics]    = [topics.by_slug('topic-a')]
+            entry[:topic_ids] = [topics.by_slug('topic-b')._id]
+
+            expect(entry.topics.all.map(&:name)).to eq ['Topic b']
+          end
+
+          it 'stores the ids a change gives after targets' do
+            created = create_specimen(topic_ids: [])
+            entry   = another_specimens_repository.find(created._id)
+            topics  = topics_repository
+
+            entry.change(topics: [topics.by_slug('topic-a')], topic_ids: [topics.by_slug('topic-b')._id])
+            specimens.update(entry)
+
+            expect(stored(created)[:topic_ids]).to eq [topics.by_slug('topic-b')._id]
+          end
+
+          it 'stores the targets a change gives after ids' do
+            created = create_specimen(topic_ids: [])
+            entry   = another_specimens_repository.find(created._id)
+            topics  = topics_repository
+
+            entry.change(topic_ids: [topics.by_slug('topic-b')._id], topics: [topics.by_slug('topic-a')])
+            specimens.update(entry)
+
+            expect(stored(created)[:topic_ids]).to eq [topics.by_slug('topic-a')._id]
+          end
+
+          it 'stores many_to_many targets assigned before the entry is created as their ids' do
+            topic_b = topics_repository.by_slug('topic-b')
+            entity  = build_specimen(name: 'Assigned topics')
+            entity[:topics] = [topic_b]
+            created = specimens.create(entity).tap { |entry| written << entry }
+
+            expect(stored(created)[:topic_ids]).to eq [topic_b._id]
+          end
+
+          it 'stores a target assigned before the entry is created as its id' do
+            entity = build_specimen(name: 'Assigned')
+            entity[:maker] = makers.by_slug('maker-two')
+            created = specimens.create(entity).tap { |entry| written << entry }
+
+            expect([stored(created)[:maker_id], stored(created).maker.name]).to eq [makers.by_slug('maker-two')._id, 'Maker two']
+          end
+
+        end
+
         # Updating a detached copy proves the write reaches the store instead
         # of mutating the object the previous read handed back.
         it 'makes an update visible to a later read' do

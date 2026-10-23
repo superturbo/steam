@@ -131,4 +131,28 @@ describe Locomotive::Steam::Models::Entity do
 
   end
 
+  describe '#[]=' do
+
+    it 'answers the value it assigns when called as a method' do
+      expect(entity.public_send(:[]=, :name, 'Grace')).to eq 'Grace'
+    end
+
+  end
+
+  describe '#change' do
+
+    it 'keeps the arrays and hashes it takes apart from the caller' do
+      labels  = ['two']
+      payload = { 'a' => [{ 'b' => 'deep' }] }
+
+      entity.change(labels: labels, payload: payload)
+      labels << 'three'
+      payload['a'] << { 'c' => 'more' }
+      payload['d'] = 'more'
+
+      expect([entity[:labels], entity[:payload]]).to eq [['two'], { 'a' => [{ 'b' => 'deep' }] }]
+    end
+
+  end
+
 end

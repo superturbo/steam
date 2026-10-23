@@ -3,6 +3,11 @@ module Locomotive::Steam
 
     class ReferencedAssociation
 
+      # A pulled Filesystem entry is stored by its slug, the last part of its id.
+      def self.stored_id(id)
+        id.is_a?(Array) ? id.last : id
+      end
+
       attr_reader :repository
 
       # Copies do not inherit the window preloader.
@@ -51,6 +56,9 @@ module Locomotive::Steam
       end
 
       def __serialize__(entity)
+      end
+
+      def __assigned__(name, value)
       end
 
       def __configured_repository__

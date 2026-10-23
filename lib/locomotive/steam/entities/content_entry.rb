@@ -37,8 +37,6 @@ module Locomotive::Steam
 
     # Positional locale preserves calls such as change(title: 'x').
     def change(new_attributes, locale = nil)
-      @changed_names = changed_names | (new_attributes || {}).keys.map(&:to_sym)
-
       super((new_attributes || {}).each_with_object({}) do |(name, value), changed|
         changed[name] = localized?(name) ? localized_change(name, value, locale) : value
       end)

@@ -25,13 +25,20 @@ module Locomotive::Steam
         Array(@entity[__target_key__])
       end
 
-      # Keep the existing ids until the association is materialized or reassigned.
+      # Preserve stored IDs regardless of cached targets.
       def __serialize__(attributes)
-        return unless attributes.key?(__name__)
+        attributes.delete(__name__)
+      end
 
-        targets = attributes.delete(__name__)
+      def __assigned__(name, value)
+        if name == __name__
+          return if value.is_a?(ReferencedAssociation)
 
-        attributes[__target_key__] = targets.try(:map, &:_id) unless targets.is_a?(ReferencedAssociation)
+          @entity.attributes[__target_key__] = value.try(:map) { |target| ReferencedAssociation.stored_id(target._id) }
+        elsif name == __target_key__
+          # Assigning an ID invalidates the cached targets.
+          @entity.attributes[__name__] = self
+        end
       end
 
       def __target_key__

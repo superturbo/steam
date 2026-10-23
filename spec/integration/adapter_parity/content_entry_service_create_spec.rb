@@ -177,12 +177,36 @@ describe 'Adapter parity' do
                 end
                 expect(stored_maker_id(create_with(maker_id: '5f1111111111111111111111'))).to eq 'pulled-maker'
               end
+
+              it 'keeps the slug it stores for a pulled entry once the link is read and the entry written again' do
+                store_maker(id: ['5f1111111111111111111111', 'pulled-maker'], slug: 'pulled-maker')
+                created = create_with(maker: 'pulled-maker')
+                entry   = entries_of('specimens').find(created['_id'])
+
+                entry.maker.name
+                entry[:score] = 3
+                entries_of('specimens').update(entry)
+
+                expect(stored_maker_id(created)).to eq 'pulled-maker'
+              end
             end
 
             it 'links a hidden target' do
               store_maker(slug: 'hidden-maker', visible: false)
 
               expect(stored_maker_id(create_with(maker: 'hidden-maker'))).to eq id_of('makers', 'hidden-maker')
+            end
+
+            it 'keeps the link to a hidden target through a write of another field that read it' do
+              store_maker(slug: 'hidden-maker', visible: false)
+              created = create_with(maker: 'hidden-maker')
+              entry   = entries_of('specimens').find(created['_id'])
+
+              expect(entry.maker.name).to be_nil
+              entry[:score] = 3
+              entries_of('specimens').update(entry)
+
+              expect(stored_maker_id(created)).to eq id_of('makers', 'hidden-maker')
             end
 
             # Only MongoDB keeps several sites in one store.
@@ -392,6 +416,29 @@ describe 'Adapter parity' do
                 ['pulled-topic', '5f2222222222222222222222'].each do |reference|
                   expect(stored_topic_ids(create_with(topic_ids: [reference]))).to eq ['pulled-topic']
                 end
+              end
+
+              it 'stores a pulled entry assigned as a link by its slug' do
+                store_entry('makers', 'maker-two', id: ['5f5555555555555555555555', 'pulled-maker'], slug: 'pulled-maker')
+                created = create_with(topic_ids: [])
+                entry   = entries_of('specimens').find(created['_id'])
+
+                entry[:maker] = entries_of('makers').by_slug('pulled-maker')
+
+                expect(entry[:maker_id]).to eq 'pulled-maker'
+                entries_of('specimens').update(entry)
+                expect(entries_of('specimens').find(created['_id'])[:maker_id]).to eq 'pulled-maker'
+              end
+
+              it 'stores pulled entries assigned as many_to_many links by their slugs' do
+                store_entry('topics', 'topic-a', id: ['5f6666666666666666666666', 'pulled-topic'], slug: 'pulled-topic')
+                created = create_with(topic_ids: [])
+                entry   = entries_of('specimens').find(created['_id'])
+
+                entry[:topics] = [entries_of('topics').by_slug('pulled-topic')]
+                entries_of('specimens').update(entry)
+
+                expect(entries_of('specimens').find(created['_id'])[:topic_ids]).to eq ['pulled-topic']
               end
 
               it 'refuses both parts of one pulled identity in one list' do
