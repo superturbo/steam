@@ -1,4 +1,5 @@
 require File.dirname(__FILE__) + '/../integration_helper'
+require 'open3'
 
 describe 'Resize jobs' do
 
@@ -319,6 +320,231 @@ describe 'Resize jobs' do
       expect(last_response.status).to eq 404
       expect(last_response.headers['cache-control']).to eq 'no-store'
       expect(Dragonfly).to have_received(:warn).with('Steam does not run this decode option')
+    end
+
+  end
+
+  context 'a job past the size bounds' do
+
+    let(:mode) { :production }
+    let(:key)  { 'a deployment key' }
+
+    before do
+      skip 'ImageMagick is not installed' unless File.exist?(resizer.env[:convert_command].to_s)
+      allow(Dragonfly).to receive(:warn)
+    end
+
+    def with_source(name, *image)
+      Dir.mktmpdir do |root|
+        allow(configuration).to receive(:asset_path).and_return(root)
+        path = File.join(root, name).tap { |file| system(resizer.env[:convert_command].to_s, *image, file, exception: true) }
+
+        yield resizer.fetch_file(path)
+      end
+    end
+
+    def served_size
+      Open3.capture2(resizer.env[:identify_command].to_s, '-format', '%wx%h ', '-', stdin_data: last_response.body, binmode: true).first.strip
+    end
+
+    it 'serves an output side of 5760 and refuses one of 5761, for a new and an earlier URL' do
+      with_source('photo.jpg', '-size', '600x300', 'gradient:red-blue') do |source|
+        %w(5760x 5761x).each do |geometry|
+          [source.thumb(geometry, 'decode' => 'jpeg-1x-v1'), source.thumb(geometry)].each do |job|
+            get job.url
+
+            if geometry == '5760x'
+              expect([last_response.status, served_size]).to eq [200, '5760x2880']
+            else
+              expect([last_response.status, last_response.headers['cache-control']]).to eq [404, 'no-store']
+            end
+          end
+        end
+        expect(Dragonfly).to have_received(:warn).with('Steam does not resize to this size').twice
+      end
+    end
+
+    it 'bounds the only frame of a JPEG a frame index past it names, which ImageMagick resizes all the same' do
+      with_source('photo.jpg', '-size', '600x300', 'gradient:red-blue') do |source|
+        [{}, { 'decode' => 'jpeg-1x-v1' }].each do |opts|
+          get source.thumb('5760x', opts.merge('frame' => 1)).url
+          expect([last_response.status, served_size]).to eq [200, '5760x2880']
+
+          get source.thumb('5761x', opts.merge('frame' => 1)).url
+          expect([last_response.status, last_response.headers['cache-control']]).to eq [404, 'no-store']
+        end
+      end
+    end
+
+    it 'refuses a frame option ImageMagick would read as no frame index, and serves a whole one' do
+      formats = Open3.capture2(resizer.env[:convert_command].to_s, '-list', 'format').first
+      skip 'this ImageMagick does not write a TIFF of several images' unless formats.match?(/^\s*TIFF\*?\s+\S+\s+rw\+/)
+
+      with_source('pages.tif', '-size', '1x6000', 'xc:red', '-size', '1x1', 'xc:blue') do |source|
+        [{}, { 'decode' => 'jpeg-1x-v1' }].each do |opts|
+          get source.thumb('1x>', opts.merge('frame' => '1.2')).url
+          expect([last_response.status, last_response.headers['cache-control']]).to eq [404, 'no-store']
+
+          get source.thumb('1x>', opts.merge('frame' => '1')).url
+          expect([last_response.status, served_size]).to eq [200, '1x1']
+        end
+      end
+    end
+
+    it 'refuses a crop whose frames an MNG shares one canvas past the bounds for, and serves them as a TIFF or a MIFF' do
+      formats = Open3.capture2(resizer.env[:convert_command].to_s, '-list', 'format').first
+      skip 'this ImageMagick does not write a TIFF of several images' unless formats.match?(/^\s*TIFF\*?\s+\S+\s+rw\+/)
+
+      with_source('strips.tif', '-size', '5001x1', 'xc:red', '-size', '1x5001', 'xc:blue') do |source|
+        { 'mng' => 404, 'tiff' => 200, 'miff' => 200 }.each do |format, status|
+          get source.thumb('5001x5001+0+0', 'format' => format).url
+
+          expect(last_response.status).to eq(status), format
+        end
+      end
+    end
+
+    it 'serves a fill longer than an output may be before its crop, within the area' do
+      with_source('tall.jpg', '-size', '600x2000', 'xc:white') do |source|
+        get source.thumb('2000x1000#').url
+
+        expect([last_response.status, served_size]).to eq [200, '2000x1000']
+      end
+    end
+
+    it 'refuses a fill past the area before its crop' do
+      with_source('tall.jpg', '-size', '1000x10000', 'xc:white') do |source|
+        get source.thumb('2000x1000#').url
+
+        expect(last_response.status).to eq 404
+      end
+    end
+
+    it 'bounds each frame of an animation, and only the frame a job names' do
+      with_source('animation.gif', '-size', '10x10', 'xc:red', '-size', '3000x3000', 'xc:blue') do |source|
+        {
+          source.thumb('100x100>')                  => 200,
+          source.thumb('200x200%')                  => 404,
+          source.thumb('200x200%', 'frame' => 0)    => 200,
+          source.thumb('200x200%', 'frame' => 1)    => 404
+        }.each do |job, status|
+          get job.url
+
+          expect(last_response.status).to eq(status), job.url
+        end
+      end
+    end
+
+    it 'refuses a resize that scales a GIF canvas past the bounds, and serves a fill that resets it, or a JPEG' do
+      with_source('canvas.gif', '-size', '10x10', 'xc:red', '-repage', '6000x6000+100+100') do |source|
+        {
+          source.thumb('100x100>')                   => 404,
+          source.thumb('20x20#')                     => 200,
+          source.thumb('100x100>', 'format' => 'jpg') => 200,
+          source.thumb('100x100>', 'format' => 'gif87') => 404,
+          source.thumb('100x100>', 'format' => 'mng') => 404
+        }.each do |job, status|
+          get job.url
+
+          expect(last_response.status).to eq(status), job.url
+        end
+      end
+    end
+
+    it 'refuses MNG output with an oversized canvas' do
+      with_source('offset.miff', '-size', '10x10', 'xc:red', '-repage', '0x0+6000+6000') do |source|
+        get source.thumb('100x100>', 'format' => 'mng').url
+
+        expect(last_response.status).to eq 404
+      end
+    end
+
+    {
+      ['10x10', '1x1+60000+60000', '1x1'] => 'a square',
+      ['11x10', '2x1+60000+0', 'x2']      => 'an oblong',
+      ['10x10', '1x1-60000-60000', '1x1'] => 'a negatively placed'
+    }.each do |(size, page, geometry), shape|
+      it "refuses #{shape} canvas a shrink rounds down to nothing, which an MNG sizes from the offset, and serves it as a MIFF" do
+        with_source('offset.miff', '-size', size, 'xc:red', '-repage', page) do |source|
+          { 'mng' => 404, 'miff' => 200 }.each do |format, status|
+            get source.thumb(geometry, 'format' => format).url
+
+            expect(last_response.status).to eq(status), format
+          end
+        end
+      end
+    end
+
+    it 'refuses a sequence whose MNG canvas the offsets of its frames build past the bounds, and serves it as a MIFF or its second frame' do
+      with_source('frames.miff', '(', '-size', '10x10', 'xc:red', '-repage', '1x1+0+0', ')',
+                  '(', '-size', '10x10', 'xc:blue', '-repage', '10x10+60000+60000', ')') do |source|
+        {
+          source.thumb('1x1', 'format' => 'mng')               => 404,
+          source.thumb('1x1', 'format' => 'miff')              => 200,
+          source.thumb('1x1', 'format' => 'mng', 'frame' => 1) => 200
+        }.each do |job, status|
+          get job.url
+
+          expect(last_response.status).to eq(status), job.url
+          expect(last_response.headers['cache-control']).to eq 'no-store' if status == 404
+        end
+      end
+    end
+
+    it 'serves a frame an offset places past the canvas the source declares, which an MNG keeps at that size' do
+      with_source('offset.miff', '-size', '10x10', 'xc:red', '-repage', '100x100+6000+6000') do |source|
+        get source.thumb('100x100>', 'format' => 'mng').url
+
+        expect(last_response.status).to eq 200
+      end
+    end
+
+    it 'serves a PNG whose canvas is metadata alone, at its own size' do
+      with_source('canvas.png', '-size', '10x10', 'xc:red', '-repage', '6000x6000+100+100') do |source|
+        get source.thumb('100x100>').url
+
+        expect([last_response.status, served_size]).to eq [200, '10x10']
+      end
+    end
+
+    it 'bounds the canvas by the format the output is written in, not the one the source is read in' do
+      Dir.mktmpdir do |root|
+        allow(configuration).to receive(:asset_path).and_return(root)
+        gif = File.join(root, 'canvas.png')
+        system(resizer.env[:convert_command].to_s, '-size', '10x10', 'xc:red', '-repage', '6000x6000+100+100', "gif:#{gif}", exception: true)
+
+        get resizer.fetch_file(gif).thumb('100x100>').url
+
+        expect([last_response.status, served_size]).to eq [200, '10x10']
+      end
+    end
+
+    it 'refuses a resize that scales the canvas of an animated WebP past the bounds' do
+      formats = Open3.capture2(resizer.env[:convert_command].to_s, '-list', 'format').first
+      skip 'this ImageMagick does not write animated WebP' unless formats.match?(/^\s*WEBP\*?\s+\S+\s+rw\+/)
+
+      with_source('canvas.webp', '-size', '10x10', 'xc:red', '-repage', '6000x6000+100+100',
+                  '(', '-size', '40x40', 'xc:blue', '-repage', '6000x6000+0+0', ')') do |source|
+        get source.thumb('100x100>').url
+
+        expect(last_response.status).to eq 404
+      end
+    end
+
+    it 'serves a crop of a region outside the image' do
+      with_source('photo.png', '-size', '600x300', 'xc:red') do |source|
+        get source.thumb('500x500+9000+9000').url
+
+        expect(last_response.status).to eq 200
+      end
+    end
+
+    it 'serves a fill that shrinks a photo, with the decode option' do
+      with_source('photo.jpg', '-size', '4032x3024', 'gradient:red-blue') do |source|
+        get source.thumb('2292x1125#', 'decode' => 'jpeg-1x-v1').url
+
+        expect([last_response.status, served_size]).to eq [200, '2292x1125']
+      end
     end
 
   end

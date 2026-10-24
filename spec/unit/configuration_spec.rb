@@ -24,6 +24,14 @@ describe Locomotive::Steam::Configuration do
 
   end
 
+  describe 'the resize bounds' do
+
+    it 'bound an output at 5760 px a side and 25,000,000 pixels' do
+      expect([subject.image_resizer_max_side, subject.image_resizer_max_area]).to eq [5760, 25_000_000]
+    end
+
+  end
+
   describe 'assign a different value' do
 
     before { subject.mode = :test }

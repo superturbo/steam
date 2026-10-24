@@ -12,6 +12,7 @@ module Locomotive
           key = signing_key
           timeout = command_timeout
           check_remote_source_prefix
+          check_size_bounds
 
           # Clear earlier rules before installing source checks.
           ::Dragonfly.app(:steam).server.fetch_file_whitelist.patterns.clear
@@ -21,6 +22,7 @@ module Locomotive
             if imagemagick_commands
               plugin :imagemagick, imagemagick_commands
               processor :thumb, Locomotive::Steam::ImageResizerService::Thumb.new
+              analyser :steam_image, Locomotive::Steam::ImageResizerService::SourceImage.new
 
               processor :convert do |content, args|
                 Locomotive::Steam::ImageResizerService::ConvertArguments.check!(args)
@@ -69,6 +71,17 @@ module Locomotive
 
           raise ArgumentError, 'Steam needs an image_resizer_secret outside test mode; ' \
                                "a blank value or 'please change it' is not one."
+        end
+
+        def check_size_bounds
+          configuration = Locomotive::Steam.configuration
+
+          %i(image_resizer_max_side image_resizer_max_area).each do |name|
+            value = configuration.public_send(name)
+            next if value.is_a?(Integer) && value.positive?
+
+            raise ArgumentError, "Steam needs #{name} as a positive whole number of pixels."
+          end
         end
 
         def check_remote_source_prefix

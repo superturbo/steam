@@ -8,14 +8,219 @@ describe Locomotive::Steam::ImageResizerService::Thumb do
   let(:processor) { described_class.new }
   let(:decode)    { { 'decode' => 'jpeg-1x-v1' } }
 
+  # As identify reports a frame: its canvas is its own size, at no offset, unless one is given.
+  def source(format, *frames)
+    frames = frames.map do |width, height, canvas_width = width, canvas_height = height, x = 0, y = 0|
+      [width, height, canvas_width, canvas_height, x, y]
+    end
+    allow(content).to receive(:analyse).with(:steam_image).and_return('format' => format, 'frames' => frames)
+  end
+
   describe 'a job without the decode option' do
 
-    it 'is processed as Dragonfly processes it, without reading the image first' do
-      expect(content).not_to receive(:analyse)
+    it 'reads the image, then is processed as Dragonfly processes it' do
+      source('png', [1000, 800], [1000, 800])
       expect(::Dragonfly::ImageMagick::Commands).to receive(:convert)
         .with(content, processor.args_for_geometry('900x>'), { 'format' => 'webp', 'frame' => 1 })
 
       processor.call(content, '900x>', 'format' => 'webp', 'frame' => 1)
+    end
+
+  end
+
+  describe 'a job whose output or intermediate image Steam does not run' do
+
+    let(:refused) { [Locomotive::Steam::ImageResizerService::Shell::RefusedJob, 'Steam does not resize to this size'] }
+
+    before { allow(::Dragonfly::ImageMagick::Commands).to receive(:convert) }
+
+    [{}, { 'decode' => 'jpeg-1x-v1' }].each do |opts|
+      context(opts.empty? ? 'without the decode option' : 'with the decode option') do
+
+        it 'runs a side of 5760 and refuses one of 5761' do
+          source('jpeg', [9000, 3000])
+
+          expect { processor.call(content, '5760x', opts) }.not_to raise_error
+          expect { processor.call(content, '5761x', opts) }.to raise_error(*refused)
+        end
+
+        it 'refuses an image filled past the bounds before it is cropped' do
+          source('jpeg', [1000, 20000])
+
+          expect { processor.call(content, '2292x1125#', opts) }.to raise_error(*refused)
+          expect(::Dragonfly::ImageMagick::Commands).not_to have_received(:convert)
+        end
+
+      end
+    end
+
+    it 'bounds a JPEG at each size it may decode to, not at its full size alone' do
+      source('jpeg', [16832, 12682])
+
+      expect { processor.call(content, '5760x') }.not_to raise_error
+      expect { processor.call(content, '5760x', decode) }.to raise_error(*refused)
+    end
+
+    it 'bounds a JPEG at a decoded size equal to the size it asks for' do
+      source('jpeg', [15808, 11910])
+
+      expect { processor.call(content, '5760x') }.not_to raise_error
+      expect { processor.call(content, '5760x', decode) }.to raise_error(*refused)
+    end
+
+    it 'refuses an area of hundreds of digits, and a fill of as many, before conversion' do
+      source('jpeg', [6000, 3000])
+
+      expect { processor.call(content, "#{'9' * 400}@", decode) }.to raise_error(*refused)
+      expect { processor.call(content, "#{'9' * 400}x30^", decode) }.to raise_error(*refused)
+      expect(::Dragonfly::ImageMagick::Commands).not_to have_received(:convert)
+    end
+
+    it 'refuses, before conversion, a size whose decode ratio is finite only until it is scaled' do
+      source('jpeg', [1, 1])
+
+      expect { processor.call(content, "#{'9' * 308}x", decode) }.to raise_error(*refused)
+      expect(::Dragonfly::ImageMagick::Commands).not_to have_received(:convert)
+    end
+
+    it 'bounds the canvas a frame is resized with when the output keeps it' do
+      source('gif', [10, 10, 6000, 6000])
+
+      expect { processor.call(content, '100x100>') }.to raise_error(*refused)
+      expect { processor.call(content, '20x20#') }.not_to raise_error
+    end
+
+    %w(gif87 mng miff unheard).each do |format|
+      it "bounds the canvas of #{format} output, as of any format not known to leave it out" do
+        source('gif', [10, 10, 6000, 6000])
+
+        expect { processor.call(content, '100x100>', 'format' => format) }.to raise_error(*refused)
+      end
+    end
+
+    %w(jpg jpeg png png8 png32 tif tiff bmp avif psd ico).each do |format|
+      it "leaves the canvas out of #{format} output, which drops it or keeps it as metadata alone" do
+        source('gif', [10, 10, 6000, 6000])
+
+        expect { processor.call(content, '100x100>', 'format' => format) }.not_to raise_error
+      end
+    end
+
+    it 'leaves the canvas out of a PNG source written as itself' do
+      source('png', [10, 10, 6000, 6000])
+
+      expect { processor.call(content, '100x100>') }.not_to raise_error
+    end
+
+    it 'bounds the canvas of an animated WebP, not of a single WebP frame' do
+      source('webp', [10, 10, 6000, 6000], [40, 40, 6000, 6000])
+
+      expect { processor.call(content, '100x100>') }.to raise_error(*refused)
+      expect { processor.call(content, '100x100>', 'frame' => 0) }.not_to raise_error
+    end
+
+    it 'bounds the canvas an encoder shares across frames, as wide and as tall as any of them' do
+      source('tiff', [5001, 1], [1, 5001])
+
+      expect { processor.call(content, '5001x5001+0+0', 'format' => 'mng') }.to raise_error(*refused)
+      expect { processor.call(content, '5001x5001+0+0', 'format' => 'tiff') }.not_to raise_error
+
+      source('tiff', [5000, 1], [1, 5000])
+      expect { processor.call(content, '5000x5000+0+0', 'format' => 'mng') }.not_to raise_error
+    end
+
+    it 'bounds the canvas of each MIFF frame, which keeps one apiece rather than sharing one' do
+      source('tiff', [5001, 1], [1, 5001])
+      expect { processor.call(content, '5001x5001+0+0', 'format' => 'miff') }.not_to raise_error
+
+      source('gif', [10, 10, 6000, 6000])
+      expect { processor.call(content, '100x100>', 'format' => 'miff') }.to raise_error(*refused)
+    end
+
+    {
+      ['1x1', [10, 10, 1, 1, 60000, 60000]]   => 'a square',
+      ['x2', [11, 10, 2, 1, 60000, 0]]        => 'an oblong',
+      ['1x1', [10, 10, 1, 1, -60000, -60000]] => 'a negatively placed'
+    }.each do |(geometry, frame), shape|
+      it "bounds #{shape} frame on a canvas narrower than itself by its offset, for an encoder that sizes a canvas from it" do
+        source('miff', frame)
+
+        expect { processor.call(content, geometry, 'format' => 'mng') }.to raise_error(*refused)
+        expect { processor.call(content, geometry, 'format' => 'miff') }.not_to raise_error
+      end
+    end
+
+    it 'bounds the canvas an encoder builds for a sequence by every offset, once any frame canvas may round down to nothing' do
+      source('miff', [10, 10, 1, 1, 0, 0], [10, 10, 10, 10, 60000, 60000])
+
+      expect { processor.call(content, '1x1', 'format' => 'mng') }.to raise_error(*refused)
+      expect { processor.call(content, '1x1', 'format' => 'miff') }.not_to raise_error
+      expect { processor.call(content, '1x1', 'format' => 'mng', 'frame' => 1) }.not_to raise_error
+    end
+
+    it 'bounds every frame, not the first alone' do
+      source('gif', [10, 10], [5000, 5000])
+
+      expect { processor.call(content, '100x100>') }.not_to raise_error
+      expect { processor.call(content, '200x200%') }.to raise_error(*refused)
+    end
+
+    it 'bounds only the frame a job names' do
+      source('gif', [10, 10], [5000, 5000])
+
+      expect { processor.call(content, '200x200%', 'frame' => 0) }.not_to raise_error
+      expect { processor.call(content, '200x200%', 'frame' => 1) }.to raise_error(*refused)
+    end
+
+    [{}, { 'decode' => 'jpeg-1x-v1' }].each do |opts|
+      it "bounds the only frame of a source a frame index past it names, #{opts.empty? ? 'without' : 'with'} the decode option" do
+        source('jpeg', [600, 300])
+
+        expect { processor.call(content, '5760x', opts.merge('frame' => 1)) }.not_to raise_error
+        expect { processor.call(content, '5761x', opts.merge('frame' => 1)) }.to raise_error(*refused)
+      end
+    end
+
+    ['1.2', '1.0', 1.0, -1, '-1', 'x', ''].each do |frame|
+      it "refuses a frame option of #{frame.inspect}, which is no whole frame index" do
+        expect(content).not_to receive(:analyse)
+
+        expect { processor.call(content, '40x30', 'frame' => frame) }
+          .to raise_error(Locomotive::Steam::ImageResizerService::Shell::RefusedJob, 'Steam does not run this frame option')
+        expect(::Dragonfly::ImageMagick::Commands).not_to have_received(:convert)
+      end
+    end
+
+    [{}, { 'decode' => 'jpeg-1x-v1' }].each do |opts|
+      it "refuses a frame index past what ImageMagick reads exactly, #{opts.empty? ? 'without' : 'with'} the decode option" do
+        source('jpeg', [600, 300])
+
+        ['9' * 30, 10**30, 2**53 + 1, (2**53 + 1).to_s].each do |frame|
+          expect { processor.call(content, '40x30', opts.merge('frame' => frame)) }
+            .to raise_error(Locomotive::Steam::ImageResizerService::Shell::RefusedJob, 'Steam does not run this frame option')
+        end
+        expect { processor.call(content, '40x30', opts.merge('frame' => (2**53).to_s)) }.not_to raise_error
+      end
+
+      it "hands ImageMagick the frame index it bounds, #{opts.empty? ? 'without' : 'with'} the decode option" do
+        source('jpeg', [600, 300], [600, 300])
+
+        processor.call(content, '40x30', opts.merge('frame' => '1'))
+
+        expect(::Dragonfly::ImageMagick::Commands).to have_received(:convert).with(content, anything, hash_including('frame' => 1))
+      end
+    end
+
+    it 'refuses an image with no frame to bound' do
+      source('png')
+
+      expect { processor.call(content, '40x30') }.to raise_error(*refused)
+    end
+
+    it 'bounds each frame of an animation on its own, not their sum' do
+      source('gif', *[[600, 600]] * 15)
+
+      expect { processor.call(content, '2292x1125#') }.not_to raise_error
     end
 
   end
@@ -48,7 +253,7 @@ describe Locomotive::Steam::ImageResizerService::Thumb do
   describe 'the JPEG decoding size of a job with the decode option' do
 
     def input_args(geometry, width, height, format = 'jpeg')
-      allow(content).to receive(:analyse).with(:image_properties).and_return('format' => format, 'width' => width, 'height' => height)
+      source(format, [width, height])
       args = nil
       allow(::Dragonfly::ImageMagick::Commands).to receive(:convert) { |*, opts| args = opts['input_args'] }
       processor.call(content, geometry, decode)
@@ -97,7 +302,7 @@ describe Locomotive::Steam::ImageResizerService::Thumb do
     end
 
     it 'keeps the format and the frame' do
-      allow(content).to receive(:analyse).with(:image_properties).and_return('format' => 'jpeg', 'width' => 4000, 'height' => 3000)
+      source('jpeg', [4000, 3000])
       expect(::Dragonfly::ImageMagick::Commands).to receive(:convert)
         .with(content, anything, hash_including('format' => 'webp', 'frame' => 1))
 
@@ -136,19 +341,50 @@ describe Locomotive::Steam::ImageResizerService::Thumb do
       expect(read(processed(processor, jpeg, '900x>'), '%wx%h %#')).to eq read(processed(upstream, jpeg, '900x>'), '%wx%h %#')
     end
 
-    # Preserve Dragonfly behavior, including accepted degenerate sizes.
-    %w(
+    accepted = %w(
       40x30 40x x30 40x30> 40x> x30> 40x30< 40x< x100< 100x100< 0x30> 0x30<
       40x30^ 40x^ x30^ 0x30^ 40x0^ 40x30! 40x! x30! x! 50x50% 50x% x50% 150x% x%
       1200@ 1@ 2400@ x 0x0 0x30 40x0
       40x30# 40x30#nw 40x30#n 40x30#ne 40x30#w 40x30#c 40x30#e 40x30#sw 40x30#s 40x30#se 0x0# 0x30#
       20x20+5+5 20x20-5-5 20x20+5 20x20nw 20x20c 20x20xx 0x0+0+0 0x20+0+0
-    ).each do |geometry|
+    )
+
+    # Preserve Dragonfly behavior, including accepted degenerate sizes.
+    accepted.each do |geometry|
       it "runs #{geometry} as Dragonfly does, with the decode option and without" do
         png      = image('source.png', '60x40')
         expected = read(processed(upstream, png, geometry), '%wx%h %#')
 
         expect([{}, decode].map { |opts| read(processed(processor, png, geometry, opts), '%wx%h %#') }).to eq [expected] * 2
+      end
+    end
+
+    def sizes(target)
+      read(target, '%w %h').split.map(&:to_i)
+    end
+
+    def within?(actual, bound)
+      actual.zip(bound).all? { |size, limit| size <= limit }
+    end
+
+    # Degenerate dimensions and crop offsets use conservative bounds.
+    loose = %w(x 0x0 0x30 40x0 0x30> 0x30^ 40x0^ 0x0# 0x30# 20x20+5+5 20x20-5-5 20x20+5)
+
+    %w(60x40 40x60 7x3).product(accepted).each do |dims, geometry|
+      it "bounds #{geometry} from #{dims} at what it makes#{' or above' if loose.include?(geometry)}" do
+        png    = image("source-#{dims}.png", dims)
+        bound  = Locomotive::Steam::ImageResizerService::Geometry.sizes(geometry, *dims.split('x').map(&:to_i))
+        actual = [sizes(processed(processor, png, geometry))]
+
+        if (fill = geometry[/\A(\d+x\d+)#/, 1])
+          filled = File.join(dir, 'filled.png').tap { |path| system(convert, png, '-resize', "#{fill}^^", path, exception: true) }
+          actual.unshift(sizes(filled))
+        end
+
+        expect(actual.zip(bound).all? { |size, limit| within?(size, limit) }).to be(true), "#{actual} past #{bound}"
+        next if loose.include?(geometry)
+
+        expect(actual.zip(bound).all? { |size, limit| within?(limit, size.map(&:succ)) }).to be(true), "#{bound} above #{actual}"
       end
     end
 
@@ -178,6 +414,47 @@ describe Locomotive::Steam::ImageResizerService::Thumb do
         expect(decoded.zip(source.split('x').map(&:to_i)).all? { |d, s| d <= s }).to be(true), "decoded #{decoded}"
         expect(result.zip(full).all? { |r, f| (r - f).abs <= 1 }).to be(true), "resized #{result}, full decode #{full}"
         set_sides.each { |side, size| expect(result[side]).to eq size }
+      end
+    end
+
+    {
+      '900x>'      => '4001x3001',
+      '300x200'    => '4001x3001',
+      'x323>'      => '4001x3001',
+      '300x200^'   => '4003x2999',
+      '900x'       => '4007x3005',
+      '2292x1125#' => '4001x3001'
+    }.each do |geometry, source|
+      it "bounds #{geometry} on a #{source} JPEG at the size it decodes to" do
+        jpeg = image('photo.jpg', source)
+        args = nil
+        allow(::Dragonfly::ImageMagick::Commands).to receive(:convert).and_wrap_original do |original, content, command, opts|
+          args = opts['input_args'] if opts.key?('input_args')
+          original.call(content, command, opts)
+        end
+
+        result  = sizes(processed(processor, jpeg, geometry, decode))
+        hint    = args.split('=').last.split('x').map(&:to_i)
+        decoded = read(jpeg, '%w %h', args.split.last).split.map(&:to_i)
+        bound   = Locomotive::Steam::ImageResizerService::Geometry.sizes(geometry, *decoded)
+
+        expect(described_class.decoded_sizes(*source.split('x').map(&:to_i), hint)).to include(decoded)
+        expect(within?(result, bound.last)).to be(true), "#{result} past #{bound.last}"
+      end
+    end
+
+    [{}, { 'decode' => 'jpeg-1x-v1' }].each do |opts|
+      it "reads a JPEG once and converts it once, #{opts.empty? ? 'without' : 'with'} the decode option" do
+        jpeg     = image('photo.jpg', '4000x3000')
+        commands = []
+        allow(app.shell).to receive(:run_command).and_wrap_original do |original, command|
+          commands << (command.start_with?(identify) ? :identify : :convert)
+          original.call(command)
+        end
+
+        processed(processor, jpeg, '900x>', opts)
+
+        expect(commands).to eq %i(identify convert)
       end
     end
 

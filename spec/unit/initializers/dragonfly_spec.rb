@@ -110,6 +110,24 @@ describe Locomotive::Steam::Initializers::Dragonfly do
       expect(app.shell.timeout).to eq 12
     end
 
+    %i(image_resizer_max_side image_resizer_max_area).product([0, -1, 1.5, '5760']).each do |name, value|
+      it "refuse to start with #{name} of #{value.inspect}" do
+        allow(configuration).to receive(name).and_return(value)
+
+        expect { initializer.run }.to raise_error(ArgumentError, /#{name}/)
+      end
+    end
+
+    %i(image_resizer_max_side image_resizer_max_area).each do |name|
+      it "refuse to start with #{name} set to false" do
+        configuration.public_send(:"#{name}=", false)
+
+        expect { initializer.run }.to raise_error(ArgumentError, /#{name}/)
+      ensure
+        configuration.public_send(:"#{name}=", nil)
+      end
+    end
+
     [0, -1, Float::INFINITY, Float::NAN, Complex(1, 1), '30'].each do |value|
       it "refuse to start with a timeout of #{value.inspect}" do
         allow(configuration).to receive(:image_magick_command_timeout).and_return(value)
@@ -141,7 +159,7 @@ describe Locomotive::Steam::Initializers::Dragonfly do
         app.fetch_file(image).thumb('4x4').apply
         app.fetch_file(image).width
 
-        expect(app.shell).to have_received(:run).with(/identify/, anything).twice
+        expect(app.shell).to have_received(:run).with(/identify/, anything).exactly(3).times
         expect(app.shell).to have_received(:run).with(/convert/, anything).exactly(3).times
       end
 

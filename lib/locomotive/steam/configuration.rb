@@ -86,6 +86,15 @@ module Locomotive
       #
       attr_accessor :image_resizer_remote_source_prefix
 
+      # Largest side and area of a resize output, for each frame and a canvas the output keeps;
+      # the resize a fill makes before its crop keeps the area alone.
+      #
+      # default: 5760 and 25_000_000
+      #
+      attr_accessor :image_resizer_max_side, :image_resizer_max_area
+      def image_resizer_max_side; @image_resizer_max_side.nil? ? 5760 : @image_resizer_max_side; end
+      def image_resizer_max_area; @image_resizer_max_area.nil? ? 25_000_000 : @image_resizer_max_area; end
+
       # Timeout for one ImageMagick command, not the whole resize job.
       #
       # default: 30

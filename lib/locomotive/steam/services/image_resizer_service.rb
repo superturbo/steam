@@ -4,6 +4,7 @@ require_relative 'image_resizer_service/thumb'
 require_relative 'image_resizer_service/shell'
 require_relative 'image_resizer_service/convert_arguments'
 require_relative 'image_resizer_service/geometry'
+require_relative 'image_resizer_service/source_image'
 
 module Locomotive
   module Steam
