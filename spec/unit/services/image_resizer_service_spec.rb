@@ -172,6 +172,27 @@ describe Locomotive::Steam::ImageResizerService do
         end
       end
 
+      describe 'the auto-orient argument' do
+        let(:input) { '/images/nav_on.png' }
+
+        def steps(url)
+          job = ::Dragonfly::Job.deserialize(url.split('/')[3], resizer)
+          job.steps.grep(::Dragonfly::Job::Process).map(&:args)
+        end
+
+        it 'orients the image in the resize, before its geometry, not after it' do
+          expect(steps(service.resize(input, '30x40#', '-quality 70 -auto-orient')))
+            .to eq [['thumb', '30x40#', { 'decode' => 'jpeg-1x-v1', 'orient' => true }], ['convert', '-quality 70']]
+          expect(steps(service.resize(input, '30x40#', '-auto-orient')))
+            .to eq [['thumb', '30x40#', { 'decode' => 'jpeg-1x-v1', 'orient' => true }]]
+        end
+
+        it 'leaves other ImageMagick arguments as they are' do
+          expect(steps(service.resize(input, '30x40#', '-quality 70 -strip')))
+            .to eq [['thumb', '30x40#', { 'decode' => 'jpeg-1x-v1' }], ['convert', '-quality 70 -strip']]
+        end
+      end
+
       describe 'a geometry Steam does not run' do
         let(:input) { '/images/nav_on.png' }
 

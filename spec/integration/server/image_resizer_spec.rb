@@ -531,6 +531,35 @@ describe 'Resize jobs' do
       end
     end
 
+    it 'serves an EXIF-oriented photo resized as it shows, and an earlier URL that orients after its resize' do
+      with_source('photo.jpg', '-size', '1800x1200', 'gradient:red-blue') do |source|
+        ExifOrientation.write(source.path, 6)
+
+        get Locomotive::Steam::ImageResizerService.new(resizer).resize('/photo.jpg', '900x>', '-auto-orient')
+        expect([last_response.status, served_size]).to eq [200, '900x1350']
+
+        get source.thumb('900x>', 'decode' => 'jpeg-1x-v1').process(:convert, '-auto-orient').url
+        expect([last_response.status, served_size]).to eq [200, '600x900']
+      end
+    end
+
+    it 'serves an EXIF 7 photo cropped as it shows' do
+      with_source('photo.jpg', '-size', '1800x1200', 'gradient:red-blue') do |source|
+        ExifOrientation.write(source.path, 7)
+
+        get Locomotive::Steam::ImageResizerService.new(resizer).resize('/photo.jpg', '600x200#', '-auto-orient')
+        expect([last_response.status, served_size]).to eq [200, '600x200']
+      end
+    end
+
+    it 'serves a transposed frame far off its canvas on a canvas of its own size' do
+      with_source('long.miff', '-size', '100x1000', 'xc:red', '-repage', '1x1+500000+0', '-orient', 'LeftTop') do |source|
+        get source.thumb('3000x1!', 'orient' => true, 'format' => 'mng').url
+
+        expect([last_response.status, served_size]).to eq [200, '3000x1']
+      end
+    end
+
     it 'serves a crop of a region outside the image' do
       with_source('photo.png', '-size', '600x300', 'xc:red') do |source|
         get source.thumb('500x500+9000+9000').url

@@ -9,11 +9,115 @@ describe Locomotive::Steam::ImageResizerService::Thumb do
   let(:decode)    { { 'decode' => 'jpeg-1x-v1' } }
 
   # As identify reports a frame: its canvas is its own size, at no offset, unless one is given.
-  def source(format, *frames)
-    frames = frames.map do |width, height, canvas_width = width, canvas_height = height, x = 0, y = 0|
-      [width, height, canvas_width, canvas_height, x, y]
+  def source(format, *frames, orientation: 'Undefined')
+    frames = frames.map do |width, height, canvas_width = width, canvas_height = height, x = 0, y = 0, turn = orientation|
+      { 'size' => [width, height], 'canvas' => [canvas_width, canvas_height], 'offset' => [x, y], 'orientation' => turn }
     end
     allow(content).to receive(:analyse).with(:steam_image).and_return('format' => format, 'frames' => frames)
+  end
+
+  describe 'a job with the orient option' do
+
+    let(:refused) { [Locomotive::Steam::ImageResizerService::Shell::RefusedJob, 'Steam does not resize to this size'] }
+    let(:calls)   { [] }
+
+    before { allow(::Dragonfly::ImageMagick::Commands).to receive(:convert) { |_, *args| calls << args } }
+
+    def frame(width, height, canvas: [width, height], offset: [0, 0], orientation: 'TopLeft', was: nil)
+      { 'size' => [width, height], 'canvas' => canvas, 'offset' => offset, 'orientation' => orientation, 'source_orientation' => was }
+    end
+
+    # As identify pings the source, then the frames as ImageMagick orients them, each with the orientation it had.
+    def oriented(format, source, frames)
+      allow(content).to receive(:analyse).with(:steam_image).and_return('format' => format, 'frames' => source)
+      allow(Locomotive::Steam::ImageResizerService::SourceImage).to receive(:oriented).and_return('format' => format, 'frames' => frames)
+    end
+
+    def measured
+      Locomotive::Steam::ImageResizerService::SourceImage
+    end
+
+    it 'measures the image as ImageMagick orients it, then orients and resizes it in one command' do
+      oriented('jpeg', [frame(1800, 1200, orientation: 'RightTop')], [frame(1200, 1800, was: 'RightTop')])
+
+      processor.call(content, '900x>', 'orient' => true)
+
+      expect(measured).to have_received(:oriented).with(content, nil, nil)
+      expect(calls).to eq [['-auto-orient +repage -resize 900x>', { 'format' => nil, 'frame' => nil, 'input_args' => nil }]]
+    end
+
+    it 'measures and resizes the frame a job names, in the format the job writes' do
+      oriented('gif', [frame(10, 10), frame(10, 20, orientation: 'RightTop')], [frame(20, 10, was: 'RightTop')])
+
+      processor.call(content, '900x>', 'orient' => true, 'frame' => 1, 'format' => 'png')
+
+      expect(measured).to have_received(:oriented).with(content, 1, nil)
+      expect(calls).to eq [['-auto-orient +repage -resize 900x>', { 'format' => 'png', 'frame' => 1, 'input_args' => nil }]]
+    end
+
+    {
+      'TopLeft' => '900x600', 'TopRight' => '900x600', 'BottomRight' => '900x600', 'BottomLeft' => '900x600',
+      'LeftTop' => '1350x900', 'RightTop' => '1350x900', 'RightBottom' => '1350x900', 'LeftBottom' => '1350x900'
+    }.each do |orientation, size|
+      it "asks for #{size} to decode a #{orientation} JPEG in its encoded orientation, for the ratio the oriented image needs" do
+        oriented('jpeg', [frame(1800, 1200, orientation: orientation)], [frame(900, 600, was: orientation)])
+
+        processor.call(content, '900x>', decode.merge('orient' => true))
+
+        expect(measured).to have_received(:oriented).with(content, nil, "-define jpeg:size=#{size}")
+        expect(calls.last.last).to include('input_args' => "-define jpeg:size=#{size}")
+      end
+    end
+
+    %w(Undefined TopLeft).each do |orientation|
+      it "keeps the canvas of an image ImageMagick left #{orientation}" do
+        oriented('gif', [frame(10, 10, canvas: [100, 100], offset: [5, 5], orientation: orientation)],
+                 [frame(10, 10, canvas: [100, 100], offset: [5, 5], was: orientation)])
+
+        processor.call(content, '900x>', 'orient' => true)
+
+        expect(calls.last.first).to eq '-auto-orient -resize 900x>'
+      end
+    end
+
+    it 'keeps the canvas of every frame of a sequence, one turned among them' do
+      oriented('miff', [frame(10, 20, orientation: 'RightTop'), frame(10, 10, canvas: [100, 10], offset: [80, 0])],
+               [frame(20, 10, canvas: [20, 100], was: 'RightTop'), frame(10, 10, canvas: [100, 10], offset: [80, 0], was: 'TopLeft')])
+
+      processor.call(content, '900x>', 'orient' => true)
+
+      expect(calls.last.first).to eq '-auto-orient -resize 900x>'
+    end
+
+    it 'bounds the image as ImageMagick orients it, before anything is resized' do
+      oriented('jpeg', [frame(9000, 3000, orientation: 'RightTop')], [frame(3000, 9000, was: 'RightTop')])
+
+      expect { processor.call(content, '5760x', 'orient' => true) }.to raise_error(*refused)
+      expect(calls).to be_empty
+    end
+
+    it 'bounds a single image it repages on a canvas of its own size' do
+      oriented('miff', [frame(10, 10, orientation: 'RightBottom')], [frame(10, 10, canvas: [6000, 6000], offset: [10, 0], was: 'RightBottom')])
+
+      expect { processor.call(content, '100x100>', 'orient' => true, 'format' => 'mng') }.not_to raise_error
+    end
+
+    it 'bounds a sequence on the canvas ImageMagick leaves it' do
+      oriented('miff', [frame(10, 10, orientation: 'RightBottom'), frame(10, 10)],
+               [frame(10, 10, canvas: [6000, 6000], offset: [10, 0], was: 'RightBottom'), frame(10, 10, was: 'TopLeft')])
+
+      expect { processor.call(content, '100x100>', 'orient' => true, 'format' => 'mng') }.to raise_error(*refused)
+    end
+
+    ['yes', false, 1].each do |value|
+      it "refuses an orient option of #{value.inspect} before anything runs" do
+        expect(content).not_to receive(:analyse)
+
+        expect { processor.call(content, '900x>', 'orient' => value) }
+          .to raise_error(Locomotive::Steam::ImageResizerService::Shell::RefusedJob, 'Steam does not run this orient option')
+      end
+    end
+
   end
 
   describe 'a job without the decode option' do
@@ -66,6 +170,12 @@ describe Locomotive::Steam::ImageResizerService::Thumb do
 
       expect { processor.call(content, '5760x') }.not_to raise_error
       expect { processor.call(content, '5760x', decode) }.to raise_error(*refused)
+    end
+
+    it 'bounds a JPEG decoded smaller by the canvas it decodes to, for an output that keeps one' do
+      source('jpeg', [11520, 100])
+
+      expect { processor.call(content, '5760x', decode.merge('format' => 'gif')) }.not_to raise_error
     end
 
     it 'refuses an area of hundreds of digits, and a fill of as many, before conversion' do
@@ -252,8 +362,8 @@ describe Locomotive::Steam::ImageResizerService::Thumb do
 
   describe 'the JPEG decoding size of a job with the decode option' do
 
-    def input_args(geometry, width, height, format = 'jpeg')
-      source(format, [width, height])
+    def input_args(geometry, width, height, format = 'jpeg', orientation: 'Undefined')
+      source(format, [width, height], orientation: orientation)
       args = nil
       allow(::Dragonfly::ImageMagick::Commands).to receive(:convert) { |*, opts| args = opts['input_args'] }
       processor.call(content, geometry, decode)
@@ -299,6 +409,10 @@ describe Locomotive::Steam::ImageResizerService::Thumb do
 
     it 'decodes another format as before' do
       expect(input_args('900x>', 4000, 3000, 'png')).to be_nil
+    end
+
+    it 'asks for a size by the encoded sides of a JPEG the job does not orient' do
+      expect(input_args('900x>', 1800, 1200, orientation: 'RightTop')).to eq '-define jpeg:size=900x600'
     end
 
     it 'keeps the format and the frame' do
@@ -361,6 +475,146 @@ describe Locomotive::Steam::ImageResizerService::Thumb do
 
     def sizes(target)
       read(target, '%w %h').split.map(&:to_i)
+    end
+
+    def photo(code)
+      File.join(dir, 'photo.jpg').tap do |path|
+        system(convert, '-size', '1800x1200', 'gradient:red-blue', '-fill', 'lime', '-draw', 'rectangle 0,0 299,199', path, exception: true)
+        ExifOrientation.write(path, code)
+      end
+    end
+
+    def upright(jpeg)
+      File.join(dir, 'upright.miff').tap { |path| system(convert, jpeg, '-auto-orient', '+repage', path, exception: true) }
+    end
+
+    (2..8).each do |code|
+      it "resizes an EXIF #{code} JPEG as Dragonfly resizes the image upright" do
+        jpeg = photo(code)
+
+        %w(900x> 600x200# 600x200#nw 300x300+100+50 300x300ne).each do |geometry|
+          expect(read(processed(processor, jpeg, geometry, 'orient' => true, 'format' => 'png'), '%wx%h %#'))
+            .to eq(read(processed(upstream, upright(jpeg), geometry, 'format' => 'png'), '%wx%h %#')), geometry
+        end
+      end
+    end
+
+    (5..8).each do |code|
+      it "fills an EXIF #{code} JPEG decoded smaller as the image upright fills" do
+        jpeg     = photo(code)
+        expected = size_and_red(processed(upstream, upright(jpeg), '600x200#'))
+
+        expect(size_and_red(processed(processor, jpeg, '600x200#', decode.merge('orient' => true))))
+          .to match [expected.first, be_within(0.01).of(expected.last)]
+      end
+    end
+
+    frames = %w(10x20 100x1000 1000x100).flat_map do |size|
+      ["#{size}+0+0", "#{size}+3+4", '100x50+5+7', '1x1+500+0', '1x1+0+500', '3000x50+0+0'].map { |page| [size, page] }
+    end
+
+    def layout(target)
+      read(target, '%w %h %W %H %X %Y').split.map(&:to_i)
+    end
+
+    orientations = %w(Undefined TopLeft TopRight BottomRight BottomLeft LeftTop RightTop RightBottom LeftBottom)
+
+    orientations.product(frames).each do |orientation, (size, page)|
+      it "leaves a #{size} frame on a #{page} canvas, #{orientation}, as Steam bounds it" do
+        miff = File.join(dir, 'frame.miff')
+        system(convert, '-size', size, 'xc:red', '-repage', page, '-orient', orientation, miff, exception: true)
+        width, height = size.split('x').map(&:to_i)
+        sides    = %w(LeftTop RightTop RightBottom LeftBottom).include?(orientation) ? [height, width] : [width, height]
+        expected = %w(Undefined TopLeft).include?(orientation) ? layout(miff) : [*sides, *sides, 0, 0]
+
+        expect(layout(processed(processor, miff, '10000x10000>', 'orient' => true, 'format' => 'miff'))).to eq expected
+      end
+    end
+
+    it 'reads the orientation of each frame, and each frame as ImageMagick orients it' do
+      a, b, both = %w(a.miff b.miff both.miff).map { |name| File.join(dir, name) }
+      system(convert, '-size', '60x60', 'xc:red', '-orient', 'TopLeft', a, exception: true)
+      system(convert, '-size', '180x60', 'xc:blue', '-orient', 'RightTop', b, exception: true)
+      system(convert, a, b, both, exception: true)
+      image  = ::Dragonfly::Content.new(app, File.new(both))
+      reader = Locomotive::Steam::ImageResizerService::SourceImage
+
+      expect(reader.new.call(image)['frames'].map { |frame| frame['orientation'] }).to eq %w(TopLeft RightTop)
+      expect(reader.oriented(image, nil, nil)['frames'].map { |frame| frame.values_at('size', 'source_orientation') })
+        .to eq [[[60, 60], 'TopLeft'], [[60, 180], 'RightTop']]
+      expect(reader.oriented(image, 1, nil)['frames'].map { |frame| frame['size'] }).to eq [[60, 180]]
+    end
+
+    it 'measures a JPEG as ImageMagick orients it at the size it decodes to' do
+      jpeg = ::Dragonfly::Content.new(app, File.new(image('photo.jpg', '1800x1200').tap { |path| ExifOrientation.write(path, 6) }))
+
+      expect(Locomotive::Steam::ImageResizerService::SourceImage.oriented(jpeg, nil, '-define jpeg:size=450x300')['frames']
+        .map { |frame| frame['size'] }).to eq [[300, 450]]
+    end
+
+    %w(jpg webp).each do |format|
+      it "writes the #{format} one ImageMagick command writes, at the quality of the JPEG it orients" do
+        jpeg = File.join(dir, 'photo.jpg').tap do |path|
+          system(convert, '-size', '400x300', 'gradient:red-blue', '-quality', '80', path, exception: true)
+          ExifOrientation.write(path, 6)
+        end
+        direct = File.join(dir, "direct.#{format}")
+        system(convert, jpeg, '-auto-orient', '+repage', '-resize', '90x', direct, exception: true)
+
+        expect(processed(processor, jpeg, '90x', 'orient' => true, 'format' => format).data).to eq File.binread(direct)
+      end
+    end
+
+    it 'orients and bounds an EXIF 6 WebP, whose orientation a ping leaves out' do
+      jpeg = image('photo.jpg', '120x40').tap { |path| ExifOrientation.write(path, 6) }
+      webp = File.join(dir, 'photo.webp').tap { |path| system(convert, jpeg, path, exception: true) }
+      allow(Locomotive::Steam.configuration).to receive(:image_resizer_max_side).and_return(100)
+
+      expect { processed(processor, webp, '60x', 'orient' => true) }
+        .to raise_error(Locomotive::Steam::ImageResizerService::Shell::RefusedJob, 'Steam does not resize to this size')
+      expect(read(processed(processor, webp, '30x', 'orient' => true), '%wx%h')).to eq '30x90'
+    end
+
+    def sequence
+      turned, placed, both = %w(turned.miff placed.miff both.miff).map { |name| File.join(dir, name) }
+      system(convert, '-size', '10x20', 'xc:lime', '-repage', '100x20+0+0', '-orient', 'RightTop', turned, exception: true)
+      system(convert, '-size', '10x10', 'xc:blue', '-repage', '100x10+80+0', '-orient', 'TopLeft', placed, exception: true)
+      system(convert, turned, placed, both, exception: true)
+      both
+    end
+
+    def frames_of(target)
+      read(target, '%w %h %W %H %X %Y ').split.map(&:to_i).each_slice(6).to_a
+    end
+
+    it 'orients each frame of a sequence as ImageMagick does, an untagged frame keeping its place' do
+      frames = frames_of(processed(processor, sequence, '10000x10000>', 'orient' => true, 'format' => 'miff'))
+
+      expect([frames.size, frames.first.first(2), frames.last]).to eq [2, [20, 10], [10, 10, 100, 10, 80, 0]]
+    end
+
+    it 'keeps the delays, disposal and loop of an animation it orients' do
+      gif = File.join(dir, 'animation.gif')
+      system(convert, '-delay', '10', '-dispose', 'Background', '-size', '20x10', 'xc:red',
+             '-delay', '30', '-dispose', 'None', '-size', '20x10', 'xc:blue', '-loop', '3', gif, exception: true)
+      timing = lambda do |target|
+        path = target.respond_to?(:path) ? target.path : target
+        [read(target, '%T %D,'), Open3.capture2(identify, '-verbose', path).first[/Iterations: \d+/]]
+      end
+
+      expect(timing.call(processed(processor, gif, '10x5', 'orient' => true))).to eq ['10 Background,30 None,', 'Iterations: 3']
+    end
+
+    it 'orients only the frame a job names' do
+      expect(frames_of(processed(processor, sequence, '10000x10000>', 'orient' => true, 'frame' => 0, 'format' => 'miff')))
+        .to eq [[20, 10, 20, 10, 0, 0]]
+    end
+
+    it 'resizes a JPEG with no orientation the same with the orient option and without' do
+      jpeg = image('photo.jpg', '1800x1200')
+
+      expect(read(processed(processor, jpeg, '900x>', decode.merge('orient' => true)), '%wx%h %#'))
+        .to eq read(processed(processor, jpeg, '900x>', decode), '%wx%h %#')
     end
 
     def within?(actual, bound)

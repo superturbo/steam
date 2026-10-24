@@ -78,6 +78,12 @@ module Locomotive
               raise "Steam cannot resize with this ImageMagick: #{format} cannot be read and written (#{e.message.lines.last.strip})"
             end
 
+            begin
+              command(convert, png, '-auto-orient', '-format', '%w %h', 'info:')
+            rescue CommandFailed, LimitExceeded => e
+              raise "Steam cannot orient images with this ImageMagick: it cannot report an image's size (#{e.message.lines.last.strip})"
+            end
+
             REFUSED.each do |format, name|
               command(identify, '-ping', "#{format.downcase}:#{File.join(SAMPLES_PATH, name)}")
               raise "Steam expects ImageMagick to refuse #{format}, but it reads it"

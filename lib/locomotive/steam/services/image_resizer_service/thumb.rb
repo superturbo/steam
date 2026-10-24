@@ -14,6 +14,12 @@ module Locomotive
         WIDTH  = /\A([1-9]\d*)x>?\z/
         HEIGHT = /\Ax([1-9]\d*)>?\z/
 
+        # Orientations that rotate or mirror pixels.
+        REORIENTED = %w(TopRight BottomRight BottomLeft LeftTop RightTop RightBottom LeftBottom).freeze
+
+        # Orientations that swap width and height.
+        TRANSPOSED = %w(LeftTop RightTop RightBottom LeftBottom).freeze
+
         # ImageMagick reads a frame index as a floating-point number, exact up to 2**53.
         MAX_FRAME_INDEX = 2**53
 
@@ -35,18 +41,29 @@ module Locomotive
           decode = opts['decode']
           raise Shell::RefusedJob, 'Steam does not run this decode option' unless decode.nil? || decode == DECODE
 
+          orient = opts['orient']
+          raise Shell::RefusedJob, 'Steam does not run this orient option' unless orient.nil? || orient == true
+
           validate!(opts['format'], &is_word)
           opts = opts.merge('frame' => frame_index(opts['frame'])) unless opts['frame'].nil?
 
           image = content.analyse(:steam_image)
-          size  = decoding_size(geometry, image) if decode
-          check_sizes!(geometry, content, image, opts, size)
-          return super(content, geometry, opts) if decode.nil?
+          size  = decoding_size(geometry, image, orient) if decode
+          if orient
+            # Bound the actual oriented image before resizing.
+            frames = SourceImage.oriented(content, opts['frame'], decoding_define(size))['frames']
+            repage = repage?(frames)
+            check_sizes!(geometry, repage ? repaged(frames) : frames, output_format(content, image, opts))
+          else
+            check_sizes!(geometry, read_frames(image, opts['frame']), output_format(content, image, opts), size)
+            return super(content, geometry, opts) if decode.nil?
+          end
 
-          ::Dragonfly::ImageMagick::Commands.convert(content, args_for_geometry(geometry), {
+          args = [('-auto-orient' if orient), ('+repage' if repage), args_for_geometry(geometry)].compact.join(' ')
+          ::Dragonfly::ImageMagick::Commands.convert(content, args, {
             'format'     => opts['format'],
             'frame'      => opts['frame'],
-            'input_args' => ("-define jpeg:size=#{size.join('x')}" if size)
+            'input_args' => decoding_define(size)
           })
         rescue ::Dragonfly::Shell::CommandFailed => e
           Shell.reraise(e)
@@ -55,19 +72,13 @@ module Locomotive
         private
 
         # Every frame the job reads, at each size it may decode to.
-        def check_sizes!(geometry, content, image, opts, decoding_size)
-          frames = image['frames']
-          # Keep checking source frames when ImageMagick ignores the index.
-          frames = frames.values_at(opts['frame']).compact.presence || frames unless opts['frame'].nil?
-          format = output_format(content, image, opts)
+        def check_sizes!(geometry, frames, format, decoding_size = nil)
           canvas = keeps_canvas?(format, frames)
           # An encoder that keeps a canvas may build its own: one shared across frames, or one sized from an offset.
           builds = canvas && !FORMATS_WITH_FRAME_CANVASES.include?(format)
 
-          inputs = frames.flat_map do |width, height, canvas_width, canvas_height, x, y|
-            next self.class.decoded_sizes(width, height, decoding_size).map { |size| [*size, {}] } if decoding_size
-
-            [[width, height, { canvas: ([canvas_width, canvas_height] if canvas), offset: ([x, y] if builds) }]]
+          inputs = frames.flat_map { |frame| decoded(frame, decoding_size) }.map do |frame|
+            [*frame['size'], { canvas: (frame['canvas'] if canvas), offset: (frame['offset'] if builds) }]
           end
 
           outputs = inputs.map { |w, h, placement| Geometry.output_size(geometry, w, h, **placement) }
@@ -77,6 +88,34 @@ module Locomotive
                     outputs.all? { |output| Geometry.output_within_bounds?(output) }
 
           raise Shell::RefusedJob, 'Steam does not resize to this size'
+        end
+
+        # The frames a job reads: the one it names, or every frame when ImageMagick ignores an index past them.
+        def read_frames(image, index)
+          frame = image['frames'][index] unless index.nil?
+          frame ? [frame] : image['frames']
+        end
+
+        # Reset transformed single-image canvases without moving sequence frames.
+        def repage?(frames)
+          frames.one? && REORIENTED.include?(frames.first['source_orientation'])
+        end
+
+        def repaged(frames)
+          frames.map { |frame| frame.merge('canvas' => frame['size'], 'offset' => [0, 0]) }
+        end
+
+        def decoding_define(size)
+          "-define jpeg:size=#{size.join('x')}" if size
+        end
+
+        # The sizes a JPEG frame may decode to, each its own canvas.
+        def decoded(frame, decoding_size)
+          return [frame] unless decoding_size
+
+          self.class.decoded_sizes(*frame['size'], decoding_size).map do |size|
+            frame.merge('size' => size, 'canvas' => size, 'offset' => [0, 0])
+          end
         end
 
         # If any canvas may vanish, bound the shared canvas by every frame's offset.
@@ -105,11 +144,14 @@ module Locomotive
           !(FORMATS_WITHOUT_CANVAS.include?(format) || (format == 'webp' && frames.size == 1))
         end
 
-        def decoding_size(geometry, image)
-          width, height = image['frames'].first&.map(&:to_i)
+        # Compute the ratio after orientation; request JPEG decoding in encoded dimensions.
+        def decoding_size(geometry, image, orient)
+          first = image['frames'].first || {}
+          width, height = first['size']
           return unless image['format'] == 'jpeg' && width.to_i > 0 && height.to_i > 0
 
-          ratio = output_ratio(geometry, width, height)
+          turns = orient && TRANSPOSED.include?(first['orientation'])
+          ratio = turns ? output_ratio(geometry, height, width) : output_ratio(geometry, width, height)
           return if ratio.nil? || ratio >= 1
 
           scale = (ratio * 8).ceil / 8.0

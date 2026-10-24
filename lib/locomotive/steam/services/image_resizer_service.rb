@@ -27,8 +27,7 @@ module Locomotive
         end
 
         if file = fetch_file(source)
-          job = file.thumb(geometry, 'decode' => Thumb::DECODE)
-          job = image_magick_convert(job, convert_args)
+          job = oriented_thumb(file, geometry, convert_args)
           job.url
         else
           Locomotive::Common::Logger.error "Unable to resize on the fly: #{source.inspect}"
@@ -74,6 +73,16 @@ module Locomotive
           source&.to_s
         end
         value.strip if value
+      end
+
+      # ImageMagick orients the image in the resize, before its geometry, rather than after it.
+      def oriented_thumb(file, geometry, convert_args)
+        words  = Shellwords.split(convert_args)
+        orient = words.include?('-auto-orient')
+        opts   = orient ? { 'decode' => Thumb::DECODE, 'orient' => true } : { 'decode' => Thumb::DECODE }
+        args   = orient ? Shellwords.join(words - ['-auto-orient']) : convert_args
+
+        image_magick_convert(file.thumb(geometry, opts), args)
       end
 
       def image_magick_convert(job, options = '')

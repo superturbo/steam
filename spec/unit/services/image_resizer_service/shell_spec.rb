@@ -718,6 +718,12 @@ describe Locomotive::Steam::ImageResizerService::Shell do
         expect { check }.to raise_error(RuntimeError, /cannot resize with this ImageMagick: PNG/)
       end
 
+      it 'fails when ImageMagick cannot report an image as it orients it' do
+        policy(steam_rules + '<policy domain="coder" rights="none" pattern="INFO"/>')
+
+        expect { check }.to raise_error(RuntimeError, /cannot orient images with this ImageMagick/)
+      end
+
     end
 
     it 'resizes a JPEG to the same bytes as Dragonfly' do
