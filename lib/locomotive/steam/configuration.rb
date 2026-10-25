@@ -1,3 +1,5 @@
+require 'tmpdir'
+
 module Locomotive
   module Steam
 
@@ -95,12 +97,40 @@ module Locomotive
       def image_resizer_max_side; @image_resizer_max_side.nil? ? 5760 : @image_resizer_max_side; end
       def image_resizer_max_area; @image_resizer_max_area.nil? ? 25_000_000 : @image_resizer_max_area; end
 
-      # Timeout for one ImageMagick command, not the whole resize job.
+      # Timeout for one ImageMagick command once it has its slots, not the whole resize job.
       #
       # default: 30
       #
       attr_accessor :image_magick_command_timeout
       def image_magick_command_timeout; @image_magick_command_timeout.nil? ? 30 : @image_magick_command_timeout; end
+
+      # ImageMagick commands that may run at once in the processes sharing image_magick_command_lock_path, and how many
+      # of them one rendering site may run.
+      #
+      # default: 5 and 2
+      #
+      attr_accessor :image_magick_max_concurrent_commands, :image_magick_max_concurrent_commands_per_site
+      def image_magick_max_concurrent_commands; @image_magick_max_concurrent_commands.nil? ? 5 : @image_magick_max_concurrent_commands; end
+      def image_magick_max_concurrent_commands_per_site
+        @image_magick_max_concurrent_commands_per_site.nil? ? 2 : @image_magick_max_concurrent_commands_per_site
+      end
+
+      # Seconds a command may wait for its slots, in no order among the commands waiting, before Steam answers 503.
+      # A waiting command holds its request's thread; keep it below the timeout of a proxy in front.
+      #
+      # default: 10
+      #
+      attr_accessor :image_magick_command_queue_timeout
+      def image_magick_command_queue_timeout; @image_magick_command_queue_timeout.nil? ? 10 : @image_magick_command_queue_timeout; end
+
+      # Directory of the command slots' lock files, private to the application user and outside a release directory.
+      #
+      # default: steam-image-magick-<user id> in the system temporary directory
+      #
+      attr_accessor :image_magick_command_lock_path
+      def image_magick_command_lock_path
+        @image_magick_command_lock_path.nil? ? File.join(Dir.tmpdir, "steam-image-magick-#{Process.euid}") : @image_magick_command_lock_path
+      end
 
       # Enable CSRF protection for entry submissions, authentication actions and unlocking private sites.
       #

@@ -35,10 +35,12 @@ module Locomotive
         # A denied format may be reported as unavailable.
         REFUSAL = /by the security policy|no decode delegate|unable to open image `[a-z]+:/
 
+        SITE = :locomotive_steam_image_magick_site
+
         attr_reader :timeout
 
         # Dragonfly 1.4 has no public way to replace an app's shell.
-        def self.install(app, timeout:)
+        def self.install(app, timeout:, slots: nil)
           raise 'Steam runs ImageMagick in process groups, which Windows does not have' if Gem.win_platform?
 
           temporary = ENV['MAGICK_TEMPORARY_PATH'].presence
@@ -51,7 +53,19 @@ module Locomotive
             raise 'Steam cannot bound ImageMagick commands: Dragonfly does not keep its shell where 1.4 does'
           end
 
-          app.instance_variable_set(:@shell, new(timeout: timeout))
+          app.instance_variable_set(:@shell, new(timeout: timeout, slots: slots))
+        end
+
+        # The rendering site of the commands a block runs, fiber-local as Thread#[] is.
+        def self.with_site(site)
+          previous, Thread.current[SITE] = Thread.current[SITE], site
+          yield
+        ensure
+          Thread.current[SITE] = previous
+        end
+
+        def self.site
+          Thread.current[SITE]
         end
 
         # Dragonfly answers a refused job with 404.
@@ -61,8 +75,8 @@ module Locomotive
           raise RefusedJob, "ImageMagick refused the source or an argument: #{error.diagnostics.lines.grep(REFUSAL).first.strip}"
         end
 
-        def initialize(timeout:)
-          @timeout = timeout
+        def initialize(timeout:, slots: nil)
+          @timeout, @slots = timeout, slots
         end
 
         # Probes sample formats, not every policy rule.
@@ -97,7 +111,15 @@ module Locomotive
 
         private
 
+        # A command holds its slots until its cleanup ends.
         def run_command(command)
+          return run_holding(command, []) unless @slots
+
+          @slots.hold(self.class.site) { |held| run_holding(command, held) }
+        end
+
+        # The command keeps its slots' locked files, so they stay taken while it runs, its worker's death included.
+        def run_holding(command, held)
           outputs   = hold_outputs(command)
           directory = Dir.mktmpdir('steam-magick-', ENV['MAGICK_TEMPORARY_PATH'].presence)
           out, out_writer = IO.pipe
@@ -106,7 +128,8 @@ module Locomotive
           # Do not interrupt a spawned child before it has a cleanup path.
           Thread.handle_interrupt(Object => :never) do
             pid = Process.spawn(ENV.slice('PATH', *RESOURCE_LIMIT_ENV_KEYS).merge('MAGICK_TEMPORARY_PATH' => directory, 'MAGICK_CONFIGURE_PATH' => POLICY_PATH), command,
-                                unsetenv_others: true, pgroup: true, in: File::NULL, out: out_writer, err: err_writer)
+                                unsetenv_others: true, pgroup: true, in: File::NULL, out: out_writer, err: err_writer,
+                                **held.to_h { |file| [file, file] })
             [out_writer, err_writer].each(&:close)
             waiter  = Process.detach(pid)
             readers = [read(out, STDOUT_LIMIT), read(err, STDERR_LIMIT)]
@@ -215,8 +238,9 @@ module Locomotive
           Process.clock_gettime(Process::CLOCK_MONOTONIC)
         end
 
+        # The start-up checks run outside the command slots, under the same limits on time and output.
         def command(*arguments)
-          run(arguments.shelljoin, escape: false)
+          self.class.new(timeout: timeout).run(arguments.shelljoin, escape: false)
         end
 
         # macOS may return EPERM for an exited group; cleanup must still finish.

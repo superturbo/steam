@@ -167,6 +167,80 @@ describe Locomotive::Steam::Initializers::Dragonfly do
 
   end
 
+  describe 'the ImageMagick command slots' do
+
+    let(:configuration) { Locomotive::Steam.configuration }
+    let(:app)           { ::Dragonfly.app(:steam) }
+    let(:locks)         { File.join(Dir.mktmpdir, 'locks') }
+    let(:image)         { File.expand_path('../../fixtures/default/public/images/nav_on.png', __dir__) }
+
+    # The Dragonfly shell is global: restore the suite's slots once the stubs are gone.
+    around do |example|
+      example.run
+      initializer.run
+      FileUtils.rm_rf(File.dirname(locks))
+    end
+
+    before { allow(configuration).to receive(:image_magick_command_lock_path).and_return(locks) }
+
+    it 'makes a lock directory only its user can use' do
+      initializer.run
+
+      expect(File.stat(locks).mode & 0o777).to eq 0o700 if File.exist?(app.env[:convert_command].to_s)
+    end
+
+    it 'runs a job only in a free slot' do
+      allow(configuration).to receive_messages(image_magick_max_concurrent_commands: 1, image_magick_max_concurrent_commands_per_site: 1,
+                                               image_magick_command_queue_timeout: 0)
+      initializer.run
+      skip 'ImageMagick is not installed' unless File.exist?(app.env[:convert_command].to_s)
+      slots = Locomotive::Steam::ImageResizerService::CommandSlots.new(directory: locks, total: 1, per_site: 1, wait: 0)
+
+      slots.hold(nil) do
+        expect { app.fetch_file(image).thumb('4x4', 'decode' => 'jpeg-1x-v1').apply }
+          .to raise_error(Locomotive::Steam::ImageResizerService::CommandSlots::Busy)
+      end
+    end
+
+    [0, -1, 1.5, '1'].each do |value|
+      it "refuses to start with image_magick_max_concurrent_commands of #{value.inspect}" do
+        allow(configuration).to receive(:image_magick_max_concurrent_commands).and_return(value)
+
+        expect { initializer.run }.to raise_error(ArgumentError, /image_magick_max_concurrent_commands /)
+      end
+    end
+
+    [0, 2, 1.5, '1'].each do |value|
+      it "refuses to start with image_magick_max_concurrent_commands_per_site of #{value.inspect} for 1 command" do
+        allow(configuration).to receive_messages(image_magick_max_concurrent_commands: 1, image_magick_max_concurrent_commands_per_site: value)
+
+        expect { initializer.run }.to raise_error(ArgumentError, /image_magick_max_concurrent_commands_per_site/)
+      end
+    end
+
+    [-1, Float::INFINITY, Float::NAN, Complex(1, 1), '1'].each do |value|
+      it "refuses to start with image_magick_command_queue_timeout of #{value.inspect}" do
+        allow(configuration).to receive(:image_magick_command_queue_timeout).and_return(value)
+
+        expect { initializer.run }.to raise_error(ArgumentError, /image_magick_command_queue_timeout/)
+      end
+    end
+
+    it 'refuses to start with a lock directory others can use, or a link to one' do
+      skip 'ImageMagick is not installed' unless File.exist?(`which convert`.strip)
+      FileUtils.mkdir_p(locks)
+      File.chmod(0o777, locks)
+      expect { initializer.run }.to raise_error(ArgumentError, /image_magick_command_lock_path/)
+
+      link = "#{locks}-link"
+      File.chmod(0o700, locks)
+      File.symlink(locks, link)
+      allow(configuration).to receive(:image_magick_command_lock_path).and_return(link)
+      expect { initializer.run }.to raise_error(ArgumentError, /image_magick_command_lock_path/)
+    end
+
+  end
+
   describe 'the log of the start-up checks' do
 
     it "goes through Steam's logger from a new process on, leaving no dragonfly.log behind" do
@@ -177,8 +251,9 @@ describe Locomotive::Steam::Initializers::Dragonfly do
         script = <<~RUBY
           require #{steam.inspect}
           Locomotive::Steam.configure do |config|
-            config.mode      = :test
-            config.log_level = ::Logger::DEBUG
+            config.mode                           = :test
+            config.log_level                      = ::Logger::DEBUG
+            config.image_magick_command_lock_path = File.join(Dir.pwd, 'locks')
           end
         RUBY
         output, status = Open3.capture2e(RbConfig.ruby, '-e', script, chdir: dir)

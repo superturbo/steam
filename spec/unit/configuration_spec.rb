@@ -32,6 +32,19 @@ describe Locomotive::Steam::Configuration do
 
   end
 
+  describe 'the ImageMagick command slots' do
+
+    it 'let five commands run at once, two of them for one site, each waiting up to ten seconds for its slots' do
+      expect([subject.image_magick_max_concurrent_commands, subject.image_magick_max_concurrent_commands_per_site,
+              subject.image_magick_command_queue_timeout]).to eq [5, 2, 10]
+    end
+
+    it 'keep their files in the system temporary directory, apart for each user' do
+      expect(subject.image_magick_command_lock_path).to eq File.join(Dir.tmpdir, "steam-image-magick-#{Process.euid}")
+    end
+
+  end
+
   describe 'assign a different value' do
 
     before { subject.mode = :test }

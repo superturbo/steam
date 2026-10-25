@@ -674,6 +674,17 @@ describe Locomotive::Steam::ImageResizerService::Shell do
         expect { check }.not_to raise_error
       end
 
+      it 'runs outside the command slots, every one of them taken' do
+        Dir.mktmpdir do |locks|
+          slots = Locomotive::Steam::ImageResizerService::CommandSlots.new(directory: locks, total: 1, per_site: 1, wait: 0)
+
+          slots.hold(nil) do
+            expect { described_class.new(timeout: 10, slots: slots).check_policy(convert: commands[:convert_command], identify: commands[:identify_command]) }
+              .not_to raise_error
+          end
+        end
+      end
+
       it 'keeps refusing a format whose coder a later rule allows' do
         policy(steam_rules + '<policy domain="coder" rights="read" pattern="MVG"/>')
 
@@ -758,6 +769,117 @@ describe Locomotive::Steam::ImageResizerService::Shell do
 
     it 'hold an SVG that is well-formed XML' do
       expect(REXML::Document.new(sample('SVG')).root.name).to eq 'svg'
+    end
+
+  end
+
+  describe 'the slots of a command' do
+
+    let(:locks)  { Dir.mktmpdir }
+    let(:slots)  { Locomotive::Steam::ImageResizerService::CommandSlots.new(directory: locks, total: 2, per_site: 1, wait: 0.1) }
+    let(:shell)  { described_class.new(timeout: 5, slots: slots) }
+    let(:busy)   { Locomotive::Steam::ImageResizerService::CommandSlots::Busy }
+    let(:begun)    { File.join(dir, 'begun') }
+    let(:released) { File.join(dir, 'released') }
+
+    after { FileUtils.rm_rf(locks) }
+
+    # Whether count commands of the site could take their slots at once.
+    def free?(site = nil, count = 1)
+      return true if count.zero?
+
+      slots.hold(site) { free?(site, count - 1) }
+    rescue Locomotive::Steam::ImageResizerService::CommandSlots::Busy
+      false
+    end
+
+    def eventually(seconds = 5)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
+      sleep 0.05 until yield || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+      yield
+    end
+
+    # A command that marks the moment it begins and runs until the spec releases it, ten seconds at most.
+    def held_command
+      "touch #{begun.shellescape}; for i in $(seq 200); do [ -e #{released.shellescape} ] && exit 0; sleep 0.05; done"
+    end
+
+    it 'holds a slot while the command runs and gives it back once its cleanup ends' do
+      running = Thread.new { shell.run(held_command, escape: false) }
+      eventually { File.exist?(begun) }
+
+      expect(free?(nil, 2)).to be false
+      FileUtils.touch(released)
+      running.join
+      expect(free?(nil, 2)).to be true
+    ensure
+      FileUtils.touch(released)
+      running&.join
+    end
+
+    it "holds the rendering site's slot too, and none of another site's" do
+      running = Thread.new { described_class.with_site('a') { shell.run(held_command, escape: false) } }
+      eventually { File.exist?(begun) }
+
+      expect([free?('a'), free?('b')]).to eq [false, true]
+    ensure
+      FileUtils.touch(released)
+      running&.join
+    end
+
+    it 'keeps the slots of a command whose worker died while it runs' do
+      locks
+      begun
+      released
+      worker = fork do
+        shell.run(held_command, escape: false)
+        exit!(0)
+      end
+      eventually { File.exist?(begun) }
+      Process.kill('KILL', worker)
+      Process.wait(worker)
+
+      expect(free?(nil, 2)).to be false
+      FileUtils.touch(released)
+      expect(eventually { free?(nil, 2) }).to be true
+    ensure
+      FileUtils.touch(released)
+    end
+
+    it 'gives the slots back after a command fails and after it runs past its timeout' do
+      expect { shell.run('false') }.to raise_error(Dragonfly::Shell::CommandFailed)
+      expect(free?(nil, 2)).to be true
+
+      expect { described_class.new(timeout: 0.2, slots: slots).run('sleep 5') }.to raise_error(described_class::LimitExceeded)
+      expect(free?(nil, 2)).to be true
+    end
+
+    it 'refuses a command that finds no slot within the wait, running nothing' do
+      slots.hold(nil) { slots.hold(nil) { expect { shell.run("touch #{begun}") }.to raise_error(busy) } }
+
+      expect(File.exist?(begun)).to be false
+    end
+
+    it 'runs no other command once the slots directory is gone, while a running command keeps an old slot' do
+      running = Thread.new { shell.run(held_command, escape: false) }
+      eventually { File.exist?(begun) }
+      FileUtils.rm_rf(locks)
+      ran = File.join(dir, 'ran')
+
+      expect { shell.run("touch #{ran}") }.to raise_error(Locomotive::Steam::ImageResizerService::CommandSlots::Unavailable)
+      expect([File.exist?(ran), Dir.exist?(locks)]).to eq [false, false]
+    ensure
+      FileUtils.touch(released)
+      running&.join
+    end
+
+    it 'restores the site a block ran under, after an error too' do
+      described_class.with_site('a') do
+        expect { described_class.with_site('b') { raise 'stop' } }.to raise_error('stop')
+        expect(described_class.site).to eq 'a'
+      end
+
+      expect(described_class.site).to be_nil
     end
 
   end

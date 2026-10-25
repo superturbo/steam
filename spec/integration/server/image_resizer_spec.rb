@@ -168,7 +168,8 @@ describe 'Resize jobs' do
     end
 
     it "names the site a request's domain finds, rendering as a page does" do
-      allow(configuration).to receive(:asset_path).and_return(File.join(default_fixture_site_path, 'public'))
+      allow(configuration).to receive_messages(asset_path: File.join(default_fixture_site_path, 'public'),
+                                               adapter:    { name: :filesystem, path: default_fixture_site_path })
       services = Locomotive::Steam::Services.build_instance(Rack::Request.new(Rack::MockRequest.env_for('http://localhost/')))
 
       url = services.image_resizer.resize('/images/nav_on.png', '4x4')
@@ -189,6 +190,85 @@ describe 'Resize jobs' do
         get for_a
         expect(last_response.status).to eq 200
       end
+    end
+
+  end
+
+  context 'every ImageMagick command slot taken' do
+
+    let(:mode) { :production }
+    let(:key)  { 'a deployment key' }
+    let(:url)  { resize_service.resize('/images/nav_on.png', '4x4') }
+
+    before do
+      allow(configuration).to receive_messages(image_magick_max_concurrent_commands: 1, image_magick_max_concurrent_commands_per_site: 1,
+                                               image_magick_command_queue_timeout: 0)
+      Locomotive::Steam::Initializers::Dragonfly.new.run
+    end
+
+    def with_every_slot_taken(&block)
+      Locomotive::Steam::ImageResizerService::CommandSlots.new(
+        directory: configuration.image_magick_command_lock_path, total: configuration.image_magick_max_concurrent_commands,
+        per_site: 1, wait: 0
+      ).hold(nil, &block)
+    end
+
+    it 'answers a job, GET and HEAD, 503 to retry later, kept out of caches' do
+      with_every_slot_taken do
+        get url
+        expect([last_response.status, last_response.headers['retry-after'], last_response.headers['cache-control']])
+          .to eq [503, '1', 'no-store']
+        head url
+        expect([last_response.status, last_response.body]).to eq [503, '']
+      end
+    end
+
+    it 'answers a client holding a copy 304, taking no slot' do
+      get url
+      etag = last_response.headers['etag']
+
+      with_every_slot_taken do
+        get url, {}, 'HTTP_IF_NONE_MATCH' => etag
+        expect(last_response.status).to eq 304
+      end
+    end
+
+    it 'refuses a job it did not sign with 400, taking no slot' do
+      with_every_slot_taken do
+        get url.sub(%r{/(\h{16})/}, '/0000000000000000/')
+        expect(last_response.status).to eq 400
+      end
+    end
+
+  end
+
+  context 'the ImageMagick command slots gone' do
+
+    let(:mode)  { :production }
+    let(:key)   { 'a deployment key' }
+    let(:url)   { resize_service.resize('/images/nav_on.png', '4x4') }
+    let(:locks) { File.join(Dir.mktmpdir, 'locks') }
+
+    before do
+      allow(configuration).to receive(:image_magick_command_lock_path).and_return(locks)
+      Locomotive::Steam::Initializers::Dragonfly.new.run
+    end
+
+    after { FileUtils.rm_rf(File.dirname(locks)) }
+
+    it 'answers 503 kept out of caches, with no time to retry, running nothing while an old slot is held' do
+      allow(Locomotive::Common::Logger).to receive(:error)
+      old_slots = Locomotive::Steam::ImageResizerService::CommandSlots.new(directory: locks, total: 5, per_site: 2, wait: 0)
+
+      old_slots.hold(nil) do
+        FileUtils.rm_rf(locks)
+        get url
+      end
+
+      expect([last_response.status, last_response.headers['cache-control'], last_response.headers['retry-after'], last_response.body])
+        .to eq [503, 'no-store', nil, 'Unavailable']
+      expect(Dir.exist?(locks)).to be false
+      expect(Locomotive::Common::Logger).to have_received(:error).with(/command slots are unavailable: Steam cannot lock #{Regexp.escape(locks)}/)
     end
 
   end

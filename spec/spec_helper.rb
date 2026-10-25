@@ -28,14 +28,21 @@ require 'bundler/setup'
 
 require 'i18n-spec'
 require 'timecop'
+require 'tmpdir'
+require 'fileutils'
 
 require_relative '../lib/locomotive/steam'
 require_relative 'support'
 
+# Each spec process keeps its ImageMagick command slots to itself.
+command_locks = Dir.mktmpdir('steam-image-magick-spec-')
+at_exit { FileUtils.rm_rf(command_locks) }
+
 Locomotive::Steam.configure do |config|
-  config.mode                 = :test
-  config.image_resizer_secret = 'steam spec key'
-  config.asset_path           = File.expand_path('fixtures/default/public', __dir__)
+  config.mode                           = :test
+  config.image_resizer_secret           = 'steam spec key'
+  config.asset_path                     = File.expand_path('fixtures/default/public', __dir__)
+  config.image_magick_command_lock_path = command_locks
 end
 
 # Rack::Static keeps the asset_path from the first stack build.

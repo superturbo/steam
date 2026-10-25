@@ -13,6 +13,7 @@ module Locomotive
           timeout = command_timeout
           check_remote_source_prefix
           check_size_bounds
+          check_command_slots
 
           # Clear earlier rules before installing source checks.
           ::Dragonfly.app(:steam).server.fetch_file_whitelist.patterns.clear
@@ -46,7 +47,7 @@ module Locomotive
           ::Dragonfly.logger = Locomotive::Common::Logger
 
           if imagemagick_commands
-            Locomotive::Steam::ImageResizerService::Shell.install(::Dragonfly.app(:steam), timeout: timeout)
+            Locomotive::Steam::ImageResizerService::Shell.install(::Dragonfly.app(:steam), timeout: timeout, slots: command_slots)
               .check_policy(convert: imagemagick_commands[:convert_command], identify: imagemagick_commands[:identify_command])
           end
         end
@@ -82,6 +83,51 @@ module Locomotive
 
             raise ArgumentError, "Steam needs #{name} as a positive whole number of pixels."
           end
+        end
+
+        def check_command_slots
+          configuration = Locomotive::Steam.configuration
+          total    = configuration.image_magick_max_concurrent_commands
+          per_site = configuration.image_magick_max_concurrent_commands_per_site
+          wait     = configuration.image_magick_command_queue_timeout
+
+          unless total.is_a?(Integer) && total >= 1
+            raise ArgumentError, 'Steam needs image_magick_max_concurrent_commands as a whole number, 1 or more.'
+          end
+          unless per_site.is_a?(Integer) && per_site.between?(1, total)
+            raise ArgumentError, 'Steam needs image_magick_max_concurrent_commands_per_site as a whole number from 1 to ' \
+                                 'image_magick_max_concurrent_commands.'
+          end
+          return if wait.is_a?(Numeric) && wait.real? && wait.finite? && wait >= 0
+
+          raise ArgumentError, 'Steam needs image_magick_command_queue_timeout as a finite number of seconds, 0 or more.'
+        end
+
+        def command_slots
+          configuration = Locomotive::Steam.configuration
+
+          ImageResizerService::CommandSlots.new(
+            directory: lock_directory(configuration.image_magick_command_lock_path),
+            total:     configuration.image_magick_max_concurrent_commands,
+            per_site:  configuration.image_magick_max_concurrent_commands_per_site,
+            wait:      configuration.image_magick_command_queue_timeout
+          )
+        end
+
+        # A directory of the application user's own, which no one else can use, made when missing.
+        def lock_directory(path)
+          begin
+            Dir.mkdir(path.to_s, 0o700)
+          rescue Errno::EEXIST
+            nil
+          end
+          stat = File.lstat(path.to_s)
+          return path if stat.directory? && stat.owned? && (stat.mode & 0o077).zero?
+
+          raise ArgumentError, "Steam needs image_magick_command_lock_path as a directory of its own user that no one else " \
+                               "can use, not #{path.inspect}."
+        rescue SystemCallError
+          raise ArgumentError, "Steam cannot make image_magick_command_lock_path #{path.inspect}."
         end
 
         def check_remote_source_prefix
