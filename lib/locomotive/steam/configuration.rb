@@ -89,7 +89,8 @@ module Locomotive
       attr_accessor :image_resizer_remote_source_prefix
 
       # Largest side and area of a resize output, for each frame and a canvas the output keeps;
-      # the resize a fill makes before its crop keeps the area alone.
+      # the resize a fill makes before its crop keeps the area alone. The area also bounds the frames
+      # of a sequence together: their outputs, and apart from them the resizes a fill makes before its crop.
       #
       # default: 5760 and 25_000_000
       #

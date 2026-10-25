@@ -29,6 +29,10 @@ module Locomotive
         # Their encoder keeps each frame's canvas as it is, building none of its own.
         FORMATS_WITH_FRAME_CANVASES = %w(miff).freeze
 
+        # Their encoder writes each frame of a sequence as its own rectangle; another may fill the frames out to one
+        # canvas, as ImageMagick coalesces them for WebP.
+        FORMATS_WRITING_FRAME_RECTANGLES = %w(gif gif87 miff).freeze
+
         # The sizes a JPEG decodes to, k/8 of each side rounded up, that are no smaller than the size asked for.
         def self.decoded_sizes(width, height, (least_width, least_height))
           (1..8).map { |eighths| [(width * eighths + 7) / 8, (height * eighths + 7) / 8] }
@@ -77,17 +81,38 @@ module Locomotive
           # An encoder that keeps a canvas may build its own: one shared across frames, or one sized from an offset.
           builds = canvas && !FORMATS_WITH_FRAME_CANVASES.include?(format)
 
-          inputs = frames.flat_map { |frame| decoded(frame, decoding_size) }.map do |frame|
-            [*frame['size'], { canvas: (frame['canvas'] if canvas), offset: (frame['offset'] if builds) }]
+          choices = frames.map do |frame|
+            decoded(frame, decoding_size).map do |choice|
+              [*choice['size'], { canvas: (choice['canvas'] if canvas), offset: (choice['offset'] if builds) }]
+            end
           end
+          inputs = choices.flatten(1)
 
           outputs = inputs.map { |w, h, placement| Geometry.output_size(geometry, w, h, **placement) }
-          outputs << shared_canvas(geometry, inputs, outputs) if builds && outputs.size > 1
+          shared  = shared_canvas(geometry, inputs, outputs) if builds && outputs.size > 1
+          outputs << shared if shared
 
-          return if inputs.any? && inputs.all? { |w, h| Geometry.resized_within_bounds?(geometry, w, h) } &&
-                    outputs.all? { |output| Geometry.output_within_bounds?(output) }
+          unless inputs.any? && inputs.all? { |w, h| Geometry.resized_within_bounds?(geometry, w, h) } &&
+                 outputs.all? { |output| Geometry.output_within_bounds?(output) }
+            raise Shell::RefusedJob, 'Steam does not resize to this size'
+          end
 
-          raise Shell::RefusedJob, 'Steam does not resize to this size'
+          filled_to = shared unless FORMATS_WRITING_FRAME_RECTANGLES.include?(format)
+          check_sequence!(geometry, choices, filled_to) if choices.size > 1
+        end
+
+        # The frames of a sequence together, each at the largest size it may decode to: their outputs, each as large as
+        # the canvas they share for an encoder that may fill them out to it, and apart from them the resizes a fill
+        # makes before its crop.
+        def check_sequence!(geometry, choices, filled_to)
+          largest = choices.map do |sizes|
+            areas = sizes.map { |width, height, _| Geometry.pixel_areas(geometry, width, height) }
+            [areas.map(&:first).max.to_i, filled_to ? filled_to.inject(:*) : areas.map(&:last).max.to_i]
+          end
+          area = Locomotive::Steam.configuration.image_resizer_max_area
+          return if largest.transpose.all? { |totals| totals.sum <= area }
+
+          raise Shell::RefusedJob, 'Steam does not resize a sequence this large'
         end
 
         # The frames a job reads: the one it names, or every frame when ImageMagick ignores an index past them.

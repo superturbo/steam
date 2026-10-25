@@ -73,6 +73,15 @@ module Locomotive
           end
         end
 
+        # The pixels a resize makes of one frame's own rectangle, before a fill's crop and after; a canvas is no pixels
+        # until an encoder fills the frame out to it.
+        def self.pixel_areas(geometry, width, height)
+          return [0, 0] unless width.positive? && height.positive?
+
+          *before, after = sizes(geometry, width, height)
+          [before.sum { |size| size.inject(:*) }, after.inject(:*)]
+        end
+
         def self.output_within_bounds?((width, height))
           configuration = Locomotive::Steam.configuration
           side          = configuration.image_resizer_max_side

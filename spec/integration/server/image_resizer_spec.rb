@@ -539,6 +539,51 @@ describe 'Resize jobs' do
       end
     end
 
+    it 'refuses the pages of a TIFF past the sequence area, an earlier URL as a new one, running no conversion' do
+      allow(configuration).to receive(:image_resizer_max_area).and_return(100_000)
+      allow(resizer.shell).to receive(:run).and_call_original
+
+      with_source('pages.tif', '-size', '200x200', 'xc:red', 'xc:green', 'xc:blue') do |source|
+        [source.thumb('200x').url, resize_service.resize('/pages.tif', '200x')].each do |url|
+          get url
+
+          expect([last_response.status, last_response.headers['cache-control']]).to eq([404, 'no-store']), url
+        end
+        expect(resizer.shell).not_to have_received(:run).with(/convert/, anything)
+
+        { source.thumb('200x', 'frame' => 1) => 200, source.thumb('150x') => 200 }.each do |job, status|
+          get job.url
+
+          expect(last_response.status).to eq(status), job.url
+        end
+      end
+    end
+
+    it "bounds an optimised GIF's small frames as they are for GIF output, and at their canvas for WebP" do
+      allow(configuration).to receive(:image_resizer_max_area).and_return(50_000)
+
+      with_source('optimised.gif', '-size', '100x100', 'xc:red', '(', '-size', '10x10', 'xc:blue', '-repage', '100x100+50+50', ')',
+                  '-duplicate', '8') do |source|
+        { source.thumb('100x100>') => 200, source.thumb('100x100>', 'format' => 'webp') => 404 }.each do |job, status|
+          get job.url
+
+          expect(last_response.status).to eq(status), job.url
+        end
+      end
+    end
+
+    it 'bounds TIFF pages of different sizes as they are for TIFF output, and at the canvas they share for WebP' do
+      allow(configuration).to receive(:image_resizer_max_area).and_return(100_000)
+
+      with_source('mixed.tif', '-size', '200x200', 'xc:red', '(', '-size', '10x10', 'xc:blue', ')', '-duplicate', '8') do |source|
+        { source.thumb('200x200>') => 200, source.thumb('200x200>', 'format' => 'webp') => 404 }.each do |job, status|
+          get job.url
+
+          expect(last_response.status).to eq(status), job.url
+        end
+      end
+    end
+
     it 'bounds each frame of an animation, and only the frame a job names' do
       with_source('animation.gif', '-size', '10x10', 'xc:red', '-size', '3000x3000', 'xc:blue') do |source|
         {

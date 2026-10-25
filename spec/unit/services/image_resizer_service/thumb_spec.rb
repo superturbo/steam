@@ -233,10 +233,11 @@ describe Locomotive::Steam::ImageResizerService::Thumb do
       source('tiff', [5001, 1], [1, 5001])
 
       expect { processor.call(content, '5001x5001+0+0', 'format' => 'mng') }.to raise_error(*refused)
+      expect { processor.call(content, '5001x5001+0+0', 'format' => 'gif') }.to raise_error(*refused)
       expect { processor.call(content, '5001x5001+0+0', 'format' => 'tiff') }.not_to raise_error
 
       source('tiff', [5000, 1], [1, 5000])
-      expect { processor.call(content, '5000x5000+0+0', 'format' => 'mng') }.not_to raise_error
+      expect { processor.call(content, '5000x5000+0+0', 'format' => 'gif') }.not_to raise_error
     end
 
     it 'bounds the canvas of each MIFF frame, which keeps one apiece rather than sharing one' do
@@ -327,10 +328,122 @@ describe Locomotive::Steam::ImageResizerService::Thumb do
       expect { processor.call(content, '40x30') }.to raise_error(*refused)
     end
 
-    it 'bounds each frame of an animation on its own, not their sum' do
+  end
+
+  describe 'a job reading a sequence of frames' do
+
+    let(:refused) { [Locomotive::Steam::ImageResizerService::Shell::RefusedJob, 'Steam does not resize a sequence this large'] }
+
+    before { allow(::Dragonfly::ImageMagick::Commands).to receive(:convert) }
+
+    def bound(area)
+      allow(Locomotive::Steam.configuration).to receive(:image_resizer_max_area).and_return(area)
+    end
+
+    it 'refuses frames whose outputs together pass the sequence area, though each fits, running nothing' do
       source('gif', *[[600, 600]] * 15)
 
-      expect { processor.call(content, '2292x1125#') }.not_to raise_error
+      expect { processor.call(content, '2292x1125#') }.to raise_error(*refused)
+      expect(::Dragonfly::ImageMagick::Commands).not_to have_received(:convert)
+    end
+
+    it 'runs a sequence whose outputs make the sequence area, and refuses one a pixel past it' do
+      source('gif', [100, 50], [100, 50])
+
+      bound(10_000)
+      expect { processor.call(content, '100x50') }.not_to raise_error
+      bound(9_999)
+      expect { processor.call(content, '100x50') }.to raise_error(*refused)
+    end
+
+    it 'bounds the resize a fill makes before its crop apart from its output, adding neither to the other' do
+      source('gif', [1000, 100], [1000, 100])
+
+      bound(200_000)
+      expect { processor.call(content, '100x100#') }.not_to raise_error
+      bound(199_999)
+      expect { processor.call(content, '100x100#') }.to raise_error(*refused)
+    end
+
+    it "counts the sizes a JPEG may decode to as the choices they are, the largest output for each frame" do
+      source('jpeg', [999, 500], [999, 500])
+
+      bound(10_200)
+      expect { processor.call(content, '100x100', decode) }.not_to raise_error
+      bound(10_199)
+      expect { processor.call(content, '100x100', decode) }.to raise_error(*refused)
+    end
+
+    it 'counts the largest fill a JPEG may decode to before its crop, for each frame' do
+      source('jpeg', [1000, 333], [1000, 333])
+
+      bound(60_200)
+      expect { processor.call(content, '100x100#', decode) }.not_to raise_error
+      bound(60_199)
+      expect { processor.call(content, '100x100#', decode) }.to raise_error(*refused)
+    end
+
+    it 'takes one JPEG and the sizes it may decode to for no sequence' do
+      source('jpeg', [800, 800])
+      bound(10_000)
+
+      expect { processor.call(content, '100x100', decode) }.not_to raise_error
+    end
+
+    it 'leaves the canvas an encoder shares across the frames out of their sum' do
+      source('gif', [100, 100], [100, 100])
+      bound(20_000)
+
+      expect { processor.call(content, '100x100') }.not_to raise_error
+    end
+
+    it "counts an optimised GIF's frame rectangles, not the canvas each sits on, for an encoder that writes them" do
+      source('gif', [1000, 1000], *[[10, 10, 1000, 1000, 500, 500]] * 9)
+
+      bound(1_000_900)
+      expect { processor.call(content, '1000x1000>') }.not_to raise_error
+      bound(1_000_899)
+      expect { processor.call(content, '1000x1000>') }.to raise_error(*refused)
+    end
+
+    it 'counts each frame at its canvas for an encoder that may fill frames out to it' do
+      source('gif', [1000, 1000], *[[10, 10, 1000, 1000, 500, 500]] * 9)
+
+      bound(10_000_000)
+      expect { processor.call(content, '1000x1000>', 'format' => 'webp') }.not_to raise_error
+      bound(9_999_999)
+      expect { processor.call(content, '1000x1000>', 'format' => 'webp') }.to raise_error(*refused)
+    end
+
+    it 'counts every frame at the canvas the frames share for such an encoder, not at its own' do
+      source('tiff', [1000, 1000], *[[10, 10]] * 9)
+      bound(5_000_000)
+
+      expect { processor.call(content, '1000x1000>') }.not_to raise_error
+      expect { processor.call(content, '1000x1000>', 'format' => 'webp') }.to raise_error(*refused)
+      expect { processor.call(content, '1000x1000>', 'format' => 'mng') }.to raise_error(*refused)
+      bound(10_000_000)
+      expect { processor.call(content, '1000x1000>', 'format' => 'webp') }.not_to raise_error
+    end
+
+    it 'bounds only the frame a job names' do
+      source('gif', *[[600, 600]] * 15)
+
+      expect { processor.call(content, '2292x1125#', 'frame' => 3) }.not_to raise_error
+    end
+
+    it 'bounds the pages of a TIFF as a sequence' do
+      source('tiff', *[[2000, 2000]] * 8)
+
+      expect { processor.call(content, '2000x') }.to raise_error(*refused)
+    end
+
+    it 'bounds the frames as ImageMagick orients them' do
+      source('gif', [600, 600])
+      oriented = Array.new(15) { { 'size' => [600, 600], 'canvas' => [600, 600], 'offset' => [0, 0], 'orientation' => 'TopLeft' } }
+      allow(Locomotive::Steam::ImageResizerService::SourceImage).to receive(:oriented).and_return('format' => 'gif', 'frames' => oriented)
+
+      expect { processor.call(content, '2292x1125#', 'orient' => true) }.to raise_error(*refused)
     end
 
   end
