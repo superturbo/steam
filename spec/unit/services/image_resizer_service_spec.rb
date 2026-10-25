@@ -46,6 +46,13 @@ describe Locomotive::Steam::ImageResizerService do
         expect(steps.first).to eq ['fu', input]
       end
 
+      it 'keeps the query of a remote image in its URL alone' do
+        url   = "#{input}?1183150800"
+        steps = ::Dragonfly::Job.deserialize(service.resize(url, geometry).split('/')[3], resizer).steps
+
+        expect([steps.first.args, steps.last.args]).to eq [[url], ['thumb', geometry, { 'decode' => 'jpeg-1x-v1' }]]
+      end
+
       describe 'a remote image outside the trusted sources' do
 
         let(:input) { 'http://169.254.169.254/latest/meta-data/banner.png' }
@@ -122,10 +129,34 @@ describe Locomotive::Steam::ImageResizerService do
 
       end
 
-      describe 'an url with a timestamp' do
+      describe 'a local source with a query' do
 
         let(:input)  { '/images/nav_on.png?24e29997bcb00e97d8252cdd29d14e2d' }
         it { is_expected.to match /\/steam\/dynamic\/.*\/[a-z0-9]+\/nav_on.png/ }
+
+        it 'keeps the version its query gives in the job, and reads the file without it' do
+          steps = ::Dragonfly::Job.deserialize(subject.split('/')[3], resizer).steps
+
+          expect([steps.first.args, steps.last.args]).to eq [
+            [File.join(public, '/images/nav_on.png')],
+            ['thumb', geometry, { 'decode' => 'jpeg-1x-v1', 'version' => '24e29997bcb00e97d8252cdd29d14e2d' }]
+          ]
+        end
+
+        it 'changes the resize URL when the source query changes' do
+          expect(service.resize('/images/nav_on.png?1', geometry)).to eq service.resize('/images/nav_on.png?1', geometry)
+          expect(service.resize('/images/nav_on.png?1', geometry)).not_to eq service.resize('/images/nav_on.png?2', geometry)
+        end
+
+        it 'reads an empty query as no version' do
+          expect(service.resize('/images/nav_on.png?', geometry)).to eq service.resize('/images/nav_on.png', geometry)
+        end
+
+        it 'keeps the version next to the orient option' do
+          steps = ::Dragonfly::Job.deserialize(service.resize(input, geometry, '-auto-orient').split('/')[3], resizer).steps
+
+          expect(steps.last.args.last).to eq('decode' => 'jpeg-1x-v1', 'orient' => true, 'version' => '24e29997bcb00e97d8252cdd29d14e2d')
+        end
 
       end
 

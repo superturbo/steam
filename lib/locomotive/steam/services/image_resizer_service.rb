@@ -14,7 +14,8 @@ module Locomotive
       attr_accessor_initialize :resizer
 
       def resize(source, geometry, convert_args = "")
-        return get_url_or_path(source) if disabled? || geometry.blank?
+        url_or_path = get_url_or_path(source)
+        return url_or_path if disabled? || geometry.blank?
 
         unless Geometry.allowed?(geometry)
           Locomotive::Common::Logger.error 'Unable to resize on the fly: Steam does not run this geometry'
@@ -26,8 +27,8 @@ module Locomotive
           return nil
         end
 
-        if file = fetch_file(source)
-          job = oriented_thumb(file, geometry, convert_args)
+        if file = fetch_file(url_or_path)
+          job = oriented_thumb(file, geometry, convert_args, local_version(url_or_path))
           job.url
         else
           Locomotive::Common::Logger.error "Unable to resize on the fly: #{source.inspect}"
@@ -44,13 +45,12 @@ module Locomotive
 
       protected
 
-      def fetch_file(source)
-        return nil if source.blank?
-        url_or_path = get_url_or_path(source)
+      def fetch_file(url_or_path)
+        return nil if url_or_path.blank?
 
         if url_or_path =~ Steam::IsHTTP
           remote_source(url_or_path)
-        elsif url_or_path
+        else
           local_source(url_or_path.sub(/(\?.*)$/, ''))
         end
       end
@@ -62,6 +62,11 @@ module Locomotive
       def remote_source(url)
         RemoteSources.new.check(url)
         resizer.fetch_url(url)
+      end
+
+      # Preserve local source queries in the job identity.
+      def local_version(url_or_path)
+        url_or_path[/\?(.*)\z/m, 1].presence unless url_or_path =~ Steam::IsHTTP
       end
 
       def get_url_or_path(source)
@@ -76,10 +81,10 @@ module Locomotive
       end
 
       # ImageMagick orients the image in the resize, before its geometry, rather than after it.
-      def oriented_thumb(file, geometry, convert_args)
+      def oriented_thumb(file, geometry, convert_args, version)
         words  = Shellwords.split(convert_args)
         orient = words.include?('-auto-orient')
-        opts   = orient ? { 'decode' => Thumb::DECODE, 'orient' => true } : { 'decode' => Thumb::DECODE }
+        opts   = { 'decode' => Thumb::DECODE, 'orient' => (true if orient), 'version' => version }.compact
         args   = orient ? Shellwords.join(words - ['-auto-orient']) : convert_args
 
         image_magick_convert(file.thumb(geometry, opts), args)

@@ -543,6 +543,28 @@ describe 'Resize jobs' do
       end
     end
 
+    it 'serves a local source named with the version its host gives it' do
+      with_source('photo.png', '-size', '600x300', 'xc:red') do
+        get Locomotive::Steam::ImageResizerService.new(resizer).resize('/photo.png?1183150800', '30x')
+
+        expect([last_response.status, served_size]).to eq [200, '30x15']
+      end
+    end
+
+    it 'serves the new image for a new source query, though the request carries the earlier ETag' do
+      with_source('photo.png', '-size', '600x300', 'xc:red') do |source|
+        service = Locomotive::Steam::ImageResizerService.new(resizer)
+        get service.resize('/photo.png?1', '30x')
+        etag = last_response.headers['etag']
+        expect([last_response.status, etag]).to match [200, be_present]
+
+        system(resizer.env[:convert_command].to_s, '-size', '600x600', 'xc:blue', source.path, exception: true)
+        get service.resize('/photo.png?2', '30x'), {}, 'HTTP_IF_NONE_MATCH' => etag
+
+        expect([last_response.status, served_size]).to eq [200, '30x30']
+      end
+    end
+
     it 'serves an EXIF 7 photo cropped as it shows' do
       with_source('photo.jpg', '-size', '1800x1200', 'gradient:red-blue') do |source|
         ExifOrientation.write(source.path, 7)
