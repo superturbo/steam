@@ -111,7 +111,7 @@ module Locomotive
         end
 
         register :image_resizer do
-          Steam::ImageResizerService.new(::Dragonfly.app(:steam))
+          Steam::ImageResizerService.new(::Dragonfly.app(:steam), site: current_site)
         end
 
         register :translator do

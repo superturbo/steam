@@ -11,7 +11,7 @@ module Locomotive
 
     class ImageResizerService
 
-      attr_accessor_initialize :resizer
+      attr_accessor_initialize :resizer, [:site]
 
       def resize(source, geometry, convert_args = "")
         url_or_path = get_url_or_path(source)
@@ -64,6 +64,12 @@ module Locomotive
         resizer.fetch_url(url)
       end
 
+      # Identify the rendering site, not the file owner.
+      def site_key
+        key = site._id.to_s unless site.nil?
+        key.presence || raise(MissingSite, 'a resize job needs the site rendering it')
+      end
+
       # Preserve local source queries in the job identity.
       def local_version(url_or_path)
         url_or_path[/\?(.*)\z/m, 1].presence unless url_or_path =~ Steam::IsHTTP
@@ -84,7 +90,7 @@ module Locomotive
       def oriented_thumb(file, geometry, convert_args, version)
         words  = Shellwords.split(convert_args)
         orient = words.include?('-auto-orient')
-        opts   = { 'decode' => Thumb::DECODE, 'orient' => (true if orient), 'version' => version }.compact
+        opts   = { 'decode' => Thumb::DECODE, 'orient' => (true if orient), 'version' => version, 'site' => site_key }.compact
         args   = orient ? Shellwords.join(words - ['-auto-orient']) : convert_args
 
         image_magick_convert(file.thumb(geometry, opts), args)

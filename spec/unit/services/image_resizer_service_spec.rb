@@ -3,7 +3,8 @@ require 'spec_helper'
 describe Locomotive::Steam::ImageResizerService do
 
   let(:resizer) { nil }
-  let(:service) { described_class.new(resizer) }
+  let(:site)    { double('Site', _id: 'site-1') }
+  let(:service) { described_class.new(resizer, site: site) }
   let(:public)  { File.expand_path('../../fixtures/default/public', __dir__) }
 
   before { allow(Locomotive::Steam.configuration).to receive(:asset_path).and_return(public) }
@@ -50,7 +51,7 @@ describe Locomotive::Steam::ImageResizerService do
         url   = "#{input}?1183150800"
         steps = ::Dragonfly::Job.deserialize(service.resize(url, geometry).split('/')[3], resizer).steps
 
-        expect([steps.first.args, steps.last.args]).to eq [[url], ['thumb', geometry, { 'decode' => 'jpeg-1x-v1' }]]
+        expect([steps.first.args, steps.last.args]).to eq [[url], ['thumb', geometry, { 'decode' => 'jpeg-1x-v1', 'site' => 'site-1' }]]
       end
 
       describe 'a remote image outside the trusted sources' do
@@ -86,8 +87,8 @@ describe Locomotive::Steam::ImageResizerService do
           steps = JSON.parse(Base64.urlsafe_decode64(job + '=' * (-job.size % 4)))
           file  = resizer.fetch_file(File.join(public, '/images/nav_on.png'))
 
-          expect(steps.last).to eq ['p', 'thumb', geometry, { 'decode' => 'jpeg-1x-v1' }]
-          expect(subject).to eq file.thumb(geometry, 'decode' => 'jpeg-1x-v1').url
+          expect(steps.last).to eq ['p', 'thumb', geometry, { 'decode' => 'jpeg-1x-v1', 'site' => 'site-1' }]
+          expect(subject).to eq file.thumb(geometry, 'decode' => 'jpeg-1x-v1', 'site' => 'site-1').url
           expect(subject).not_to eq file.thumb(geometry).url
         end
 
@@ -139,7 +140,7 @@ describe Locomotive::Steam::ImageResizerService do
 
           expect([steps.first.args, steps.last.args]).to eq [
             [File.join(public, '/images/nav_on.png')],
-            ['thumb', geometry, { 'decode' => 'jpeg-1x-v1', 'version' => '24e29997bcb00e97d8252cdd29d14e2d' }]
+            ['thumb', geometry, { 'decode' => 'jpeg-1x-v1', 'version' => '24e29997bcb00e97d8252cdd29d14e2d', 'site' => 'site-1' }]
           ]
         end
 
@@ -155,7 +156,7 @@ describe Locomotive::Steam::ImageResizerService do
         it 'keeps the version next to the orient option' do
           steps = ::Dragonfly::Job.deserialize(service.resize(input, geometry, '-auto-orient').split('/')[3], resizer).steps
 
-          expect(steps.last.args.last).to eq('decode' => 'jpeg-1x-v1', 'orient' => true, 'version' => '24e29997bcb00e97d8252cdd29d14e2d')
+          expect(steps.last.args.last).to eq('decode' => 'jpeg-1x-v1', 'orient' => true, 'version' => '24e29997bcb00e97d8252cdd29d14e2d', 'site' => 'site-1')
         end
 
       end
@@ -213,15 +214,58 @@ describe Locomotive::Steam::ImageResizerService do
 
         it 'orients the image in the resize, before its geometry, not after it' do
           expect(steps(service.resize(input, '30x40#', '-quality 70 -auto-orient')))
-            .to eq [['thumb', '30x40#', { 'decode' => 'jpeg-1x-v1', 'orient' => true }], ['convert', '-quality 70']]
+            .to eq [['thumb', '30x40#', { 'decode' => 'jpeg-1x-v1', 'orient' => true, 'site' => 'site-1' }], ['convert', '-quality 70']]
           expect(steps(service.resize(input, '30x40#', '-auto-orient')))
-            .to eq [['thumb', '30x40#', { 'decode' => 'jpeg-1x-v1', 'orient' => true }]]
+            .to eq [['thumb', '30x40#', { 'decode' => 'jpeg-1x-v1', 'orient' => true, 'site' => 'site-1' }]]
         end
 
         it 'leaves other ImageMagick arguments as they are' do
           expect(steps(service.resize(input, '30x40#', '-quality 70 -strip')))
-            .to eq [['thumb', '30x40#', { 'decode' => 'jpeg-1x-v1' }], ['convert', '-quality 70 -strip']]
+            .to eq [['thumb', '30x40#', { 'decode' => 'jpeg-1x-v1', 'site' => 'site-1' }], ['convert', '-quality 70 -strip']]
         end
+      end
+
+      describe 'the rendering site' do
+
+        let(:input) { '/images/nav_on.png' }
+
+        def thumb_options(url)
+          ::Dragonfly::Job.deserialize(url.split('/')[3], resizer).steps.last.args.last
+        end
+
+        def signed_for(site)
+          described_class.new(resizer, site: site).resize(input, geometry)
+        end
+
+        it 'names the rendering site, as text' do
+          expect(thumb_options(signed_for(double('Site', _id: 1)))).to eq('decode' => 'jpeg-1x-v1', 'site' => '1')
+        end
+
+        it 'signs another URL for the same source and size for another site' do
+          expect(signed_for(double('Site', _id: 'a'))).not_to eq signed_for(double('Site', _id: 'b'))
+        end
+
+        it 'names the site the services give it' do
+          services = Locomotive::Steam::Services.build_simple_instance(double('Site', _id: 'acme'))
+
+          expect(thumb_options(services.image_resizer.resize(input, geometry))).to eq('decode' => 'jpeg-1x-v1', 'site' => 'acme')
+        end
+
+        it 'signs no job for services with neither a request nor a site' do
+          expect { Locomotive::Steam::Services.build_instance.image_resizer.resize(input, geometry) }
+            .to raise_error(Locomotive::Steam::MissingSite, 'a resize job needs the site rendering it')
+        end
+
+        it 'signs no job without a site' do
+          [nil, Locomotive::Steam::Services::Defer.new { nil }, double('Site', _id: nil)].each do |site|
+            expect { signed_for(site) }.to raise_error(Locomotive::Steam::MissingSite)
+          end
+        end
+
+        it 'gives the source back without a site when it signs no job' do
+          expect(described_class.new(resizer).resize(input, '')).to eq input
+        end
+
       end
 
       describe 'a geometry Steam does not run' do

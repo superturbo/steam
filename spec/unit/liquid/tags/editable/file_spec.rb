@@ -77,7 +77,7 @@ describe Locomotive::Steam::Liquid::Tags::Editable::File do
 
     before { @context = context }
 
-    before { allow(services).to receive(:current_site).and_return(nil) }
+    before { allow(services).to receive(:current_site).and_return(double('Site', _id: 'site-1')) }
 
     before { allow(services.editable_element).to receive(:find).and_return(element) }
 
@@ -137,13 +137,13 @@ describe Locomotive::Steam::Liquid::Tags::Editable::File do
       let(:source) { "{% block header %}{% editable_file banner, hint: 'some text', resize: '500x100#' %}http://www.placehold.it/500x500{% endeditable_file %}{% endblock %}" }
 
       before { allow(Locomotive::Steam.configuration).to receive(:image_resizer_remote_source_prefix).and_return('http://www.placehold.it/') }
-      it { is_expected.to eq '/steam/dynamic/W1siZnUiLCJodHRwOi8vd3d3LnBsYWNlaG9sZC5pdC81MDB4NTAwIl0sWyJwIiwidGh1bWIiLCI1MDB4MTAwIyIseyJkZWNvZGUiOiJqcGVnLTF4LXYxIn1dXQ/6583698bbc7a883d/500x500' }
+      it { is_expected.to eq '/steam/dynamic/W1siZnUiLCJodHRwOi8vd3d3LnBsYWNlaG9sZC5pdC81MDB4NTAwIl0sWyJwIiwidGh1bWIiLCI1MDB4MTAwIyIseyJkZWNvZGUiOiJqcGVnLTF4LXYxIiwic2l0ZSI6InNpdGUtMSJ9XV0/ef647b013dcaffd0/500x500' }
 
       context 'live editing on' do
 
         let(:live_editing) { true }
 
-        it { is_expected.to eq '<span class="locomotive-block-anchor" data-element-id="header" style="visibility: hidden"></span>/steam/dynamic/W1siZnUiLCJodHRwOi8vd3d3LnBsYWNlaG9sZC5pdC81MDB4NTAwIl0sWyJwIiwidGh1bWIiLCI1MDB4MTAwIyIseyJkZWNvZGUiOiJqcGVnLTF4LXYxIn1dXQ/6583698bbc7a883d/500x500?editable-path=header--banner' }
+        it { is_expected.to eq '<span class="locomotive-block-anchor" data-element-id="header" style="visibility: hidden"></span>/steam/dynamic/W1siZnUiLCJodHRwOi8vd3d3LnBsYWNlaG9sZC5pdC81MDB4NTAwIl0sWyJwIiwidGh1bWIiLCI1MDB4MTAwIyIseyJkZWNvZGUiOiJqcGVnLTF4LXYxIiwic2l0ZSI6InNpdGUtMSJ9XV0/ef647b013dcaffd0/500x500?editable-path=header--banner' }
 
       end
 

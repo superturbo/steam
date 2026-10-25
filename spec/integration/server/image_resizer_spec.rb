@@ -14,6 +14,10 @@ describe 'Resize jobs' do
     run_server
   end
 
+  def resize_service
+    Locomotive::Steam::ImageResizerService.new(resizer, site: Locomotive::Steam::Site.new(_id: 'site-1'))
+  end
+
   def url_signed_with(signing_key)
     kept, resizer.secret = resizer.secret, signing_key
     job.url
@@ -54,7 +58,7 @@ describe 'Resize jobs' do
       end
       allow(configuration).to receive(:image_resizer_remote_source_prefix).and_return("http://127.0.0.1:#{port}/sites/")
 
-      url = Locomotive::Steam::ImageResizerService.new(resizer).resize("http://127.0.0.1:#{port}/sites/1/banner.png", '4x4')
+      url = resize_service.resize("http://127.0.0.1:#{port}/sites/1/banner.png", '4x4')
       get url
 
       expect(last_response.status).to eq 200
@@ -100,7 +104,7 @@ describe 'Resize jobs' do
           link = File.join(root, 'current.png')
           File.symlink(File.join(root, 'banner.png'), link)
 
-          url = Locomotive::Steam::ImageResizerService.new(resizer).resize('/current.png', '4x4')
+          url = resize_service.resize('/current.png', '4x4')
           expect(url).to start_with '/steam/dynamic/'
 
           File.unlink(link)
@@ -151,6 +155,41 @@ describe 'Resize jobs' do
     let(:key)  { nil }
 
     it_behaves_like 'a server running only the jobs it signed'
+
+  end
+
+  context 'two sites' do
+
+    let(:mode) { :production }
+    let(:key)  { 'a deployment key' }
+
+    def service_for(id)
+      Locomotive::Steam::ImageResizerService.new(resizer, site: Locomotive::Steam::Site.new(_id: id))
+    end
+
+    it "names the site a request's domain finds, rendering as a page does" do
+      allow(configuration).to receive(:asset_path).and_return(File.join(default_fixture_site_path, 'public'))
+      services = Locomotive::Steam::Services.build_instance(Rack::Request.new(Rack::MockRequest.env_for('http://localhost/')))
+
+      url = services.image_resizer.resize('/images/nav_on.png', '4x4')
+
+      expect(::Dragonfly::Job.deserialize(url.split('/')[3], resizer).steps.last.args.last['site']).to eq services.current_site._id.to_s
+    end
+
+    it "resizes one site's file for another, under a job naming the rendering site" do
+      Dir.mktmpdir do |root|
+        allow(configuration).to receive(:asset_path).and_return(root)
+        FileUtils.mkdir_p(File.join(root, 'sites/b'))
+        FileUtils.cp(image, File.join(root, 'sites/b/photo.png'))
+
+        for_a = service_for('a').resize('/sites/b/photo.png', '4x4')
+        for_b = service_for('b').resize('/sites/b/photo.png', '4x4')
+        expect(for_a).not_to eq for_b
+
+        get for_a
+        expect(last_response.status).to eq 200
+      end
+    end
 
   end
 
@@ -535,7 +574,7 @@ describe 'Resize jobs' do
       with_source('photo.jpg', '-size', '1800x1200', 'gradient:red-blue') do |source|
         ExifOrientation.write(source.path, 6)
 
-        get Locomotive::Steam::ImageResizerService.new(resizer).resize('/photo.jpg', '900x>', '-auto-orient')
+        get resize_service.resize('/photo.jpg', '900x>', '-auto-orient')
         expect([last_response.status, served_size]).to eq [200, '900x1350']
 
         get source.thumb('900x>', 'decode' => 'jpeg-1x-v1').process(:convert, '-auto-orient').url
@@ -545,7 +584,7 @@ describe 'Resize jobs' do
 
     it 'serves a local source named with the version its host gives it' do
       with_source('photo.png', '-size', '600x300', 'xc:red') do
-        get Locomotive::Steam::ImageResizerService.new(resizer).resize('/photo.png?1183150800', '30x')
+        get resize_service.resize('/photo.png?1183150800', '30x')
 
         expect([last_response.status, served_size]).to eq [200, '30x15']
       end
@@ -553,7 +592,7 @@ describe 'Resize jobs' do
 
     it 'serves the new image for a new source query, though the request carries the earlier ETag' do
       with_source('photo.png', '-size', '600x300', 'xc:red') do |source|
-        service = Locomotive::Steam::ImageResizerService.new(resizer)
+        service = resize_service
         get service.resize('/photo.png?1', '30x')
         etag = last_response.headers['etag']
         expect([last_response.status, etag]).to match [200, be_present]
@@ -569,7 +608,7 @@ describe 'Resize jobs' do
       with_source('photo.jpg', '-size', '1800x1200', 'gradient:red-blue') do |source|
         ExifOrientation.write(source.path, 7)
 
-        get Locomotive::Steam::ImageResizerService.new(resizer).resize('/photo.jpg', '600x200#', '-auto-orient')
+        get resize_service.resize('/photo.jpg', '600x200#', '-auto-orient')
         expect([last_response.status, served_size]).to eq [200, '600x200']
       end
     end

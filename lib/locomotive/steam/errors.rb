@@ -37,6 +37,9 @@ module Locomotive::Steam
   class MissingLocale < ::ArgumentError
   end
 
+  class MissingSite < ::ArgumentError
+  end
+
   # Reasons are stable identifiers.
   class InvalidEntriesFileError < ::StandardError
 
