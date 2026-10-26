@@ -21,4 +21,14 @@ describe Locomotive::Steam::Server do
     expect(Rack::Session::Moneta).to have_received(:new).once
   end
 
+  it 'answers a HEAD request as it answers a GET, with no body' do
+    get '/'
+    page = last_response.headers.to_h.slice('content-type', 'cache-control')
+
+    head '/'
+
+    expect([last_response.status, last_response.body, last_response.headers.to_h.slice('content-type', 'cache-control')])
+      .to eq [200, '', page]
+  end
+
 end

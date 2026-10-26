@@ -2,6 +2,7 @@ require 'rack/csrf'
 require 'rack/session/moneta'
 require 'rack/builder'
 require 'rack/lint'
+require 'rack/head'
 
 require_relative 'middlewares'
 
@@ -33,6 +34,7 @@ module Locomotive::Steam
           use Middlewares::ImageResizer
 
           use Rack::Lint
+          use Rack::Head
           use Rack::RewindableInput::Middleware unless ENV['RAILS_ENV']
           use Rack::Session::Moneta, configuration.moneta
 
