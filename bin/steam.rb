@@ -65,6 +65,7 @@ OptionParser.new do |opts|
 
 end.parse!
 
+require 'haml'
 require_relative '../lib/locomotive/steam'
 require_relative '../lib/locomotive/steam/server'
 
@@ -83,10 +84,8 @@ app = Locomotive::Steam.to_app
 # Puma rack handler
 require 'puma'
 
-server   = ::Puma::Server.new(app)
+server   = ::Puma::Server.new(app, nil, min_threads: 4, max_threads: 16)
 server.add_tcp_listener server_options[:address], server_options[:port]
-server.min_threads = 4
-server.max_threads = 16
 begin
   Locomotive::Common::Logger.info 'Server started...'
   server.run.join
