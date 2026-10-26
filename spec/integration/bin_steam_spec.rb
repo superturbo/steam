@@ -1,6 +1,7 @@
 require File.dirname(__FILE__) + '/integration_helper'
 
 require 'net/http'
+require 'open3'
 
 describe 'bin/steam.rb' do
 
@@ -8,17 +9,38 @@ describe 'bin/steam.rb' do
   let(:port) { TCPServer.open('127.0.0.1', 0) { |server| server.addr[1] } }
 
   it 'serves a site from its path until it is interrupted' do
+    with_steam do |pid, output|
+      response = first_response(pid, '/')
+      expect([response&.code, response&.body.to_s[/Upcoming events/]]).to eq(['200', 'Upcoming events']), File.read(output)
+
+      Process.kill('INT', pid)
+      expect(Timeout.timeout(10) { Process.wait2(pid).last }).to be_success, File.read(output)
+    end
+  end
+
+  it 'links the assets of a page through the asset host it is given' do
+    with_steam('--asset-host', 'https://cdn.example.com') do |pid, output|
+      response = first_response(pid, '/')
+      expect(response&.code).to eq('200'), File.read(output)
+      expect(response.body).to include('href="https://cdn.example.com/stylesheets/application.css'), File.read(output)
+    end
+  end
+
+  it 'shows its usage for -h' do
+    usage, errors, status = Open3.capture3(RbConfig.ruby, 'bin/steam.rb', '-h', chdir: root)
+
+    expect(status).to be_success, errors
+    expect(usage).to start_with('Usage: steam.rb [options]'), usage + errors
+  end
+
+  def with_steam(*arguments)
     Dir.mktmpdir do |dir|
       output = File.join(dir, 'output')
       pid    = Process.spawn(RbConfig.ruby, 'bin/steam.rb', '--path', 'spec/fixtures/default', '--port', port.to_s,
-                             '--log-file', File.join(dir, 'steam.log'), chdir: root, [:out, :err] => [output, 'w'])
+                             '--log-file', File.join(dir, 'steam.log'), *arguments, chdir: root, [:out, :err] => [output, 'w'])
 
       begin
-        response = first_response(pid, '/')
-        expect([response&.code, response&.body.to_s[/Upcoming events/]]).to eq(['200', 'Upcoming events']), File.read(output)
-
-        Process.kill('INT', pid)
-        expect(Timeout.timeout(10) { Process.wait2(pid).last }).to be_success, File.read(output)
+        yield pid, output
       ensure
         stop(pid)
       end

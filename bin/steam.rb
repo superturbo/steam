@@ -43,12 +43,12 @@ OptionParser.new do |opts|
   end
 
   # Asset host
-  opts.on('-h', '--asset-host HOST', 'Required if the assets are stored on Amazon S3 or through a CDN') do |host|
-    options[:asset_host]
+  opts.on('--asset-host HOST', 'Link the assets through this host, such as a CDN') do |host|
+    options[:asset_host] = host
   end
 
   # TCP port
-  opts.on('-p', '--port PORT', 'Run the HTTP server on the specified port (by default: 8080') do |port|
+  opts.on('-p', '--port PORT', 'Run the HTTP server on the specified port (by default: 8080)') do |port|
     server_options[:port] = port
   end
 
