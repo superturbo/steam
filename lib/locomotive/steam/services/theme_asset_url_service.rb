@@ -6,9 +6,9 @@ module Locomotive
       attr_accessor_initialize :repository, :asset_host, :checksum
 
       def build(path)
-        # keep the query string safe
-        path.gsub!(/(\?+.+)$/, '')
-        query_string = $1
+        # Preserve the query without changing the input.
+        query_string = path[/(\?+.+)$/, 1]
+        path         = path.sub(/(\?+.+)$/, '')
 
         # build the url of the theme asset based on the persistence layer
         _url = repository.url_for(path)

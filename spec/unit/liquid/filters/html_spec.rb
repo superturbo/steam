@@ -38,6 +38,13 @@ describe Locomotive::Steam::Liquid::Filters::Html do
       expect(theme_asset_url('others/manifest.json')).to eq('/sites/42/theme/others/manifest.json')
     end
 
+    it 'leaves the path it is given as it was, for the template to use again' do
+      context = ::Liquid::Context.new({ 'path' => +'others/app.js?v=1' }, {}, { services: services })
+
+      expect(render_template('{{ path | theme_asset_url }} {{ path | theme_asset_url }} {{ path }}', context))
+        .to eq '/sites/42/theme/others/app.js?v=1 /sites/42/theme/others/app.js?v=1 others/app.js?v=1'
+    end
+
   end
 
   describe '#stylesheet_url' do
