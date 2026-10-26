@@ -134,7 +134,7 @@ describe Locomotive::Steam::Server do
       get '/song-by-id/song-number-1'
       expect(last_response.body).to include 'Song #1'
 
-      post '/song-by-id/song-number-1', '{"x": 1}', 'CONTENT_TYPE' => 'application/json'
+      post '/song-by-id/song-number-1', '{"x": 1}'.dup, 'CONTENT_TYPE' => 'application/json'
       expect(last_response.status).to eq 200
       expect(last_response.body).to include 'Song #1'
     end

@@ -38,7 +38,7 @@ describe 'Section preview' do
       page = last_response.body
 
       # An empty body, as Puma gives every request.
-      get '/about-us', {}, 'HTTP_LOCOMOTIVE_SECTION_TYPE' => 'header', input: ''
+      get '/about-us', {}, 'HTTP_LOCOMOTIVE_SECTION_TYPE' => 'header', input: ''.dup
       get '/about-us'
 
       expect(last_response.headers['age']).to be_present

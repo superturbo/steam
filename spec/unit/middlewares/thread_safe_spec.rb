@@ -6,7 +6,7 @@ describe Locomotive::Steam::Middlewares::ThreadSafe do
 
   # A new middleware each time: params are memoized.
   def middleware_for(body)
-    env = Rack::MockRequest.env_for('/', method: 'POST', input: body.to_s, 'CONTENT_TYPE' => 'application/json')
+    env = Rack::MockRequest.env_for('/', method: 'POST', input: body.to_s.dup, 'CONTENT_TYPE' => 'application/json')
     env.delete('rack.input') if body.nil?
     env['steam.request'] = Rack::Request.new(env)
     described_class.new(nil).tap { |middleware| middleware.env = env }
@@ -19,7 +19,7 @@ describe Locomotive::Steam::Middlewares::ThreadSafe do
   describe 'the params of a request' do
 
     def middleware_with(url, body, content_type, env = nil)
-      env ||= Rack::MockRequest.env_for(url, method: 'POST', input: body, 'CONTENT_TYPE' => content_type)
+      env ||= Rack::MockRequest.env_for(url, method: 'POST', input: body.dup, 'CONTENT_TYPE' => content_type)
       env['steam.request'] ||= Rack::Request.new(env)
       described_class.new(nil).tap { |middleware| middleware.env = env }
     end

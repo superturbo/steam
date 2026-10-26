@@ -13,7 +13,7 @@ describe Locomotive::Steam::Decorators::TemplateDecorator do
 
     let(:content) { 'Lorem ipsum' }
 
-    before { allow(File).to receive(:read).and_return(content) }
+    before { allow(File).to receive(:read) { content.dup } }
 
     subject { decorated.liquid_source.strip }
 

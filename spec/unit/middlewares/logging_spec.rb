@@ -218,7 +218,7 @@ describe Locomotive::Steam::Middlewares::Logging do
     context 'a malformed form body' do
 
       let(:env) do
-        env_for(url, method: 'POST', input: 'entry[name]=Jonas%zzJonaitis', 'CONTENT_TYPE' => 'application/x-www-form-urlencoded',
+        env_for(url, method: 'POST', input: 'entry[name]=Jonas%zzJonaitis'.dup, 'CONTENT_TYPE' => 'application/x-www-form-urlencoded',
                      'steam.site' => site, 'steam.locale' => :en).tap do |env|
           env['steam.request'] = Rack::Request.new(env)
         end
