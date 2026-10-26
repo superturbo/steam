@@ -22,7 +22,6 @@ end
 
 group :test do
   gem 'rspec',              '~> 3.13'
-  gem 'json_spec',          '~> 1.1.5'
   gem 'i18n-spec',          '~> 0.6.0'
 
   gem 'timecop',            '~> 0.9.1'
