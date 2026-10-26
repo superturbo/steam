@@ -75,7 +75,7 @@ module Locomotive::Steam
           stack.inject(self)
 
           run Middlewares::Renderer.new(nil)
-        end
+        end.to_app
       end
 
       def configuration
