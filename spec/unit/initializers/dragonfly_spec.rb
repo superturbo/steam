@@ -39,6 +39,50 @@ describe Locomotive::Steam::Initializers::Dragonfly do
 
   end
 
+  describe 'the ImageMagick commands it finds' do
+
+    let(:magick)   { Tempfile.new('magick') }
+    let(:convert)  { Tempfile.new('convert') }
+    let(:identify) { Tempfile.new('identify') }
+
+    around do |example|
+      kept = ENV.values_at('IMAGE_MAGICK_CONVERT', 'IMAGE_MAGICK_IDENTIFY')
+      example.run
+    ensure
+      ENV['IMAGE_MAGICK_CONVERT'], ENV['IMAGE_MAGICK_IDENTIFY'] = kept
+      initializer.run
+    end
+
+    before do
+      ENV.delete('IMAGE_MAGICK_CONVERT')
+      ENV['IMAGE_MAGICK_IDENTIFY'] = identify.path
+      allow_any_instance_of(Locomotive::Steam::ImageResizerService::Shell).to receive(:check_policy)
+      allow(initializer).to receive(:`).and_call_original
+    end
+
+    def converting_with(magick: nil, convert: nil)
+      allow(initializer).to receive(:`).with('which magick').and_return("#{magick}\n")
+      allow(initializer).to receive(:`).with('which convert').and_return("#{convert}\n")
+      initializer.run
+      ::Dragonfly.app(:steam).env[:convert_command]
+    end
+
+    it "converts with ImageMagick 7's magick, not the convert command it deprecates" do
+      expect(converting_with(magick: magick.path, convert: convert.path)).to eq magick.path
+    end
+
+    it 'converts with convert where there is no magick, as with ImageMagick 6' do
+      expect(converting_with(convert: convert.path)).to eq convert.path
+    end
+
+    it 'converts with the command the host names' do
+      ENV['IMAGE_MAGICK_CONVERT'] = convert.path
+
+      expect(converting_with(magick: magick.path)).to eq convert.path
+    end
+
+  end
+
   describe 'missing ImagickMagick' do
 
     before do
@@ -160,7 +204,7 @@ describe Locomotive::Steam::Initializers::Dragonfly do
         app.fetch_file(image).width
 
         expect(app.shell).to have_received(:run).with(/identify/, anything).exactly(3).times
-        expect(app.shell).to have_received(:run).with(/convert/, anything).exactly(3).times
+        expect(app.shell).to have_received(:run).with(/\A#{Regexp.escape(app.env[:convert_command])} /, anything).exactly(3).times
       end
 
     end
@@ -227,7 +271,7 @@ describe Locomotive::Steam::Initializers::Dragonfly do
     end
 
     it 'refuses to start with a lock directory others can use, or a link to one' do
-      skip 'ImageMagick is not installed' unless File.exist?(`which convert`.strip)
+      skip 'ImageMagick is not installed' unless File.exist?(app.env[:convert_command].to_s)
       FileUtils.mkdir_p(locks)
       File.chmod(0o777, locks)
       expect { initializer.run }.to raise_error(ArgumentError, /image_magick_command_lock_path/)
@@ -244,7 +288,7 @@ describe Locomotive::Steam::Initializers::Dragonfly do
   describe 'the log of the start-up checks' do
 
     it "goes through Steam's logger from a new process on, leaving no dragonfly.log behind" do
-      skip 'ImageMagick is not installed' unless File.exist?(`which convert`.strip)
+      skip 'ImageMagick is not installed' unless File.exist?(::Dragonfly.app(:steam).env[:convert_command].to_s)
       steam = File.expand_path('../../../lib/locomotive/steam', __dir__)
 
       Dir.mktmpdir do |dir|

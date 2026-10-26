@@ -139,7 +139,7 @@ module Locomotive
         end
 
         def find_imagemagick_commands
-          convert   = ENV['IMAGE_MAGICK_CONVERT'] || `which convert`.strip.presence || '/usr/local/bin/convert'
+          convert   = ENV['IMAGE_MAGICK_CONVERT'] || `which magick`.strip.presence || `which convert`.strip.presence || '/usr/local/bin/convert'
           identify  = ENV['IMAGE_MAGICK_IDENTIFY'] || `which identify`.strip.presence || '/usr/local/bin/identify'
 
           if File.exist?(convert)

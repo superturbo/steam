@@ -549,7 +549,7 @@ describe 'Resize jobs' do
 
           expect([last_response.status, last_response.headers['cache-control']]).to eq([404, 'no-store']), url
         end
-        expect(resizer.shell).not_to have_received(:run).with(/convert/, anything)
+        expect(resizer.shell).not_to have_received(:run).with(/\A#{Regexp.escape(resizer.env[:convert_command])} /, anything)
 
         { source.thumb('200x', 'frame' => 1) => 200, source.thumb('150x') => 200 }.each do |job, status|
           get job.url
