@@ -41,4 +41,29 @@ describe Locomotive::Steam::Models::Scope do
 
   end
 
+  describe '#with_locale' do
+
+    it 'runs the block in the locale and gives back its value and the locale it had' do
+      expect(scope.with_locale(:fr) { scope.locale }).to eq :fr
+      expect(scope.locale).to eq :en
+    end
+
+    it 'gives back the locale of the outer block when nested' do
+      scope.with_locale(:fr) do
+        scope.with_locale(:de) { }
+
+        expect(scope.locale).to eq :fr
+      end
+
+      expect(scope.locale).to eq :en
+    end
+
+    it 'gives back the locale it had when the block raises' do
+      expect { scope.with_locale(:fr) { raise ArgumentError } }.to raise_error(ArgumentError)
+
+      expect(scope.locale).to eq :en
+    end
+
+  end
+
 end
