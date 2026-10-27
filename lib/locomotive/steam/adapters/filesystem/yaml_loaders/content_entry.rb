@@ -23,6 +23,7 @@ module Locomotive
                   # A missing _visible key means visible in Wagon files.
                   _attributes[:_visible] = true unless _attributes.key?(:_visible)
 
+                  check_default_slug!(_attributes)
                   modify_for_selects(_attributes, label)
                   modify_for_associations(_attributes)
                   modify_for_files(_attributes)
@@ -106,6 +107,17 @@ module Locomotive
               raise Locomotive::Steam::InvalidEntriesFileError.new(
                 reason,
                 "#{File.join(path, "#{content_type_slug}.yml")}, entries of #{name} #{parent}: #{message}")
+            end
+
+            # An entry not pulled from MongoDB takes its id from the default locale slug.
+            def check_default_slug!(attributes)
+              slug = attributes[:_slug]
+
+              return unless slug.is_a?(Hash) && slug.values.any?(&:present?)
+              return if slug[default_locale].present? || Sanitizers::ContentEntry.pulled_id?(attributes[:_id])
+
+              entries_file_error!(:missing_default_slug, attributes,
+                                  "_slug has no value in the default locale #{default_locale}")
             end
 
             def reject_repeated_slugs(list)

@@ -43,7 +43,7 @@ module Locomotive::Steam
   # Reasons are stable identifiers.
   class InvalidEntriesFileError < ::StandardError
 
-    REASONS = %i(duplicate_position invalid_position partial_position_group
+    REASONS = %i(duplicate_position invalid_position missing_default_slug partial_position_group
                  unknown_association unlinked_position).freeze
 
     attr_reader :reason

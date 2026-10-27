@@ -1,7 +1,6 @@
 require 'spec_helper'
 
-require_relative '../../../../../lib/locomotive/steam/adapters/filesystem/yaml_loader.rb'
-require_relative '../../../../../lib/locomotive/steam/adapters/filesystem/yaml_loaders/content_entry.rb'
+require_relative '../../../../../lib/locomotive/steam/adapters/filesystem.rb'
 
 describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
 
@@ -74,6 +73,51 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
 
     end
 
+    context 'a slug spelled out without the default locale' do
+
+      let(:entries) { [{ 'Pearl Jam' => { '_slug' => { 'fr' => 'perle-jam' } } }] }
+
+      before { allow(loader).to receive(:_load).and_return(HashConverter.to_sym(entries)) }
+
+      it 'says which file and which entry' do
+        expect { subject }.to raise_error(
+          Locomotive::Steam::InvalidEntriesFileError,
+          %r{data/bands\.yml, entry Pearl Jam: _slug has no value in the default locale en}) do |error|
+          expect(error.reason).to eq :missing_default_slug
+        end
+      end
+
+      context 'next to a blank default' do
+
+        let(:entries) { [{ 'Pearl Jam' => { '_slug' => { 'en' => '', 'fr' => 'perle-jam' } } }] }
+
+        it { expect { subject }.to raise_error(Locomotive::Steam::InvalidEntriesFileError, /default locale en/) }
+
+      end
+
+      context 'blank in every locale' do
+
+        let(:entries) { [{ 'Pearl Jam' => { '_slug' => { 'en' => '', 'fr' => nil } } }] }
+
+        it { expect { subject }.not_to raise_error }
+
+      end
+
+      context 'on an entry pulled from MongoDB' do
+
+        [['5f3a1c2b4d5e6f7a8b9c0d1e', 'perle-jam'], '5f3a1c2b4d5e6f7a8b9c0d1e'].each do |id|
+          it "loads it with the id #{id.inspect}" do
+            allow(loader).to receive(:_load)
+              .and_return(HashConverter.to_sym([{ 'Pearl Jam' => { '_id' => id, '_slug' => { 'fr' => 'perle-jam' } } }]))
+
+            expect(subject.first[:_id]).to eq id
+          end
+        end
+
+      end
+
+    end
+
     context 'two entries each spelling out a slug of their own' do
 
       before { allow(loader).to receive(:_load).and_return(HashConverter.to_sym(entries)) }
@@ -92,11 +136,11 @@ describe Locomotive::Steam::Adapters::Filesystem::YAMLLoaders::ContentEntry do
       context 'both leaving the same locale empty' do
 
         let(:entries) do
-          [{ 'Pearl Jam'   => { '_slug' => { 'en' => '', 'fr' => 'pearl-jam' } } },
-           { 'Soundgarden' => { '_slug' => { 'en' => '', 'fr' => 'soundgarden' } } }]
+          [{ 'Pearl Jam'   => { '_slug' => { 'en' => 'pearl-jam', 'fr' => '' } } },
+           { 'Soundgarden' => { '_slug' => { 'en' => 'soundgarden', 'fr' => '' } } }]
         end
 
-        it { expect { subject }.to raise_error(/locale en, duplicate slug ""/) }
+        it { expect { subject }.to raise_error(/locale fr, duplicate slug ""/) }
 
       end
 

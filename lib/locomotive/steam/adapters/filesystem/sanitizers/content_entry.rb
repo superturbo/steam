@@ -14,7 +14,7 @@ module Locomotive::Steam
 
           def apply_to_dataset(dataset)
             dataset.records.values.each do |entity|
-              _apply_to_dataset(entity, dataset)
+              _apply_to_dataset(entity, dataset, default_locale)
             end
           end
 
@@ -22,14 +22,21 @@ module Locomotive::Steam
             # Note: this statement attaches the site to the entity
             apply_to_entity(entity)
 
-            _apply_to_dataset(entity, dataset)
+            _apply_to_dataset(entity, dataset, locale)
+          end
+
+          # Preserve array ids from MongoDB dumps and 24-character ObjectId strings.
+          def self.pulled_id?(id)
+            id.is_a?(Array) || (id.is_a?(String) && id.match?(/\A\h{24}\z/))
           end
 
           private
 
-          def _apply_to_dataset(entity, dataset)
+          # A loaded entry takes its id from the default locale, whichever locale
+          # loads it. A created entry takes it from the locale it is created in.
+          def _apply_to_dataset(entity, dataset, id_locale)
             set_slug(entity, dataset)
-            set_id(entity)
+            set_id(entity, id_locale)
           end
 
           # YAML stores the label as the entry key, not as a field.
@@ -45,12 +52,11 @@ module Locomotive::Steam
             end
           end
 
-          def set_id(entity)
-            # don't override the id if it was set from a MongoDB dump
-            return if entity._id.to_s =~ /[a-z0-9]{12,}/
+          def set_id(entity, id_locale)
+            return if self.class.pulled_id?(entity._id)
 
             if (slug = entity[:_slug]).respond_to?(:translations)
-              entity[:_id] = slug[locale]
+              entity[:_id] = slug[id_locale]
             else
               entity[:_id] = slug
             end

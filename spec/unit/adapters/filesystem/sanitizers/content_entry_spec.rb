@@ -20,16 +20,24 @@ describe Locomotive::Steam::Adapters::Filesystem::Sanitizers::ContentEntry do
     File.write(path, content)
   end
 
-  def load_site(bands:, notes: nil)
+  def load_site(bands:, notes: nil, songs: nil)
     write('config/site.yml', "name: Slugs\nsubdomain: slugs\nlocales: #{locales.inspect}\ntimezone: 'UTC'\n")
     write('app/content_types/bands.yml',
-          "name: Bands\nslug: bands\nlabel_field_name: name\nfields:\n- name:\n    type: string\n")
+          "name: Bands\nslug: bands\nlabel_field_name: name\nfields:\n- name:\n    type: string\n" +
+          (songs ? "- songs:\n    type: has_many\n    class_name: songs\n    inverse_of: band\n" : ''))
     write('data/bands.yml', bands)
 
     if notes
       write('app/content_types/notes.yml',
             "name: Notes\nslug: notes\nlabel_field_name: title\nfields:\n- title:\n    type: string\n    localized: true\n")
       write('data/notes.yml', notes)
+    end
+
+    if songs
+      write('app/content_types/songs.yml',
+            "name: Songs\nslug: songs\nlabel_field_name: title\nfields:\n- title:\n    type: string\n" \
+            "- band:\n    type: belongs_to\n    target: bands\n")
+      write('data/songs.yml', songs)
     end
   end
 
@@ -154,6 +162,87 @@ describe Locomotive::Steam::Adapters::Filesystem::Sanitizers::ContentEntry do
       created = repository.create(repository.build(name: 'A-B'))
 
       expect(created[:_slug].translations).to eq every_locale('a-b-1')
+    end
+
+  end
+
+  describe 'the id of a loaded entry' do
+
+    let(:object_id) { '5f3a1c2b4d5e6f7a8b9c0d1e' }
+
+    # A new adapter loads the site again, in the locale it is first read in.
+    def loaded_in(locale, type = 'bands')
+      @adapter = nil
+      repository(type, locale)
+    end
+
+    it 'comes from the default locale slug whichever locale loads first' do
+      load_site(bands: "- Pearl Jam:\n    _slug:\n      en: pearl-jam\n      fr: perle-jam\n")
+
+      locales.each do |locale|
+        expect(loaded_in(locale).all.first._id).to eq 'pearl-jam'
+      end
+    end
+
+    it 'links entries in every locale whichever locale loads first' do
+      load_site(bands: "- Pearl Jam:\n    _slug:\n      en: pearl-jam\n      fr: perle-jam\n",
+                songs: "- Alive:\n    band: pearl-jam\n- Black:\n    band: pearl-jam\n")
+
+      [%i(fr en), %i(en fr)].each do |order|
+        @adapter = nil
+
+        order.each do |locale|
+          expect(repository('songs', locale).all.map { |song| song.band&._label }).to eq ['Pearl Jam', 'Pearl Jam']
+          expect(repository('bands', locale).all.first.songs.all.map(&:_label)).to eq %w(Alive Black)
+        end
+      end
+    end
+
+    it 'keeps an id pulled from MongoDB, found by either part' do
+      load_site(bands: "- Pearl Jam:\n    _id: ['#{object_id}', 'pearl-jam']\n    _slug:\n      en: pearl-jam\n      fr: perle-jam\n")
+
+      %i(fr en).each do |locale|
+        bands = loaded_in(locale)
+
+        expect(bands.all.first._id).to eq [object_id, 'pearl-jam']
+        expect(bands.find(object_id)&._label).to eq 'Pearl Jam'
+        expect(bands.find('pearl-jam')&._label).to eq 'Pearl Jam'
+      end
+    end
+
+    it 'keeps an ObjectId pulled from MongoDB' do
+      load_site(bands: "- Pearl Jam:\n    _id: '#{object_id}'\n")
+
+      expect(loaded_in(:fr).all.first._id).to eq object_id
+    end
+
+    it 'keeps a pulled id when the default locale has no slug' do
+      load_site(bands: "- Pearl Jam:\n    _id: ['#{object_id}', 'perle-jam']\n    _slug:\n      fr: perle-jam\n")
+
+      %i(en fr).each do |locale|
+        expect(loaded_in(locale).all.first._id).to eq [object_id, 'perle-jam']
+      end
+    end
+
+    it 'replaces any other id with the slug' do
+      ['42', 'abcdefghijklmnop', "#{object_id}0"].each do |id|
+        load_site(bands: "- Pearl Jam:\n    _id: #{id}\n")
+
+        expect(loaded_in(:en).all.first._id).to eq 'pearl-jam'
+      end
+    end
+
+  end
+
+  describe 'the id of a created entry' do
+
+    it 'comes from its slug in the locale it is created in' do
+      load_site(bands: "- Pearl Jam: {}\n")
+
+      bands   = repository('bands', :fr)
+      created = bands.create(bands.build(name: 'Given', _slug: { 'fr' => 'given-fr' }))
+
+      expect(created._id).to eq 'given-fr'
     end
 
   end
