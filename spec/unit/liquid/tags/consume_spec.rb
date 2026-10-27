@@ -206,32 +206,78 @@ describe Locomotive::Steam::Liquid::Tags::Consume do
       subject
     end
 
-    it 'gives the block nil on a timeout' do
-      allow(services.external_api).to receive(:consume).and_raise(Timeout::Error)
-      source = %{{% consume blog from "#{url}" %}{% if blog == null %}down{% endif %}{% endconsume %}}
+  end
 
-      expect(render_template(source, context)).to eq 'down'
+  describe 'an API that cannot be read' do
+
+    include_context 'filtered logs'
+
+    let(:context) { ::Liquid::Context.new(assigns, {}, { services: services }, true) }
+    let(:url)     { 'http://blog.locomotiveapp.org/api/read?api_key=k123' }
+    let(:source)  { %{{% consume blog from "#{url}", password: 'p456' %}{% if blog == null %}down{% endif %}{% endconsume %}} }
+    let(:errors)  { [] }
+
+    before { allow(Locomotive::Common::Logger).to receive(:error) { |message| errors << message } }
+
+    [SocketError, Errno::ECONNREFUSED, Errno::ECONNRESET, Errno::EHOSTUNREACH, EOFError, OpenSSL::SSL::SSLError,
+     Net::OpenTimeout, Net::ReadTimeout, Timeout::Error, Errno::ETIMEDOUT].each do |error|
+      it "gives the block nil on #{error}, naming the call and the error class, nothing more" do
+        allow(services.external_api).to receive(:consume).and_raise(error, 'p456 in the message')
+
+        expect(rendered(source)).to eq 'down'
+        expect(errors).to eq ["[consume] GET http://blog.locomotiveapp.org/api/read?api_key=[FILTERED] failed (#{error})"]
+      end
     end
 
-    describe 'the error line' do
+    [['application/json', '<html>p456</html>', 'json', 'JSON::ParserError'],
+     ['application/xml', '<feed><p456>', 'xml', 'MultiXML::ParseError'],
+     ['application/xml', '<data type="decimal">p456</data>', 'xml', 'ArgumentError'],
+     ['text/csv', "\"p456,1\n", 'csv', 'CSV::MalformedCSVError']].each do |type, body, format, error|
+      it "gives the block nil for a #{type} answer that raises #{error} on decoding, keeping the body out of the error line" do
+        answering(type, body) do |address|
+          source = %{{% consume blog from "#{address}?api_key=k123" %}{% if blog == null %}down{% endif %}{% endconsume %}}
 
-      include_context 'filtered logs'
+          expect(rendered(source)).to eq 'down'
+          expect(errors).to eq ["[WebService] GET #{address}?api_key=[FILTERED] answered 200 with a body that cannot be read as #{format} (#{error})"]
+        end
+      end
+    end
 
-      let(:url)    { 'http://blog.locomotiveapp.org/api/read?api_key=k123' }
-      let(:source) { %{{% consume blog from "#{url}", password: 'p456' %}{{ blog.title }}{% endconsume %}} }
-      let(:errors) { [] }
+    it 'gives the block nil when nothing listens at the address' do
+      address = "http://127.0.0.1:#{TCPServer.open('127.0.0.1', 0) { |server| server.addr[1] }}/feed"
+      source  = %{{% consume blog from "#{address}" %}{% if blog == null %}down{% endif %}{% endconsume %}}
 
-      before do
-        allow(Locomotive::Common::Logger).to receive(:error) { |message| errors << message }
-        allow(services.external_api).to receive(:consume).and_raise(Net::ReadTimeout, 'timed out reading p456')
+      expect(rendered(source)).to eq 'down'
+      expect(errors).to eq ["[consume] GET #{address} failed (Errno::ECONNREFUSED)"]
+    end
+
+    [NoMethodError, URI::InvalidURIError].each do |error|
+      it "lets #{error} through" do
+        allow(services.external_api).to receive(:consume).and_raise(error)
+
+        expect { rendered(source) }.to raise_error(error)
+      end
+    end
+
+    def rendered(source)
+      Locomotive::Steam::Liquid::Template.parse(source).render(context)
+    end
+
+    def answering(type, body)
+      server = TCPServer.new('127.0.0.1', 0)
+      thread = Thread.new do
+        client = server.accept
+        while (line = client.gets) && line != "\r\n"; end
+        client.write "HTTP/1.1 200 OK\r\nContent-Type: #{type}\r\nContent-Length: #{body.bytesize}\r\nConnection: close\r\n\r\n#{body}"
+        client.close
+      rescue IOError, SystemCallError
+        nil
       end
 
-      it 'names the call and the timeout, nothing more' do
-        subject
-
-        expect(errors).to eq ['[consume] GET http://blog.locomotiveapp.org/api/read?api_key=[FILTERED] timed out (Net::ReadTimeout)']
-      end
-
+      yield "http://127.0.0.1:#{server.addr[1]}/feed"
+    ensure
+      server&.close
+      thread&.join(1)
     end
 
   end

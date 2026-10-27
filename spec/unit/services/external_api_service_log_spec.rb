@@ -45,6 +45,16 @@ describe Locomotive::Steam::ExternalAPIService do
     expect(logged[:debug].join.length).to be < 1_200
   end
 
+  it 'logs a 200 answer whose body does not decode by the error class only, and returns nothing' do
+    response = double('response', code: 200, body: '<data type="decimal">p456</data>', request: double('request', format: :xml))
+    allow(response).to receive(:parsed_response).and_raise(ArgumentError, 'invalid value for BigDecimal(): "p456"')
+
+    expect(fail_with(response)).to be_nil
+    expect(logged[:error]).to eq ['[WebService] GET https://api.example.com:8443/v1/users/tok123?api_key=[FILTERED] answered 200 with a body that cannot be read as xml (ArgumentError)']
+    expect(logged[:debug].join).to include('[WebService] GET https://api.example.com:8443/v1/users/tok123?api_key=[FILTERED] response: <data type="decimal">p456</data>')
+    expect(response).to have_received(:parsed_response).once
+  end
+
   it 'logs the status of a failed call whose body does not parse, and returns nothing' do
     response = double('response', code: 502, body: '<html>Bad gateway</html>')
     allow(response).to receive(:parsed_response).and_raise(JSON::ParserError)

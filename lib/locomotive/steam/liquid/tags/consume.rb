@@ -67,9 +67,9 @@ module Locomotive
             Locomotive::Common::Logger.info "[consume] #{loggable_call(context)}"
 
             service(context).consume(url, attributes)
-          rescue Timeout::Error, Errno::ETIMEDOUT => error
+          rescue *HTTParty::COMMON_NETWORK_ERRORS => error
             Locomotive::Common::Logger.error "[consume] #{(attributes[:method] || 'GET').to_s.upcase} " \
-              "#{Locomotive::Steam::LogFilter.url(url, host_log_rules(context))} timed out (#{error.class})"
+              "#{Locomotive::Steam::LogFilter.url(url, host_log_rules(context))} failed (#{error.class})"
             nil
           end
 

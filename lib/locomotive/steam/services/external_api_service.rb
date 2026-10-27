@@ -79,16 +79,25 @@ module Locomotive
 
       def perform_request_to(method, path, options)
         response = self.class.send(method.to_sym, path, options)
+        call     = "[WebService] #{method.to_s.upcase} #{LogFilter.url("#{options[:base_uri]}#{path}", @log_rules)}"
 
         if response.code == 200
-          HashConverter.to_underscore(response.parsed_response)
+          HashConverter.to_underscore(parsed_response(response, call))
         else
-          call = "[WebService] #{method.to_s.upcase} #{LogFilter.url("#{options[:base_uri]}#{path}", @log_rules)}"
-
-          Locomotive::Common::Logger.error "#{call} failed with status #{response.code}"
-          Locomotive::Common::Logger.debug "#{call} response: #{debug_response_body(response)}" if Locomotive::Common::Logger.instance.logger&.debug?
-          nil
+          failed(call, "failed with status #{response.code}") { debug_response_body(response) }
         end
+      end
+
+      def parsed_response(response, call)
+        response.parsed_response
+      rescue StandardError => error
+        failed(call, "answered 200 with a body that cannot be read as #{response.request.format} (#{error.class})") { debug_text(response.body) }
+      end
+
+      def failed(call, outcome)
+        Locomotive::Common::Logger.error "#{call} #{outcome}"
+        Locomotive::Common::Logger.debug "#{call} response: #{yield}" if Locomotive::Common::Logger.instance.logger&.debug?
+        nil
       end
 
       def debug_response_body(response)
@@ -98,8 +107,11 @@ module Locomotive
           nil
         end
 
-        text = parsed_response.is_a?(Hash) ? LogFilter.params(parsed_response, @log_rules).inspect : response.body.to_s
-        text.truncate(1_000)
+        debug_text(parsed_response.is_a?(Hash) ? LogFilter.params(parsed_response, @log_rules).inspect : response.body)
+      end
+
+      def debug_text(text)
+        text.to_s.truncate(1_000)
       end
 
       def verbose_perform_request_to(method, path, options)
