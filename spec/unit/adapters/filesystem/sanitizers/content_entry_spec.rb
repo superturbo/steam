@@ -232,6 +232,12 @@ describe Locomotive::Steam::Adapters::Filesystem::Sanitizers::ContentEntry do
       end
     end
 
+    it 'replaces a number written with 24 digits' do
+      load_site(bands: "- Pearl Jam:\n    _id: 123456789012345678901234\n    _slug: pearl-jam\n")
+
+      expect(loaded_in(:en).all.first._id).to eq 'pearl-jam'
+    end
+
   end
 
   describe 'the id of a created entry' do
@@ -243,6 +249,30 @@ describe Locomotive::Steam::Adapters::Filesystem::Sanitizers::ContentEntry do
       created = bands.create(bands.build(name: 'Given', _slug: { 'fr' => 'given-fr' }))
 
       expect(created._id).to eq 'given-fr'
+    end
+
+  end
+
+  describe 'the label of a created entry' do
+
+    before { load_site(bands: "- Pearl Jam: {}\n", notes: "- Hello:\n    title:\n      fr: Bonjour\n") }
+
+    it 'keeps the label given in the default locale, with a slug and an id from it' do
+      notes   = repository('notes', :en)
+      created = notes.create(notes.build(title: { 'en' => 'First' }))
+
+      expect(created[:title].translations).to eq('en' => 'First')
+      expect(created[:_slug].translations).to eq every_locale('first')
+      expect(created._id).to eq 'first'
+      expect(repository('notes', :en).find('first')[:title].translations).to eq('en' => 'First')
+    end
+
+    it 'keeps the label given in another locale' do
+      notes   = repository('notes', :fr)
+      created = notes.create(notes.build(title: { 'fr' => 'Premier' }))
+
+      expect(created[:title].translations).to eq('fr' => 'Premier')
+      expect(repository('notes', :fr).find(created._id)[:title].translations).to eq('fr' => 'Premier')
     end
 
   end

@@ -41,6 +41,8 @@ module Locomotive::Steam
 
           # YAML stores the label as the entry key, not as a field.
           def add_label(entity)
+            return unless entity.attributes.key?(:_label)
+
             value = entity.attributes.delete(:_label)
             name  = entity.content_type.label_field_name
 
