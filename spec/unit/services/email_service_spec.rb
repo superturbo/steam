@@ -295,6 +295,24 @@ describe Locomotive::Steam::EmailService do
       expect(error).not_to include('token=abc')
     end
 
+    it "filters the URL of an attachment it cannot read with the host's rules too" do
+      options[:attachments] = { 'bar.txt' => 'https://files.example.com/private/bar.txt?access_code=abc&v=2' }
+      allow(Net::HTTP).to receive(:get).and_raise(SocketError, 'getaddrinfo: nodename nor servname provided')
+
+      described_class.new(page_finder, liquid_parser, asset_host, simulation, log_rules: [:access_code]).send_email(options, context)
+
+      error = logged[:error].find { |message| message.include?('Unable to read') }
+      expect(error).to include('https://files.example.com/private/bar.txt?access_code=[FILTERED]&v=2')
+      expect(error).not_to include('access_code=abc')
+    end
+
+    it 'takes the rules of the request it is built for by the services' do
+      env      = Rack::MockRequest.env_for('/', 'action_dispatch.parameter_filter' => [:access_code])
+      services = Locomotive::Steam::Services.build_instance(Rack::Request.new(env))
+
+      expect(services.email.log_rules).to eq [:access_code]
+    end
+
   end
 
 end

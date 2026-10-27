@@ -79,7 +79,7 @@ module Locomotive
         end
 
         register :content_entry do
-          Steam::ContentEntryService.new(repositories.content_type, repositories.content_entry, locale)
+          Steam::ContentEntryService.new(repositories.content_type, repositories.content_entry, locale, log_rules: log_rules)
         end
 
         register :entry_submission do
@@ -119,7 +119,7 @@ module Locomotive
         end
 
         register :external_api do
-          Steam::ExternalAPIService.new(request&.env&.fetch('action_dispatch.parameter_filter', nil))
+          Steam::ExternalAPIService.new(log_rules)
         end
 
         register :csrf_protection do
@@ -135,7 +135,7 @@ module Locomotive
         end
 
         register :email do
-          Steam::EmailService.new(page_finder, liquid_parser, asset_host, configuration.mode == :test)
+          Steam::EmailService.new(page_finder, liquid_parser, asset_host, configuration.mode == :test, log_rules: log_rules)
         end
 
         register :auth do
@@ -174,6 +174,10 @@ module Locomotive
 
         def set_site(site)
           self.current_site.__setobj__(site)
+        end
+
+        def log_rules
+          request&.env&.fetch('action_dispatch.parameter_filter', nil)
         end
 
         def defer(name, &block)

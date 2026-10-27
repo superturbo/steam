@@ -5,7 +5,7 @@ module Locomotive
 
     class EmailService
 
-      attr_accessor_initialize :page_finder_service, :liquid_parser, :asset_host, :simulation
+      attr_accessor_initialize :page_finder_service, :liquid_parser, :asset_host, :simulation, [:log_rules]
 
       def send_email(options, context)
         prepare_options(options, context)
@@ -82,7 +82,7 @@ module Locomotive
           uri = URI(url)
           Net::HTTP.get(uri)
         rescue Exception => e
-          filtered = LogFilter.url(url)
+          filtered = LogFilter.url(url, log_rules)
           logger.error "[SendEmail] Unable to read the attachment #{filtered}: #{e.class} #{e.message.gsub(url, filtered)}"
           nil
         end

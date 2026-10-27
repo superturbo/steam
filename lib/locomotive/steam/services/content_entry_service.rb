@@ -15,7 +15,7 @@ module Locomotive
 
       private_constant :SEO_NAMES, :PUBLIC_BUILT_IN_NAMES, :WRITTEN_BY_NAME, :REFUSED_INPUT_NAME
 
-      attr_accessor_initialize :content_type_repository, :repository, :locale
+      attr_accessor_initialize :content_type_repository, :repository, :locale, [:log_rules]
 
       def all(type_slug, conditions = {}, as_json = false)
         with_repository(type_slug) do |_repository|
@@ -148,7 +148,7 @@ module Locomotive
       def debug_entry_details(entry)
         attributes = entry.as_json
 
-        LogFilter.params(attributes.except('errors')).merge(attributes.slice('errors')).inspect
+        LogFilter.params(attributes.except('errors'), log_rules).merge(attributes.slice('errors')).inspect
       end
 
       def with_repository(type_or_slug)

@@ -115,6 +115,21 @@ describe Locomotive::Steam::ContentEntryService do
         expect(logged[:debug].join).not_to include('jonas@example.lt')
       end
 
+      it "filters the attributes with the host's rules too" do
+        allow(entry_repository).to receive(:update)
+
+        described_class.new(type_repository, entry_repository, locale, log_rules: [:title]).update_decorated_entry(decorated, 'title' => 'New title')
+
+        expect(logged[:debug].join).to match(/"title"\s*=>\s*"\[FILTERED\]"/)
+      end
+
+      it 'takes the rules of the request it is built for by the services' do
+        env      = Rack::MockRequest.env_for('/', 'action_dispatch.parameter_filter' => [:title])
+        services = Locomotive::Steam::Services.build_instance(Rack::Request.new(env))
+
+        expect(services.content_entry.log_rules).to eq [:title]
+      end
+
     end
 
   end
