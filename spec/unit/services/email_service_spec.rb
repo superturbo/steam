@@ -1,4 +1,5 @@
 require 'spec_helper'
+require 'socket'
 
 describe Locomotive::Steam::EmailService do
 
@@ -118,9 +119,15 @@ describe Locomotive::Steam::EmailService do
 
         let(:attachments) { { 'foo.txt' => '/local/foo.txt' } }
 
+        around do |example|
+          answering('Foo') do |address|
+            @address = address
+            example.run
+          end
+        end
+
         before do
-          expect(asset_host).to receive(:compute).with('/local/foo.txt', false).and_return('http://acme.org/local/foo.txt')
-          expect(Net::HTTP).to receive(:get).with(URI('http://acme.org/local/foo.txt')).and_return('Foo')
+          expect(asset_host).to receive(:compute).with('/local/foo.txt', false).and_return("#{@address}/local/foo.txt")
         end
 
         it 'sends the email over Pony' do
@@ -145,10 +152,17 @@ describe Locomotive::Steam::EmailService do
 
       context 'remote attachment' do
 
-        let(:attachments) { { 'bar.txt' => 'http://acme.org/bar.txt' } }
+        let(:address)     { @address }
+        let(:attachments) { { 'bar.txt' => "#{address}/bar.txt" } }
+
+        around do |example|
+          answering('Bar') do |address|
+            @address = address
+            example.run
+          end
+        end
 
         it 'sends the email over Pony' do
-          expect(Net::HTTP).to receive(:get).with(URI('http://acme.org/bar.txt')).and_return('Bar')
           expect(Pony).to receive(:mail).with({
             to:           'john@doe.net',
             from:         'me@locomotivecms.com',
@@ -166,10 +180,35 @@ describe Locomotive::Steam::EmailService do
           subject
         end
 
+        it 'reads it once, waiting up to 5 seconds to connect and 10 seconds for each read' do
+          allow(Net::HTTP).to receive(:start).and_call_original
+          allow(Pony).to receive(:mail)
+
+          subject
+
+          expect(Net::HTTP).to have_received(:start).once
+            .with('127.0.0.1', URI(address).port, hash_including(open_timeout: 5, read_timeout: 10, max_retries: 0))
+        end
+
+        it 'stops reading an attachment whose server never answers after one attempt, keeping no content for it' do
+          stub_const("#{described_class}::ATTACHMENT_HTTP_OPTIONS", described_class::ATTACHMENT_HTTP_OPTIONS.merge(read_timeout: 0.2))
+          allow(Pony).to receive(:mail)
+
+          stalled do |stalled_address, connections|
+            options[:attachments] = { 'bar.txt' => "#{stalled_address}/bar.txt" }
+
+            subject
+
+            expect(Pony).to have_received(:mail).with(hash_including(attachments: { 'bar.txt' => nil }))
+            expect(connections.size).to eq 1
+          end
+        end
+
         context 'attachment not found' do
 
-          it "doesn't send the email" do
-            expect(Net::HTTP).to receive(:get).with(URI('http://acme.org/bar.txt')).and_raise('URL not responding')
+          let(:address) { "http://127.0.0.1:#{TCPServer.open('127.0.0.1', 0) { |server| server.addr[1] }}" }
+
+          it 'sends the email with no content for the attachment' do
             expect(Pony).to receive(:mail).with({
               to:           'john@doe.net',
               from:         'me@locomotivecms.com',
@@ -275,7 +314,7 @@ describe Locomotive::Steam::EmailService do
     it 'filters the URL out of an error message that repeats it' do
       url = 'https://files.example.com/private/bar.txt?token=abc'
       options[:attachments] = { 'bar.txt' => url }
-      allow(Net::HTTP).to receive(:get).and_raise(URI::InvalidURIError, "bad URI(is not URI?): #{url.inspect}")
+      allow(Net::HTTP).to receive(:start).and_raise(URI::InvalidURIError, "bad URI(is not URI?): #{url.inspect}")
 
       service.send_email(options, context)
 
@@ -286,7 +325,7 @@ describe Locomotive::Steam::EmailService do
 
     it 'names an attachment it cannot read by its URL, query filtered, and the error' do
       options[:attachments] = { 'bar.txt' => 'https://files.example.com/private/bar.txt?token=abc&v=2' }
-      allow(Net::HTTP).to receive(:get).and_raise(SocketError, 'getaddrinfo: nodename nor servname provided')
+      allow(Net::HTTP).to receive(:start).and_raise(SocketError, 'getaddrinfo: nodename nor servname provided')
 
       service.send_email(options, context)
 
@@ -297,7 +336,7 @@ describe Locomotive::Steam::EmailService do
 
     it "filters the URL of an attachment it cannot read with the host's rules too" do
       options[:attachments] = { 'bar.txt' => 'https://files.example.com/private/bar.txt?access_code=abc&v=2' }
-      allow(Net::HTTP).to receive(:get).and_raise(SocketError, 'getaddrinfo: nodename nor servname provided')
+      allow(Net::HTTP).to receive(:start).and_raise(SocketError, 'getaddrinfo: nodename nor servname provided')
 
       described_class.new(page_finder, liquid_parser, asset_host, simulation, log_rules: [:access_code]).send_email(options, context)
 
@@ -313,6 +352,41 @@ describe Locomotive::Steam::EmailService do
       expect(services.email.log_rules).to eq [:access_code]
     end
 
+  end
+
+  def answering(body)
+    server = TCPServer.new('127.0.0.1', 0)
+    thread = Thread.new do
+      loop do
+        client = server.accept
+        while (line = client.gets) && line != "\r\n"; end
+        client.write "HTTP/1.1 200 OK\r\nContent-Length: #{body.bytesize}\r\nConnection: close\r\n\r\n#{body}"
+        client.close
+      end
+    rescue IOError, SystemCallError
+      nil
+    end
+
+    yield "http://127.0.0.1:#{server.addr[1]}"
+  ensure
+    server&.close
+    thread&.join(1)
+  end
+
+  def stalled
+    server      = TCPServer.new('127.0.0.1', 0)
+    connections = Queue.new
+    thread      = Thread.new do
+      loop { connections << server.accept }
+    rescue IOError, SystemCallError
+      nil
+    end
+
+    yield "http://127.0.0.1:#{server.addr[1]}", connections
+  ensure
+    server&.close
+    thread&.join(1)
+    connections.pop.close until connections.nil? || connections.empty?
   end
 
 end

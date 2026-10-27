@@ -5,6 +5,10 @@ module Locomotive
 
     class EmailService
 
+      # An attachment is read while the request waits. Timeouts limit individual waits, not the whole read.
+      # Disable retries to avoid holding the request thread for a second attempt.
+      ATTACHMENT_HTTP_OPTIONS = { open_timeout: 5, read_timeout: 10, max_retries: 0 }.freeze
+
       attr_accessor_initialize :page_finder_service, :liquid_parser, :asset_host, :simulation, [:log_rules]
 
       def send_email(options, context)
@@ -80,7 +84,9 @@ module Locomotive
       def _read_http_attachment(url)
         begin
           uri = URI(url)
-          Net::HTTP.get(uri)
+          Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == 'https', **ATTACHMENT_HTTP_OPTIONS) do |http|
+            http.request_get(uri).body
+          end
         rescue Exception => e
           filtered = LogFilter.url(url, log_rules)
           logger.error "[SendEmail] Unable to read the attachment #{filtered}: #{e.class} #{e.message.gsub(url, filtered)}"
