@@ -7,10 +7,11 @@ module Locomotive
 
       include ::HTTParty
 
-      # any HTTP call shouldn't block a thread or a process
-      # for a long time (waiting for 3 seconds seems reasonable).
+      # Timeouts limit individual waits, not the whole call. Disable retries to
+      # avoid holding the request thread for a second attempt.
       open_timeout 3
       read_timeout 3
+      default_options[:max_retries] = 0
 
       def initialize(log_rules = [])
         @log_rules = Array(log_rules)

@@ -1,4 +1,5 @@
 require 'spec_helper'
+require 'socket'
 
 describe Locomotive::Steam::ExternalAPIService do
 
@@ -105,6 +106,46 @@ describe Locomotive::Steam::ExternalAPIService do
         subject
       end
 
+    end
+
+  end
+
+  it 'waits up to 3 seconds to connect and 3 seconds for each read' do
+    expect(described_class.default_options).to include(open_timeout: 3, read_timeout: 3)
+  end
+
+  describe 'an API that accepts the connection but never answers' do
+
+    let(:service) { Class.new(described_class) { read_timeout 0.2 }.new }
+
+    it 'is asked once for a page' do
+      stalled do |url, connections|
+        expect { service.consume(url) }.to raise_error(Net::ReadTimeout)
+        expect(connections.size).to eq 1
+      end
+    end
+
+    it 'is asked once for an action' do
+      stalled do |url, connections|
+        expect(service.consume(url, {}, true)).to include(status: nil)
+        expect(connections.size).to eq 1
+      end
+    end
+
+    def stalled
+      server      = TCPServer.new('127.0.0.1', 0)
+      connections = Queue.new
+      thread      = Thread.new do
+        loop { connections << server.accept }
+      rescue IOError, SystemCallError
+        nil
+      end
+
+      yield "http://127.0.0.1:#{server.addr[1]}/feed", connections
+    ensure
+      server&.close
+      thread&.join(1)
+      connections.pop.close until connections.nil? || connections.empty?
     end
 
   end
