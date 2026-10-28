@@ -33,6 +33,11 @@ describe 'Adapter parity' do
         expect(specimens.all(_id: embedded._id.to_s).map(&:name)).to eq ['Embedded']
       end
 
+      it 'finds entries by an option id given as text, as a page renders it' do
+        expect(slugs(category_id: option_id(:category, 'beta').to_s)).to eq ['arrays']
+        expect(slugs(tier_id: option_id(:tier, 'Gold').to_s)).to eq %w(embedded scalars)
+      end
+
       it 'answers whether anything matches a condition' do
         expect(specimens.exists?(flag: true)).to be(true)
       end

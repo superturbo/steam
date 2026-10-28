@@ -152,8 +152,7 @@ module Locomotive
             def build_select_options_from_array(options)
               [].tap do |list|
                 options.each_with_index do |name, position|
-                  # _id = name.is_a?(Hash) ? name.values.first : name
-                  list << { _id: position, name: name, position: position }
+                  list << { _id: position.to_s, name: name, position: position }
                 end
               end
             end

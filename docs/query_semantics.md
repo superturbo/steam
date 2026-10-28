@@ -395,10 +395,10 @@ values it cannot compare.
 ## Where the two stores differ
 
 - **IDs.** A Filesystem entry normally takes its slug as its id, and a
-  Filesystem select option its position in the declaration (an `Integer`,
-  or a `String` when the options are declared per locale), while MongoDB
-  issues an `ObjectId` for both, so the same `_id` need not name the same
-  logical entry. Portable entry lookups use `_slug` or `by_slug`.
+  Filesystem select option its position in the declaration (a `String`),
+  while MongoDB issues an `ObjectId` for both, so the same `_id` need not
+  name the same logical entry. Portable entry lookups use `_slug` or
+  `by_slug`.
 - **Projections** (`only`). MongoDB applies one, Filesystem ignores it.
 - **Localized fields stored as scalars.** Filesystem returns such a value
   in every locale: every value operator and ordering see it, while `exists`

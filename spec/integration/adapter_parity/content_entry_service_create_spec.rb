@@ -745,6 +745,15 @@ describe 'Adapter parity' do
           expect(stored.category[:en]).to eq 'alpha'
         end
 
+        it 'reads back the option of an id given as text, as a page renders it' do
+          pending 'MongoDB stores an option id given as text as that text' unless filesystem?
+
+          created = service.create('specimens', name: 'Text option id', topic_ids: [],
+                                                category_id: option_id(:category, 'beta').to_s)
+
+          expect(stored_specimen(created._id).category[:en]).to eq 'beta'
+        end
+
         it 'resolves a localized hash of option names locale by locale' do
           created = service.create('specimens', name: 'Localized names', topic_ids: [],
                                                 tier: { en: 'Gold', fr: 'Argent' })
