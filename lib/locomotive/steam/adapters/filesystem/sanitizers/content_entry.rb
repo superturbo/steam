@@ -83,9 +83,10 @@ module Locomotive::Steam
             end
 
             # An entry is reachable by slug in every locale, even the ones its
-            # label was never translated into.
+            # label was never translated into. An entry created at runtime may
+            # hold its label only in the locale it is created in.
             locales.each do |locale|
-              label = entity._label[locale] || entity._label[default_locale]
+              label = entity._label[locale] || entity._label[default_locale] || entity._label[current_locale]
 
               entity[:_slug][locale] = slugify(entity._id, label, dataset, [locale])
             end

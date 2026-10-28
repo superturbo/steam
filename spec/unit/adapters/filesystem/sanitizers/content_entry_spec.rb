@@ -133,6 +133,14 @@ describe Locomotive::Steam::Adapters::Filesystem::Sanitizers::ContentEntry do
         .to eq('en' => 'hello', 'fr' => 'bonjour', 'nb' => 'hello')
     end
 
+    it 'falls back to the label of the locale an entry is created in' do
+      notes   = repository('notes', :fr)
+      created = notes.create(notes.build(title: { 'fr' => 'Premier' }))
+
+      expect(created[:_slug].translations).to eq every_locale('premier')
+      expect(repository('notes', :en).by_slug('premier')&._id).to eq created._id
+    end
+
   end
 
   describe 'a generated slug another entry already holds' do
