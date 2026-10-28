@@ -217,6 +217,26 @@ describe 'Adapter parity' do
           expect(stored_specimen(created._id).attributes['category_id']).to be_nil
         end
 
+        it 'resolves an option id on update, and refuses an unknown one without touching the entry' do
+          created = readable_specimen(category_id: option_id(:category, 'alpha'))
+
+          service.update('specimens', created._id, category_id: option_id(:category, 'beta').to_s)
+          expect(stored_specimen(created._id).attributes['category_id']).to eq option_id(:category, 'beta')
+
+          updated = service.update('specimens', created._id, { category_id: 'bogus' }, true)
+
+          expect(updated['errors']['category']).to eq ['is invalid']
+          expect(stored_specimen(created._id).attributes['category_id']).to eq option_id(:category, 'beta')
+        end
+
+        it 'clears a stored option given an empty id' do
+          created = readable_specimen(visibility_id: option_id(:visibility, 'public'))
+
+          service.update('specimens', created._id, visibility_id: '')
+
+          expect(stored_specimen(created._id).attributes['visibility_id']).to be_nil
+        end
+
         it 'refuses an unknown option name without touching the entry' do
           created = readable_specimen(category_id: option_id(:category, 'alpha'))
           updated = service.update('specimens', created._id, { category: 'bogus' }, true)

@@ -134,6 +134,17 @@ describe 'Adapter parity' do
           expect(stored_specimen(created._id).score).to eq 12
         end
 
+        it 'leaves the entry the caller holds alone when a decorated update names an unknown option' do
+          created   = readable_specimen(category_id: option_id(:category, 'alpha'))
+          decorated = service.find('specimens', created._id)
+
+          expect { service.update_decorated_entry(decorated, 'category_id' => 'bogus') }
+            .to raise_error(Locomotive::Steam::InvalidEntry)
+
+          expect(decorated.category).to eq 'alpha'
+          expect(stored_specimen(created._id).attributes['category_id']).to eq option_id(:category, 'alpha')
+        end
+
         describe 'a unique field' do
 
           let(:writable_types) { %w(specimens submissions tickets vouchers) }

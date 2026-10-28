@@ -73,24 +73,26 @@ module Locomotive
         end
       end
 
-      # A select named by its field takes an option name or an option;
-      # its persisted key is the explicit id. Naming both is ambiguous and
-      # fails validation, like an unknown name.
+      # A select named by its field takes an option name or an option. Its
+      # persisted key takes the id of one of its options. Naming both is
+      # ambiguous and fails validation, like an unknown name or id.
       def resolve_selects(attributes)
         content_type.fields.selects.each_with_object(attributes.dup) do |field, memo|
           name_keys = memo.keys.select { |key| key.to_s == field.name.to_s }
           id_keys   = memo.keys.select { |key| key.to_s == field.persisted_name.to_s }
 
-          next if name_keys.empty? && id_keys.size <= 1
+          next if name_keys.empty? && id_keys.empty?
 
-          values = name_keys.map { |key| memo.delete(key) }
+          names = name_keys.map { |key| memo.delete(key) }
+          ids   = id_keys.map { |key| memo.delete(key) }
 
           memo[field.persisted_name.to_sym] =
-            if name_keys.size > 1 || id_keys.size > 1 || (name_keys.any? && id_keys.any?)
-              id_keys.each { |key| memo.delete(key) }
+            if names.size + ids.size > 1
               ContentEntry::INVALID_SELECT_VALUE
+            elsif name_keys.any?
+              select_value_to_id(field, names.first)
             else
-              select_value_to_id(field, values.first)
+              select_id_to_id(field, ids.first)
             end
         end
       end
@@ -446,6 +448,25 @@ module Locomotive
         option = field.select_options.scope.with_locale(locale) do
           field.select_options.by_name(name)
         end
+
+        option ? option._id : ContentEntry::INVALID_SELECT_VALUE
+      end
+
+      # A localized select takes one id per locale.
+      def select_id_to_id(field, value)
+        return option_id_by_id(field, value) unless value.is_a?(Hash) && field.localized?
+
+        value.to_h { |locale, id| [locale, option_id_by_id(field, id)] }
+      end
+
+      # An id names an option as its store issued it, or as its text. An empty
+      # text clears the selection, as an empty form choice does.
+      def option_id_by_id(field, id)
+        return if id.nil? || id == ''
+        return ContentEntry::INVALID_SELECT_VALUE unless id.is_a?(String) || id.is_a?(Symbol) || adapter.native_id?(id)
+
+        key    = link_key(id)
+        option = field.select_options.all.detect { |candidate| link_key(candidate._id) == key }
 
         option ? option._id : ContentEntry::INVALID_SELECT_VALUE
       end

@@ -746,12 +746,64 @@ describe 'Adapter parity' do
         end
 
         it 'reads back the option of an id given as text, as a page renders it' do
-          pending 'MongoDB stores an option id given as text as that text' unless filesystem?
-
           created = service.create('specimens', name: 'Text option id', topic_ids: [],
                                                 category_id: option_id(:category, 'beta').to_s)
+          stored  = stored_specimen(created._id)
 
-          expect(stored_specimen(created._id).category[:en]).to eq 'beta'
+          expect(stored.attributes['category_id']).to eq option_id(:category, 'beta')
+          expect(stored.category[:en]).to eq 'beta'
+        end
+
+        it 'refuses an option id the field does not hold without writing anything' do
+          [option_id(:category, 'alpha').to_s + 'x', 1, false, ' ', { 'x' => 'y' }].each do |id|
+            entry = nil
+
+            expect { entry = service.create('specimens', { name: "Bogus id #{id.inspect}", topic_ids: [], category_id: id }, true) }
+              .not_to change { service.all('specimens').size }
+
+            expect(entry['errors']['category']).to eq(['is invalid']), "#{id.inspect} was not refused"
+          end
+        end
+
+        it 'clears a select given no id or an empty one, even where it has a default' do
+          [nil, ''].each do |id|
+            created = service.create('specimens', name: "Cleared #{id.inspect}", topic_ids: [], visibility_id: id)
+
+            expect(stored_specimen(created._id).attributes['visibility_id']).to be_nil
+          end
+        end
+
+        it 'resolves a localized hash of option ids locale by locale' do
+          created = service.create('specimens', name: 'Localized ids', topic_ids: [],
+                                                tier_id: { 'en' => option_id(:tier, 'Gold').to_s,
+                                                           'fr' => option_id(:tier, 'Silver').to_s })
+
+          expect(stored_specimen(created._id).attributes['tier_id'].translations)
+            .to eq('en' => option_id(:tier, 'Gold'), 'fr' => option_id(:tier, 'Silver'))
+        end
+
+        it 'refuses a nested hash of option ids' do
+          entry = service.create('specimens', { name: 'Nested ids', topic_ids: [],
+                                                tier_id: { 'en' => { 'fr' => option_id(:tier, 'Gold').to_s } } }, true)
+
+          expect(entry['errors']['tier']).to eq ['is invalid']
+        end
+
+        # Only MongoDB issues ids unique across fields, written in either case.
+        if store == :mongodb
+          it 'reads an option id written in capitals as the option it names' do
+            created = service.create('specimens', name: 'Capital id', topic_ids: [],
+                                                  category_id: option_id(:category, 'beta').to_s.upcase)
+
+            expect(stored_specimen(created._id).attributes['category_id']).to eq option_id(:category, 'beta')
+          end
+
+          it 'refuses the option id of another field' do
+            entry = service.create('specimens', { name: 'Other field id', topic_ids: [],
+                                                  category_id: option_id(:visibility, 'public').to_s }, true)
+
+            expect(entry['errors']['category']).to eq ['is invalid']
+          end
         end
 
         it 'resolves a localized hash of option names locale by locale' do
@@ -784,6 +836,15 @@ describe 'Adapter parity' do
             .not_to change { service.all('specimens').size }
 
           expect(entry['errors']['category']).to be_present
+        end
+
+        it 'refuses false as an option name without writing anything' do
+          entry = nil
+
+          expect { entry = service.create('specimens', { name: 'False option', topic_ids: [], category: false }, true) }
+            .not_to change { service.all('specimens').size }
+
+          expect(entry['errors']['category']).to eq ['is invalid']
         end
 
         it 'hands back an unknown option as no value' do

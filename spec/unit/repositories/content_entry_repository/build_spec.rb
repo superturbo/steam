@@ -95,8 +95,19 @@ describe Locomotive::Steam::ContentEntryRepository do
       expect(built.attributes.key?(:category)).to be false
     end
 
-    it 'keeps an explicit id as given' do
-      expect(repository.build(category_id: 7)[:category_id]).to eq 7
+    it 'resolves an explicit id to the option id its store issued' do
+      allow(options).to receive(:all).and_return([option])
+
+      expect(repository.build(category_id: '42')[:category_id]).to eq 42
+    end
+
+    it 'marks an explicit id no option holds and fails validation' do
+      allow(options).to receive(:all).and_return([option])
+
+      built = repository.build(category_id: '7')
+
+      expect(built.valid?).to be false
+      expect(built.errors[:category]).to be_present
     end
 
     it 'takes an option object by its id' do
